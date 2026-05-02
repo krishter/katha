@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Katha — Marketecture</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,700;0,900;1,600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root {
+    --saffron: oklch(72% 0.18 55);
+    --gold: oklch(68% 0.17 75);
+    --deep-indigo: oklch(28% 0.12 280);
+    --indigo-mid: oklch(38% 0.14 275);
+    --warm-white: oklch(97% 0.01 80);
+    --parchment: oklch(94% 0.02 80);
+    --parchment-dark: oklch(88% 0.03 75);
+    --text-dark: oklch(22% 0.04 280);
+    --text-mid: oklch(42% 0.05 275);
+    --text-light: oklch(62% 0.04 275);
+    --accent-green: oklch(62% 0.16 160);
+    --accent-rose: oklch(62% 0.16 10);
+    --whatsapp: oklch(56% 0.18 155);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--deep-indigo);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* ── Background texture ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% -10%, oklch(45% 0.14 275 / 0.6), transparent),
+      radial-gradient(ellipse 60% 40% at 10% 80%, oklch(55% 0.14 45 / 0.2), transparent),
+      radial-gradient(ellipse 40% 50% at 90% 70%, oklch(38% 0.12 295 / 0.3), transparent);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page-wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1440px;
+    padding: 48px 32px 64px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+    animation: fadeUp 0.8s ease both;
+  }
+  .header-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--saffron);
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(36px, 5vw, 60px);
+    font-weight: 900;
+    color: var(--warm-white);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .header h1 em {
+    font-style: italic;
+    color: var(--saffron);
+  }
+  .header-sub {
+    margin-top: 12px;
+    font-size: 16px;
+    color: oklch(75% 0.06 275);
+    font-weight: 300;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Main diagram grid ── */
+  .diagram {
+    display: grid;
+    grid-template-columns: 240px 1fr 240px;
+    grid-template-rows: auto auto;
+    gap: 0 0;
+    align-items: start;
+    animation: fadeUp 0.8s 0.15s ease both;
+  }
+
+  /* ── Column labels ── */
+  .col-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: oklch(60% 0.08 275);
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 6px 0;
+    border-bottom: 1px solid oklch(55% 0.08 275 / 0.3);
+  }
+
+  /* ── Panels ── */
+  .left-col, .right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 52px;
+  }
+
+  .center-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 0 32px;
+    position: relative;
+  }
+
+  /* ── User cards ── */
+  .user-card {
+    background: oklch(97% 0.01 80 / 0.06);
+    border: 1px solid oklch(75% 0.08 75 / 0.2);
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: background 0.2s, transform 0.2s, border-color 0.2s;
+    cursor: default;
+    position: relative;
+  }
+  .user-card:hover {
+    background: oklch(97% 0.01 80 / 0.1);
+    border-color: oklch(75% 0.15 65 / 0.4);
+    transform: translateX(4px);
+  }
+  .right-col .user-card:hover { transform: translateX(-4px); }
+
+  .user-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .user-icon svg, .layer-icon svg { display: block; }
+  .user-icon.parent { background: oklch(72% 0.18 55 / 0.25); }
+  .user-icon.child  { background: oklch(62% 0.16 160 / 0.25); }
+  .user-icon.family { background: oklch(62% 0.16 295 / 0.25); }
+  .user-icon.output { background: oklch(62% 0.16 10 / 0.2); }
+
+  .user-info { flex: 1; }
+  .user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--warm-white);
+    margin-bottom: 2px;
+  }
+  .user-desc {
+    font-size: 11.5px;
+    color: oklch(70% 0.06 275);
+    line-height: 1.4;
+  }
+
+  /* ── Center platform box ── */
+  .platform-box {
+    width: 100%;
+    background: oklch(97% 0.015 75 / 0.07);
+    border: 1.5px solid oklch(80% 0.12 70 / 0.35);
+    border-radius: 20px;
+    padding: 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .platform-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--saffron), var(--gold), oklch(68% 0.17 100));
+    border-radius: 20px 20px 0 0;
+  }
+  .platform-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--warm-white);
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .platform-subtitle {
+    font-size: 11px;
+    color: var(--saffron);
+    text-align: center;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    font-weight: 500;
+  }
+
+  /* ── Layer cards inside platform ── */
+  .layers {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .layer {
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.2s, filter 0.2s;
+    cursor: default;
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+  }
+  .layer:hover { transform: scale(1.015); filter: brightness(1.1); }
+
+  .layer.whatsapp {
+    background: oklch(56% 0.18 155 / 0.18);
+    border-color: oklch(56% 0.18 155 / 0.35);
+  }
+  .layer.ai {
+    background: oklch(62% 0.16 280 / 0.18);
+    border-color: oklch(62% 0.16 280 / 0.35);
+  }
+  .layer.story {
+    background: oklch(72% 0.18 55 / 0.15);
+    border-color: oklch(72% 0.18 55 / 0.30);
+  }
+  .layer.archive {
+    background: oklch(62% 0.16 230 / 0.18);
+    border-color: oklch(62% 0.16 230 / 0.35);
+  }
+  .layer.dashboard {
+    background: oklch(62% 0.16 10 / 0.18);
+    border-color: oklch(62% 0.16 10 / 0.35);
+  }
+
+  .layer-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .layer.whatsapp .layer-icon { background: oklch(56% 0.18 155 / 0.35); }
+  .layer.ai .layer-icon        { background: oklch(62% 0.16 280 / 0.35); }
+  .layer.story .layer-icon     { background: oklch(72% 0.18 55 / 0.35); }
+  .layer.archive .layer-icon   { background: oklch(62% 0.16 230 / 0.35); }
+  .layer.dashboard .layer-icon { background: oklch(62% 0.16 10 / 0.35); }
+
+  .layer-text { flex: 1; }
+  .layer-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--warm-white);
+    margin-bottom: 1px;
+  }
+  .layer-desc {
+    font-size: 11px;
+    color: oklch(70% 0.06 275);
+    line-height: 1.35;
+  }
+
+  /* ── External integrations strip ── */
+  .integrations-row {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid oklch(70% 0.06 275 / 0.2);
+  }
+  .integrations-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: oklch(60% 0.08 275);
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .integration-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .chip {
+    font-size: 11px;
+    padding: 5px 11px;
+    border-radius: 100px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border: 1px solid;
+    transition: transform 0.2s, filter 0.2s;
+    cursor: default;
+    white-space: nowrap;
+  }
+  .chip:hover { transform: translateY(-2px); filter: brightness(1.2); }
+  .chip.wa   { background: oklch(56% 0.18 155 / 0.15); border-color: oklch(56% 0.18 155 / 0.5); color: oklch(72% 0.18 155); }
+  .chip.ai   { background: oklch(62% 0.16 280 / 0.15); border-color: oklch(62% 0.16 280 / 0.5); color: oklch(72% 0.14 280); }
+  .chip.cloud{ background: oklch(62% 0.14 225 / 0.15); border-color: oklch(62% 0.14 225 / 0.5); color: oklch(72% 0.12 225); }
+  .chip.pay  { background: oklch(72% 0.18 55 / 0.15);  border-color: oklch(72% 0.18 55 / 0.5);  color: oklch(78% 0.16 60); }
+
+  /* ── Output cards (right column) ── */
+  .output-card {
+    background: oklch(97% 0.01 80 / 0.06);
+    border: 1px solid oklch(75% 0.08 75 / 0.2);
+    border-radius: 14px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: background 0.2s, transform 0.2s, border-color 0.2s;
+    cursor: default;
+  }
+  .output-card:hover {
+    background: oklch(97% 0.01 80 / 0.1);
+    border-color: oklch(62% 0.16 10 / 0.4);
+    transform: translateX(-4px);
+  }
+
+  /* ── SVG arrows canvas ── */
+  .arrows-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    overflow: visible;
+  }
+
+  .diagram-container {
+    position: relative;
+    width: 100%;
+  }
+
+  /* ── Annotations row ── */
+  .annotations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 32px;
+    animation: fadeUp 0.8s 0.3s ease both;
+  }
+  .annotation {
+    font-size: 12px;
+    padding: 7px 16px;
+    border-radius: 100px;
+    background: oklch(97% 0.015 75 / 0.08);
+    border: 1px solid oklch(80% 0.12 70 / 0.2);
+    color: oklch(80% 0.08 75);
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .annotation:hover {
+    background: oklch(97% 0.015 75 / 0.14);
+    border-color: oklch(80% 0.15 65 / 0.4);
+  }
+  .annotation .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--saffron);
+    flex-shrink: 0;
+  }
+
+  /* ── Flow legend ── */
+  .flow-legend {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    justify-content: center;
+    animation: fadeUp 0.8s 0.45s ease both;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: oklch(65% 0.06 275);
+  }
+  .legend-line {
+    width: 28px; height: 2px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .legend-line.blue   { background: oklch(68% 0.16 230); }
+  .legend-line.saffron{ background: oklch(72% 0.18 55); }
+  .legend-line.green  { background: oklch(62% 0.18 155); }
+  .legend-line.dashed {
+    background: none;
+    border-top: 2px dashed oklch(62% 0.16 295);
+    height: 0;
+    margin-top: 1px;
+  }
+
+  /* ── Animated arrows ── */
+  @keyframes dash {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes dashFlow {
+    from { stroke-dashoffset: 40; }
+    to   { stroke-dashoffset: 0; }
+  }
+  .arrow-path {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    animation: dashFlow 2s linear infinite;
+  }
+  .arrow-path.inbound  { stroke: oklch(72% 0.18 55); stroke-dasharray: 6 4; }
+  .arrow-path.outbound { stroke: oklch(62% 0.18 155); stroke-dasharray: 6 4; }
+  .arrow-path.internal { stroke: oklch(68% 0.16 230); stroke-dasharray: 5 4; }
+  .arrow-path.viral    { stroke: oklch(62% 0.16 295); stroke-dasharray: 4 5; }
+
+  .arrow-path.inbound  { animation-duration: 2.2s; }
+  .arrow-path.outbound { animation-duration: 2.8s; }
+  .arrow-path.internal { animation-duration: 2.4s; }
+  .arrow-path.viral    { animation-duration: 3.2s; }
+
+  /* ── Flow numbers on arrows ── */
+  .flow-badge {
+    position: absolute;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--deep-indigo);
+    border: 1.5px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Column header labels above grid ── */
+  .diagram-headers {
+    display: grid;
+    grid-template-columns: 240px 1fr 240px;
+    gap: 0;
+    margin-bottom: 8px;
+    animation: fadeUp 0.8s 0.1s ease both;
+  }
+
+  /* ── Tab switcher ── */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-bottom: 40px;
+    background: oklch(97% 0.01 80 / 0.05);
+    border: 1px solid oklch(75% 0.08 75 / 0.15);
+    border-radius: 100px;
+    padding: 5px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    animation: fadeUp 0.6s ease both;
+  }
+  .tab-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 22px;
+    border-radius: 100px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    letter-spacing: 0.01em;
+    background: transparent;
+    color: oklch(65% 0.07 275);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tab-btn svg { width: 14px; height: 14px; }
+  .tab-btn.active {
+    background: oklch(97% 0.015 75 / 0.12);
+    color: var(--warm-white);
+    box-shadow: 0 1px 6px oklch(0% 0 0 / 0.25);
+  }
+  .tab-btn:not(.active):hover { color: oklch(80% 0.07 275); }
+
+  /* ── View panels ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ══════════════════════════════════════
+     USER JOURNEY VIEW
+  ══════════════════════════════════════ */
+
+  .journey-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  /* Phase header */
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+    margin-top: 36px;
+  }
+  .phase-header:first-child { margin-top: 0; }
+  .phase-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .phase-label {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .phase-line {
+    flex: 1;
+    height: 1px;
+    background: oklch(55% 0.08 275 / 0.3);
+  }
+  .phase-tag {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    border: 1px solid;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  /* Three-column journey layout */
+  .journey-cols {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;
+    gap: 0 24px;
+    position: relative;
+  }
+
+  .journey-actor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .journey-center {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  /* Actor label */
+  .actor-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: oklch(55% 0.07 275);
+    font-weight: 600;
+    text-align: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid oklch(55% 0.07 275 / 0.25);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+  }
+  .actor-label svg { width: 13px; height: 13px; }
+
+  /* Message bubbles */
+  .msg-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;
+    gap: 0 24px;
+    align-items: center;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .bubble {
+    border-radius: 14px;
+    padding: 11px 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    position: relative;
+    max-width: 100%;
+    border: 1px solid transparent;
+  }
+  .bubble.child-bubble {
+    background: oklch(62% 0.18 155 / 0.12);
+    border-color: oklch(62% 0.18 155 / 0.3);
+    color: oklch(85% 0.07 275);
+    border-bottom-left-radius: 4px;
+    margin-left: auto;
+  }
+  .bubble.parent-bubble {
+    background: oklch(72% 0.18 55 / 0.12);
+    border-color: oklch(72% 0.18 55 / 0.3);
+    color: oklch(85% 0.07 275);
+    border-bottom-right-radius: 4px;
+    margin-right: auto;
+  }
+  .bubble.katha-bubble {
+    background: oklch(62% 0.14 280 / 0.15);
+    border-color: oklch(62% 0.14 280 / 0.35);
+    color: oklch(85% 0.07 275);
+    border-radius: 14px;
+  }
+  .bubble.system-bubble {
+    background: oklch(97% 0.015 75 / 0.06);
+    border-color: oklch(70% 0.06 75 / 0.2);
+    color: oklch(72% 0.06 275);
+    font-style: italic;
+    font-size: 12px;
+    border-radius: 14px;
+  }
+  .bubble-sender {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    opacity: 0.7;
+  }
+  .bubble-time {
+    font-size: 10px;
+    opacity: 0.5;
+    margin-top: 5px;
+    text-align: right;
+  }
+
+  /* Voice note visual */
+  .voice-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .voice-play {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: oklch(72% 0.18 55 / 0.3);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .voice-play svg { width: 12px; height: 12px; color: oklch(78% 0.18 55); }
+  .voice-wave {
+    flex: 1;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .voice-wave span {
+    display: inline-block;
+    width: 3px;
+    border-radius: 2px;
+    background: oklch(72% 0.18 55 / 0.6);
+    animation: waveAnim 1.4s ease-in-out infinite;
+  }
+  @keyframes waveAnim {
+    0%, 100% { transform: scaleY(0.4); }
+    50%       { transform: scaleY(1); }
+  }
+  .voice-dur { font-size: 11px; color: oklch(65% 0.07 275); flex-shrink: 0; }
+
+  /* Memory card preview */
+  .mem-card-preview {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid oklch(72% 0.18 55 / 0.3);
+    background: oklch(25% 0.08 55);
+  }
+  .mem-card-top {
+    padding: 12px 14px 8px;
+    background: linear-gradient(135deg, oklch(30% 0.10 55), oklch(25% 0.08 275));
+  }
+  .mem-card-date { font-size: 9px; color: oklch(65% 0.08 75); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 5px; }
+  .mem-card-title { font-family: 'Playfair Display', serif; font-size: 13px; color: oklch(92% 0.05 75); line-height: 1.3; }
+  .mem-card-bottom { padding: 8px 14px 10px; }
+  .mem-card-excerpt { font-size: 11px; color: oklch(70% 0.06 275); line-height: 1.5; font-style: italic; }
+
+  /* Step connector line down the center */
+  .step-connector {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0;
+    grid-column: 2;
+  }
+  .step-connector-line {
+    width: 1px;
+    height: 20px;
+    background: oklch(55% 0.08 275 / 0.3);
+  }
+
+  /* Outcome strip */
+  .outcome-strip {
+    margin-top: 40px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .outcome-card {
+    background: oklch(97% 0.015 75 / 0.06);
+    border: 1px solid oklch(75% 0.08 75 / 0.18);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .outcome-card:hover {
+    background: oklch(97% 0.015 75 / 0.1);
+    border-color: oklch(72% 0.14 55 / 0.35);
+  }
+  .outcome-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+  }
+  .outcome-icon svg { display: block; }
+  .outcome-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--warm-white);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .outcome-label {
+    font-size: 12px;
+    color: oklch(65% 0.07 275);
+    line-height: 1.4;
+  }
+
+  /* Journey actor headers row */
+  .journey-actor-headers {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;
+    gap: 0 24px;
+    margin-bottom: 20px;
+  }
+
+  /* hover tooltip for layers */
+  .layer[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: oklch(22% 0.05 280);
+    color: var(--warm-white);
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 99;
+    border: 1px solid oklch(50% 0.08 275 / 0.5);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-eyebrow">System Architecture · May 2026</div>
+    <h1>Katha — <em>Memory, Preserved</em></h1>
+    <div class="header-sub">Conversational AI platform for capturing family stories via WhatsApp, built for India</div>
+  </div>
+
+  <!-- Tab switcher -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-arch" onclick="switchTab('arch')">
+      <i data-lucide="network"></i> System Architecture
+    </button>
+    <button class="tab-btn" id="tab-journey" onclick="switchTab('journey')">
+      <i data-lucide="git-branch"></i> User Journey
+    </button>
+  </div>
+
+  <!-- VIEW 1: Architecture -->
+  <div class="view active" id="view-arch">
+
+  <!-- Column headers -->
+  <div class="diagram-headers">
+    <div class="col-label">Users &amp; Initiators</div>
+    <div class="col-label" style="padding: 0 32px;">Katha Platform</div>
+    <div class="col-label">Outputs &amp; Deliverables</div>
+  </div>
+
+  <!-- Main diagram -->
+  <div class="diagram-container">
+    <div class="diagram" id="diagram">
+
+      <!-- LEFT: Users -->
+      <div class="left-col" id="left-col">
+
+        <div class="user-card" id="card-child">
+          <div class="user-icon child"><i data-lucide="laptop" style="width:22px;height:22px;color:oklch(72% 0.18 155);"></i></div>
+          <div class="user-info">
+            <div class="user-name">Adult Child</div>
+            <div class="user-desc">Buyer · lives abroad<br>Forwards parent's contact to Katha</div>
+          </div>
+        </div>
+
+        <div class="user-card" id="card-parent">
+          <div class="user-icon parent"><i data-lucide="user" style="width:22px;height:22px;color:oklch(78% 0.18 55);"></i></div>
+          <div class="user-info">
+            <div class="user-name">Elderly Parent</div>
+            <div class="user-desc">WhatsApp user · India<br>Speaks in native language</div>
+          </div>
+        </div>
+
+        <div class="user-card" id="card-family">
+          <div class="user-icon family"><i data-lucide="users" style="width:22px;height:22px;color:oklch(72% 0.14 295);"></i></div>
+          <div class="user-info">
+            <div class="user-name">Extended Family</div>
+            <div class="user-desc">Viewers · story recipients<br>Viral sharing loop</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CENTER: Platform -->
+      <div class="center-col">
+        <div class="platform-box" id="platform-box">
+          <div class="platform-title">Katha Platform</div>
+          <div class="platform-subtitle">कथा · Story as a Service</div>
+
+          <div class="layers">
+
+            <div class="layer whatsapp" id="layer-wa" data-tip="WhatsApp Business API · no app install needed">
+              <div class="layer-icon"><i data-lucide="message-circle" style="width:18px;height:18px;color:oklch(72% 0.18 155);"></i></div>
+              <div class="layer-text">
+                <div class="layer-name">WhatsApp Interface Layer</div>
+                <div class="layer-desc">Inbound voice notes · outbound prompts &amp; cards · zero app friction</div>
+              </div>
+            </div>
+
+            <div class="layer ai" id="layer-ai" data-tip="Sarvam.ai STT/TTS + LLM reasoning">
+              <div class="layer-icon"><i data-lucide="cpu" style="width:18px;height:18px;color:oklch(72% 0.14 280);"></i></div>
+              <div class="layer-text">
+                <div class="layer-name">AI Conversation Engine</div>
+                <div class="layer-desc">Sarvam.ai voice AI + LLM · Indian languages &amp; accents · async prompting</div>
+              </div>
+            </div>
+
+            <div class="layer story" id="layer-story" data-tip="Themes, timeline, emotion tagging">
+              <div class="layer-icon"><i data-lucide="book-open" style="width:18px;height:18px;color:oklch(78% 0.16 60);"></i></div>
+              <div class="layer-text">
+                <div class="layer-name">Story Extraction &amp; Organization</div>
+                <div class="layer-desc">NLP theme clustering · timeline building · transcript + audio pairing</div>
+              </div>
+            </div>
+
+            <div class="layer archive" id="layer-archive" data-tip="Encrypted family memory vault">
+              <div class="layer-icon"><i data-lucide="database" style="width:18px;height:18px;color:oklch(72% 0.14 230);"></i></div>
+              <div class="layer-text">
+                <div class="layer-name">Memory Archive Database</div>
+                <div class="layer-desc">Cloud storage · family-scoped access · version history</div>
+              </div>
+            </div>
+
+            <div class="layer dashboard" id="layer-dash" data-tip="Progressive web app · mobile-first">
+              <div class="layer-icon"><i data-lucide="layout-dashboard" style="width:18px;height:18px;color:oklch(72% 0.16 10);"></i></div>
+              <div class="layer-text">
+                <div class="layer-name">Web Dashboard</div>
+                <div class="layer-desc">Family browsing · search · upgrade prompts · shareable story pages</div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- External integrations -->
+          <div class="integrations-row">
+            <div class="integrations-label">External Integrations</div>
+            <div class="integration-chips">
+              <div class="chip wa">WhatsApp Business API</div>
+              <div class="chip ai">Sarvam.ai</div>
+              <div class="chip cloud">Cloud Storage</div>
+              <div class="chip pay">UPI / Payment Gateway</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: Outputs -->
+      <div class="right-col" id="right-col">
+
+        <div class="output-card" id="card-memcard">
+          <div class="user-icon output"><i data-lucide="image" style="width:22px;height:22px;color:oklch(72% 0.16 10);"></i></div>
+          <div class="user-info">
+            <div class="user-name">Daily Memory Cards</div>
+            <div class="user-desc">Sent to parent via WhatsApp · shareable to family</div>
+          </div>
+        </div>
+
+        <div class="output-card" id="card-archive-out">
+          <div class="user-icon output" style="background: oklch(62% 0.16 230 / 0.2);"><i data-lucide="archive" style="width:22px;height:22px;color:oklch(72% 0.14 230);"></i></div>
+          <div class="user-info">
+            <div class="user-name">Story Archive</div>
+            <div class="user-desc">Web access for family · organized by theme &amp; timeline</div>
+          </div>
+        </div>
+
+        <div class="output-card" id="card-share">
+          <div class="user-icon output" style="background: oklch(62% 0.16 295 / 0.2);"><i data-lucide="share-2" style="width:22px;height:22px;color:oklch(72% 0.14 295);"></i></div>
+          <div class="user-info">
+            <div class="user-name">Shareable Story Links</div>
+            <div class="user-desc">Public or private links · viral distribution catalyst</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div><!-- /diagram -->
+
+    <!-- SVG arrows overlay (drawn by JS) -->
+    <svg class="arrows-layer" id="arrows-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+
+  </div><!-- /diagram-container -->
+
+  <!-- Annotations -->
+  <div class="annotations">
+    <div class="annotation"><span class="dot"></span>No app download — 95% activation</div>
+    <div class="annotation"><span class="dot"></span>Works across time zones — asynchronous</div>
+    <div class="annotation"><span class="dot"></span>Indian languages + accents</div>
+    <div class="annotation"><span class="dot"></span>Free for 10 conversations</div>
+    <div class="annotation"><span class="dot" style="background: oklch(62% 0.18 155);"></span>₹5,000 / year subscription</div>
+  </div>
+
+  <!-- Flow legend -->
+  <div class="flow-legend">
+    <div class="legend-item"><div class="legend-line saffron"></div>User → Platform (inbound)</div>
+    <div class="legend-item"><div class="legend-line green"></div>Platform → User (outbound)</div>
+    <div class="legend-item"><div class="legend-line blue"></div>Platform → Output</div>
+    <div class="legend-item"><div class="legend-line dashed"></div>Family viral loop</div>
+  </div>
+
+  </div><!-- /view-arch -->
+
+  <!-- VIEW 2: User Journey -->
+  <div class="view" id="view-journey">
+    <div class="journey-wrap">
+
+      <!-- Actor headers -->
+      <div class="journey-actor-headers">
+        <div class="actor-label"><i data-lucide="laptop"></i> Adult Child</div>
+        <div class="actor-label" style="color: var(--saffron);"><i data-lucide="sparkles"></i> Katha AI</div>
+        <div class="actor-label"><i data-lucide="user"></i> Elderly Parent</div>
+      </div>
+
+      <!-- PHASE 1: Onboarding -->
+      <div class="phase-header">
+        <div class="phase-num" style="background: oklch(62% 0.18 155 / 0.2); color: oklch(72% 0.18 155);">1</div>
+        <div class="phase-label" style="color: oklch(72% 0.18 155);">Onboarding</div>
+        <div class="phase-line"></div>
+        <div class="phase-tag" style="background: oklch(62% 0.18 155 / 0.12); border-color: oklch(62% 0.18 155 / 0.4); color: oklch(72% 0.18 155);">Day 0</div>
+      </div>
+
+      <!-- Step 1.1: Child signs up -->
+      <div class="msg-row">
+        <div>
+          <div class="bubble child-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.18 155);">Adult Child</div>
+            Signs up on katha.in, enters parent's WhatsApp number
+            <div class="bubble-time">Web · 2 min</div>
+          </div>
+        </div>
+        <div></div>
+        <div></div>
+      </div>
+
+      <!-- Step 1.2: Katha reaches out to parent -->
+      <div class="msg-row">
+        <div></div>
+        <div>
+          <div class="bubble katha-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.14 280);">Katha AI · WhatsApp</div>
+            "Namaste Kamala ji 🙏 Aapke bete Rahul ne Katha se connect kiya hai. Katha aapki kahaniyon ko preserve karta hai — ek WhatsApp message se. Kya aap share karna chahenge?"
+            <div class="bubble-time">WhatsApp · auto-sent</div>
+          </div>
+        </div>
+        <div></div>
+      </div>
+
+      <!-- Step 1.3: Parent replies -->
+      <div class="msg-row">
+        <div></div>
+        <div></div>
+        <div>
+          <div class="bubble parent-bubble">
+            <div class="bubble-sender" style="color: oklch(78% 0.18 55);">Elderly Parent</div>
+            "Haan, bilkul. Kya karna hoga?"
+            <div class="bubble-time">WhatsApp · same day</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHASE 2: First Conversation -->
+      <div class="phase-header">
+        <div class="phase-num" style="background: oklch(72% 0.18 55 / 0.2); color: oklch(78% 0.18 55);">2</div>
+        <div class="phase-label" style="color: oklch(78% 0.18 55);">First Conversation</div>
+        <div class="phase-line"></div>
+        <div class="phase-tag" style="background: oklch(72% 0.18 55 / 0.12); border-color: oklch(72% 0.18 55 / 0.4); color: oklch(78% 0.18 55);">Day 1–3 · Free tier</div>
+      </div>
+
+      <!-- Step 2.1: Katha sends first prompt -->
+      <div class="msg-row">
+        <div></div>
+        <div>
+          <div class="bubble katha-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.14 280);">Katha AI · Daily Prompt</div>
+            "Aaj ka sawaal: Aapki shaadi ka pehla din kaisa tha? Koi ek yaad jo aap kabhi nahi bhoolenge?"
+            <div class="bubble-time">WhatsApp · 10:00 AM</div>
+          </div>
+        </div>
+        <div></div>
+      </div>
+
+      <!-- Step 2.2: Parent sends voice note -->
+      <div class="msg-row">
+        <div></div>
+        <div></div>
+        <div>
+          <div class="bubble parent-bubble">
+            <div class="bubble-sender" style="color: oklch(78% 0.18 55);">Parent · Voice Note</div>
+            <div class="voice-note">
+              <div class="voice-play"><i data-lucide="play" style="width:10px;height:10px;color:oklch(78% 0.18 55);"></i></div>
+              <div class="voice-wave">
+                <span style="height:8px;animation-delay:0s"></span>
+                <span style="height:14px;animation-delay:0.1s"></span>
+                <span style="height:20px;animation-delay:0.2s"></span>
+                <span style="height:12px;animation-delay:0.3s"></span>
+                <span style="height:18px;animation-delay:0.4s"></span>
+                <span style="height:9px;animation-delay:0.5s"></span>
+                <span style="height:16px;animation-delay:0.6s"></span>
+                <span style="height:22px;animation-delay:0.7s"></span>
+                <span style="height:10px;animation-delay:0.8s"></span>
+                <span style="height:14px;animation-delay:0.9s"></span>
+                <span style="height:18px;animation-delay:1.0s"></span>
+                <span style="height:8px;animation-delay:1.1s"></span>
+              </div>
+              <div class="voice-dur">2:34</div>
+            </div>
+            <div class="bubble-time">Hindi · 2:34 min voice note</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2.3: AI processes + follow-up -->
+      <div class="msg-row">
+        <div></div>
+        <div>
+          <div class="bubble katha-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.14 280);">Katha AI · Follow-up</div>
+            <div style="font-size:11px; color: oklch(62% 0.08 275); margin-bottom:6px;">Sarvam.ai transcribed → LLM extracted 3 story threads</div>
+            "Kamala ji, bahut sundar memory! Aapne bataya ki unhe jasmines pasand the — kya aap us bouquet ke baare mein aur batayengi?"
+            <div class="bubble-time">WhatsApp · 2 min later · AI-generated</div>
+          </div>
+        </div>
+        <div></div>
+      </div>
+
+      <!-- PHASE 3: Memory Card Delivered -->
+      <div class="phase-header">
+        <div class="phase-num" style="background: oklch(62% 0.16 10 / 0.2); color: oklch(72% 0.16 10);">3</div>
+        <div class="phase-label" style="color: oklch(72% 0.16 10);">Memory Card Delivered</div>
+        <div class="phase-line"></div>
+        <div class="phase-tag" style="background: oklch(62% 0.16 10 / 0.12); border-color: oklch(62% 0.16 10 / 0.4); color: oklch(72% 0.16 10);">Day 2 · Auto-generated</div>
+      </div>
+
+      <!-- Step 3.1: Memory card sent to parent -->
+      <div class="msg-row">
+        <div></div>
+        <div>
+          <div class="bubble katha-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.14 280);">Katha AI · Memory Card</div>
+            <div class="mem-card-preview">
+              <div class="mem-card-top">
+                <div class="mem-card-date">2 May 1974 · Wedding Day</div>
+                <div class="mem-card-title">"The Jasmine Bouquet"</div>
+              </div>
+              <div class="mem-card-bottom">
+                <div class="mem-card-excerpt">"Unke haath mein jasmines the jab hum pehli baar mile..."</div>
+              </div>
+            </div>
+            <div style="font-size:11px; color: oklch(60% 0.08 275); margin-top:7px;">Tap to share with family ↗</div>
+            <div class="bubble-time">WhatsApp · morning delivery</div>
+          </div>
+        </div>
+        <div></div>
+      </div>
+
+      <!-- Step 3.2: Parent shares to family -->
+      <div class="msg-row">
+        <div></div>
+        <div></div>
+        <div>
+          <div class="bubble parent-bubble">
+            <div class="bubble-sender" style="color: oklch(78% 0.18 55);">Parent → Family Group</div>
+            Forwards memory card to family WhatsApp group
+            <div style="font-size:11px; color: oklch(60% 0.08 275); margin-top:5px;">Viral loop begins</div>
+            <div class="bubble-time">WhatsApp forward</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3.3: Child notified -->
+      <div class="msg-row">
+        <div>
+          <div class="bubble child-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.18 155);">Adult Child · Email</div>
+            "New memory added: 'The Jasmine Bouquet' — 3 stories captured this week. <span style='color: oklch(72% 0.18 155)'>View archive →</span>"
+            <div class="bubble-time">Email digest · weekly</div>
+          </div>
+        </div>
+        <div></div>
+        <div></div>
+      </div>
+
+      <!-- PHASE 4: Upgrade -->
+      <div class="phase-header">
+        <div class="phase-num" style="background: oklch(72% 0.17 75 / 0.2); color: oklch(72% 0.17 75);">4</div>
+        <div class="phase-label" style="color: oklch(72% 0.17 75);">Subscription Conversion</div>
+        <div class="phase-line"></div>
+        <div class="phase-tag" style="background: oklch(72% 0.17 75 / 0.12); border-color: oklch(72% 0.17 75 / 0.4); color: oklch(72% 0.17 75);">Day 10 · Upgrade trigger</div>
+      </div>
+
+      <!-- Step 4.1: Limit reached -->
+      <div class="msg-row">
+        <div></div>
+        <div>
+          <div class="bubble katha-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.14 280);">Katha AI · WhatsApp</div>
+            "Kamala ji, aapki 10 kahaniyan save ho gayi hain! Aapke paas abhi bhi bahut saari yaadein hain. Aapke bete Rahul ke liye subscribe karein — sirf ₹5,000 mein poora saal."
+            <div class="bubble-time">Triggered at 10 conversations</div>
+          </div>
+        </div>
+        <div></div>
+      </div>
+
+      <!-- Step 4.2: Child upgrades -->
+      <div class="msg-row">
+        <div>
+          <div class="bubble child-bubble">
+            <div class="bubble-sender" style="color: oklch(72% 0.18 155);">Adult Child</div>
+            Pays ₹5,000/year via UPI from abroad. Full archive unlocked, unlimited conversations.
+            <div class="bubble-time">UPI · instant</div>
+          </div>
+        </div>
+        <div></div>
+        <div></div>
+      </div>
+
+      <!-- Outcomes -->
+      <div class="outcome-strip">
+        <div class="outcome-card">
+          <div class="outcome-icon" style="background: oklch(62% 0.18 155 / 0.2);">
+            <i data-lucide="zap" style="width:22px;height:22px;color:oklch(72% 0.18 155);"></i>
+          </div>
+          <div class="outcome-value" style="color: oklch(72% 0.18 155);">95%</div>
+          <div class="outcome-label">Activation rate<br>No app download needed</div>
+        </div>
+        <div class="outcome-card">
+          <div class="outcome-icon" style="background: oklch(72% 0.18 55 / 0.2);">
+            <i data-lucide="mic" style="width:22px;height:22px;color:oklch(78% 0.18 55);"></i>
+          </div>
+          <div class="outcome-value" style="color: oklch(78% 0.18 55);">2–4 min</div>
+          <div class="outcome-label">Avg. voice note length<br>per conversation</div>
+        </div>
+        <div class="outcome-card">
+          <div class="outcome-icon" style="background: oklch(62% 0.16 295 / 0.2);">
+            <i data-lucide="share-2" style="width:22px;height:22px;color:oklch(72% 0.14 295);"></i>
+          </div>
+          <div class="outcome-value" style="color: oklch(72% 0.14 295);">3.2×</div>
+          <div class="outcome-label">Avg. family shares per<br>memory card</div>
+        </div>
+      </div>
+
+    </div><!-- /journey-wrap -->
+  </div><!-- /view-journey -->
+
+
+</div><!-- /page-wrapper -->
+
+<script>
+// ── Draw SVG arrows after layout ──
+function mid(el, container) {
+  const er = el.getBoundingClientRect();
+  const cr = container.getBoundingClientRect();
+  return {
+    top:    er.top  - cr.top,
+    left:   er.left - cr.left,
+    right:  er.right - cr.left,
+    bottom: er.bottom - cr.top,
+    cx:     er.left + er.width / 2 - cr.left,
+    cy:     er.top  + er.height / 2 - cr.top,
+    width:  er.width,
+    height: er.height
+  };
+}
+
+function makePath(svg, d, cls, delay) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'arrow-path ' + cls);
+  path.style.animationDelay = delay + 's';
+  svg.appendChild(path);
+
+  // arrowhead
+  const arrowLen = 7;
+  // We'll add a marker instead
+  return path;
+}
+
+function makeArrow(svg, defs, x1, y1, x2, y2, cls, delay, markerId) {
+  // marker
+  if (!defs.querySelector('#' + markerId)) {
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', markerId);
+    marker.setAttribute('markerWidth', '8');
+    marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('refX', '7');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 8 3, 0 6');
+    const colors = { inbound: 'oklch(72% 0.18 55)', outbound: 'oklch(62% 0.18 155)', internal: 'oklch(68% 0.16 230)', viral: 'oklch(62% 0.16 295)' };
+    polygon.setAttribute('fill', colors[cls] || '#fff');
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+  }
+
+  // curved path
+  const cx = (x1 + x2) / 2;
+  const cy = (y1 + y2) / 2;
+  // slight arc
+  const dx = x2 - x1, dy = y2 - y1;
+  const nx = -dy * 0.15, ny = dx * 0.15;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const d = `M ${x1} ${y1} Q ${cx + nx} ${cy + ny} ${x2} ${y2}`;
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'arrow-path ' + cls);
+  path.setAttribute('marker-end', `url(#${markerId})`);
+  path.style.animationDelay = delay + 's';
+  svg.appendChild(path);
+}
+
+function drawArrows() {
+  const container = document.querySelector('.diagram-container');
+  const svg = document.getElementById('arrows-svg');
+  svg.innerHTML = '';
+  svg.setAttribute('width', container.offsetWidth);
+  svg.setAttribute('height', container.offsetHeight);
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  svg.appendChild(defs);
+
+  const get = id => document.getElementById(id);
+  const c = container;
+
+  // Helper: right edge midpoint of element
+  const rMid  = el => { const m = mid(el, c); return [m.right, m.cy]; };
+  const lMid  = el => { const m = mid(el, c); return [m.left,  m.cy]; };
+  const tMid  = el => { const m = mid(el, c); return [m.cx,    m.top]; };
+  const bMid  = el => { const m = mid(el, c); return [m.cx,    m.bottom]; };
+
+  const pb = get('platform-box');
+  const pbM = mid(pb, c);
+
+  // 1. Adult Child → platform (inbound: forwards parent contact)
+  { const [x1,y1] = rMid(get('card-child')); const [x2,y2] = [pbM.left, mid(get('layer-wa'),c).cy]; makeArrow(svg, defs, x1, y1, x2, y2, 'inbound', 0, 'm1a'); }
+
+  // 2. Parent → platform (sends voice notes)
+  { const [x1,y1] = rMid(get('card-parent')); const [x2,y2] = [pbM.left, mid(get('layer-ai'),c).cy]; makeArrow(svg, defs, x1, y1, x2, y2, 'inbound', 0.3, 'm2a'); }
+
+  // 3. Platform → Parent: AI sends follow-up + memory cards
+  { const [x1,y1] = [pbM.left, mid(get('layer-wa'),c).cy + 14]; const [x2,y2] = rMid(get('card-parent')); makeArrow(svg, defs, x1, y1, x2, y2+12, 'outbound', 0.6, 'm3a'); }
+
+  // 4. Platform → Adult Child: archive updates
+  { const [x1,y1] = [pbM.left, mid(get('layer-dash'),c).cy]; const [x2,y2] = rMid(get('card-child')); makeArrow(svg, defs, x1, y1, x2, y2+8, 'outbound', 0.9, 'm4a'); }
+
+  // Platform → Memory Cards output
+  { const [x1,y1] = [pbM.right, mid(get('layer-wa'),c).cy]; const [x2,y2] = lMid(get('card-memcard')); makeArrow(svg, defs, x1, y1, x2, y2, 'internal', 0.4, 'm5a'); }
+
+  // Platform → Story Archive output
+  { const [x1,y1] = [pbM.right, mid(get('layer-archive'),c).cy]; const [x2,y2] = lMid(get('card-archive-out')); makeArrow(svg, defs, x1, y1, x2, y2, 'internal', 0.7, 'm6a'); }
+
+  // Platform → Shareable Links
+  { const [x1,y1] = [pbM.right, mid(get('layer-dash'),c).cy]; const [x2,y2] = lMid(get('card-share')); makeArrow(svg, defs, x1, y1, x2, y2, 'internal', 1.0, 'm7a'); }
+
+  // 5. Parent → Family (viral - memory cards to WhatsApp)
+  { const pm = mid(get('card-parent'), c); const fm = mid(get('card-family'), c);
+    makeArrow(svg, defs, pm.cx - 30, pm.bottom, fm.cx - 30, fm.top, 'viral', 1.2, 'm8a'); }
+
+  // 6. Family → Web Dashboard (access full archive)
+  { const [x1,y1] = rMid(get('card-family')); const [x2,y2] = lMid(get('card-archive-out')); makeArrow(svg, defs, x1, y1, x2, y2+16, 'viral', 1.5, 'm9a'); }
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'arch') setTimeout(drawArrows, 80);
+}
+
+// Render Lucide icons then draw arrows
+window.addEventListener('load', () => {
+  lucide.createIcons();
+  setTimeout(drawArrows, 150);
+});
+window.addEventListener('resize', drawArrows);
+
+// ── Tweaks panel protocol ──
+window.addEventListener('message', e => {
+  if (e.data?.type === '__activate_edit_mode')   document.getElementById('tweaks-panel').style.display = 'flex';
+  if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').style.display = 'none';
+});
+window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+</script>
+
+<!-- Tweaks panel (inline, no React dependency) -->
+<div id="tweaks-panel" style="display:none; position:fixed; bottom:24px; right:24px; z-index:9999;
+  background: oklch(22% 0.05 280); border: 1px solid oklch(50% 0.08 275 / 0.5);
+  border-radius: 16px; padding: 20px; width: 240px; flex-direction: column; gap: 14px;
+  box-shadow: 0 8px 40px oklch(0% 0 0 / 0.5); font-family: 'DM Sans', sans-serif;">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <span style="font-size:13px; font-weight:600; color: oklch(90% 0.06 75); letter-spacing:0.04em;">Tweaks</span>
+    <button onclick="document.getElementById('tweaks-panel').style.display='none'; window.parent.postMessage({type:'__edit_mode_dismissed'},'*')"
+      style="background:none; border:none; color: oklch(65% 0.05 275); cursor:pointer; font-size:16px; line-height:1;">✕</button>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <label style="font-size:11px; color: oklch(60% 0.06 275); letter-spacing:0.12em; text-transform:uppercase;">Background Tone</label>
+    <div style="display:flex; gap:8px;">
+      <button class="tweak-btn" onclick="setTheme('indigo')" style="flex:1; padding:7px; border-radius:8px; border:1px solid oklch(50% 0.12 275/0.5); background:oklch(28% 0.12 280); color:oklch(80% 0.08 75); font-size:12px; cursor:pointer;">Indigo</button>
+      <button class="tweak-btn" onclick="setTheme('dark')" style="flex:1; padding:7px; border-radius:8px; border:1px solid oklch(50% 0.05 275/0.3); background:oklch(18% 0.03 280); color:oklch(80% 0.08 75); font-size:12px; cursor:pointer;">Dark</button>
+      <button class="tweak-btn" onclick="setTheme('warm')" style="flex:1; padding:7px; border-radius:8px; border:1px solid oklch(60% 0.12 55/0.4); background:oklch(22% 0.05 50); color:oklch(80% 0.08 75); font-size:12px; cursor:pointer;">Warm</button>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <label style="font-size:11px; color: oklch(60% 0.06 275); letter-spacing:0.12em; text-transform:uppercase;">Arrow Animation</label>
+    <div style="display:flex; gap:8px;">
+      <button onclick="toggleArrows()" id="arrow-toggle" style="flex:1; padding:7px; border-radius:8px; border:1px solid oklch(72% 0.18 55/0.4); background:oklch(72% 0.18 55/0.15); color:oklch(78% 0.16 60); font-size:12px; cursor:pointer;">On</button>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <label style="font-size:11px; color: oklch(60% 0.06 275); letter-spacing:0.12em; text-transform:uppercase;">Subtitle text</label>
+    <input id="subtitle-input" value="Conversational AI platform for capturing family stories via WhatsApp, built for India"
+      oninput="document.querySelector('.header-sub').textContent = this.value"
+      style="background: oklch(30% 0.05 280); border: 1px solid oklch(50% 0.06 275/0.4); border-radius:8px; padding: 6px 10px; color: oklch(85% 0.05 275); font-size:11px; outline:none; font-family: 'DM Sans', sans-serif; resize:none;" />
+  </div>
+</div>
+
+<script>
+let arrowsOn = true;
+function toggleArrows() {
+  arrowsOn = !arrowsOn;
+  document.querySelectorAll('.arrow-path').forEach(p => {
+    p.style.animationPlayState = arrowsOn ? 'running' : 'paused';
+    p.style.opacity = arrowsOn ? '1' : '0.2';
+  });
+  document.getElementById('arrow-toggle').textContent = arrowsOn ? 'On' : 'Off';
+}
+function setTheme(t) {
+  const body = document.body;
+  if (t === 'indigo') { body.style.background = 'oklch(28% 0.12 280)'; }
+  if (t === 'dark')   { body.style.background = 'oklch(14% 0.04 280)'; }
+  if (t === 'warm')   { body.style.background = 'oklch(20% 0.06 45)'; }
+}
+</script>
+
+</body>
+</html>
