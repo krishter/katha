@@ -8,5 +8,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "info"
 
+    SARVAM_API_KEY: str
+    ANTHROPIC_API_KEY: str
+
 
 settings = Settings()
