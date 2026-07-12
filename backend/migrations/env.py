@@ -20,7 +20,9 @@ _db_url = os.environ.get(
 config.set_main_option("sqlalchemy.url", _db_url)
 
 # Import models so Alembic can detect schema changes for autogenerate
+import models.fact  # noqa: E402, F401
 import models.session  # noqa: E402, F401
+import models.story_atom  # noqa: E402, F401
 from models.db import Base  # noqa: E402
 
 target_metadata = Base.metadata
