@@ -96,6 +96,26 @@ def mock_update_session():
         yield
 
 
+@pytest.fixture(autouse=True)
+def mock_prior_context():
+    """Mock fact_store and vector_store so Phase 2 tests don't hit real DB/OpenAI."""
+    with (
+        patch(
+            "core.orchestrator.fact_store.get_facts",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "core.orchestrator.vector_store.retrieve_relevant",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "core.orchestrator.fact_store.get_significant_people",
+            new=AsyncMock(return_value=[]),
+        ),
+    ):
+        yield
+
+
 # ── tests ─────────────────────────────────────────────────────────────────────
 
 
