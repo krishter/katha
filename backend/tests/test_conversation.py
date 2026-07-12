@@ -1,54 +1,57 @@
-import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from models.db import get_db
+
+
+async def _override_get_db():
+    yield AsyncMock()
+
+
+app.dependency_overrides[get_db] = _override_get_db
 
 client = TestClient(app)
 
 _FAKE_WAV = b"RIFF$\x00\x00\x00WAVEfmt " + b"\x00" * 36
-_FAKE_WAV_B64 = base64.b64encode(_FAKE_WAV).decode()
 _DUMMY_AUDIO = b"fake-ogg-audio-bytes"
 
 
+def _make_turn_result(**overrides):
+    """Build a minimal TurnResult-like object."""
+    from core.orchestrator import TurnResult
+    from core.session_manager import SessionState
+
+    defaults = dict(
+        response_audio=_FAKE_WAV,
+        response_text="Hello! How can I help you?",
+        extraction_json={},
+        transcript="नमस्ते",
+        detected_language="hi-IN",
+        session_state=SessionState(
+            session_id="test-session-id",
+            user_id="user-1",
+            session_number=1,
+            domain="childhood",
+            exchange_count=1,
+            energy_signal="high",
+            goal_met=False,
+            session_end_suggested=False,
+        ),
+        crisis_detected=False,
+    )
+    defaults.update(overrides)
+    return TurnResult(**defaults)
+
+
 @pytest.fixture(autouse=True)
-def mock_all_adapters():
-    """Patch all three adapters so no real API calls are made."""
-    with (
-        patch(
-            "core.orchestrator.sarvam_stt.transcribe",
-            new=AsyncMock(
-                return_value=type(
-                    "TranscriptResult",
-                    (),
-                    {
-                        "transcript": "नमस्ते",
-                        "language_code": "hi-IN",
-                        "language_probability": 0.97,
-                    },
-                )()
-            ),
-        ),
-        patch(
-            "core.orchestrator.llm.chat",
-            new=AsyncMock(
-                return_value=type(
-                    "LLMResponse",
-                    (),
-                    {
-                        "content": "Hello! I am Katha.",
-                        "input_tokens": 10,
-                        "output_tokens": 8,
-                    },
-                )()
-            ),
-        ),
-        patch(
-            "core.orchestrator.sarvam_tts.synthesize",
-            new=AsyncMock(return_value=_FAKE_WAV),
-        ),
+def mock_orchestrator():
+    """Mock process_voice_turn so no real adapters or DB are called."""
+    with patch(
+        "api.routes.conversation.orchestrator.process_voice_turn",
+        new=AsyncMock(return_value=_make_turn_result()),
     ):
         yield
 
@@ -57,6 +60,12 @@ def test_conversation_turn_returns_200():
     response = client.post(
         "/conversation/turn",
         files={"audio": ("test.ogg", _DUMMY_AUDIO, "audio/ogg")},
+        data={
+            "session_id": "test-session-id",
+            "user_name": "Subramaniam",
+            "preferred_language": "hi-IN",
+            "onboarding_context": "",
+        },
     )
     assert response.status_code == 200
 
@@ -65,6 +74,12 @@ def test_conversation_turn_content_type_wav():
     response = client.post(
         "/conversation/turn",
         files={"audio": ("test.ogg", _DUMMY_AUDIO, "audio/ogg")},
+        data={
+            "session_id": "test-session-id",
+            "user_name": "Subramaniam",
+            "preferred_language": "hi-IN",
+            "onboarding_context": "",
+        },
     )
     assert response.headers["content-type"] == "audio/wav"
 
@@ -73,6 +88,12 @@ def test_conversation_turn_x_transcript_header():
     response = client.post(
         "/conversation/turn",
         files={"audio": ("test.ogg", _DUMMY_AUDIO, "audio/ogg")},
+        data={
+            "session_id": "test-session-id",
+            "user_name": "Subramaniam",
+            "preferred_language": "hi-IN",
+            "onboarding_context": "",
+        },
     )
     assert response.headers.get("x-transcript", "") != ""
 
@@ -81,5 +102,11 @@ def test_conversation_turn_returns_audio_bytes():
     response = client.post(
         "/conversation/turn",
         files={"audio": ("test.ogg", _DUMMY_AUDIO, "audio/ogg")},
+        data={
+            "session_id": "test-session-id",
+            "user_name": "Subramaniam",
+            "preferred_language": "hi-IN",
+            "onboarding_context": "",
+        },
     )
     assert response.content == _FAKE_WAV

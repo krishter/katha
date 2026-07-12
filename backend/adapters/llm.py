@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 
@@ -23,15 +25,20 @@ class LLMResponse:
     output_tokens: int
 
 
-async def chat(messages: list[Message]) -> LLMResponse:
+async def chat(
+    messages: list[Message],
+    system: str | None = None,
+) -> LLMResponse:
     """Send messages to Claude Sonnet 4.6 and return the response."""
     client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-    system_content = None
+    # Separate any system-role message; explicit system= param takes precedence
+    system_content = system
     user_messages = []
     for msg in messages:
         if msg.role == "system":
-            system_content = msg.content
+            if system_content is None:
+                system_content = msg.content
         else:
             user_messages.append({"role": msg.role, "content": msg.content})
 

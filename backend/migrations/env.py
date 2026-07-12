@@ -19,7 +19,11 @@ _db_url = os.environ.get(
 
 config.set_main_option("sqlalchemy.url", _db_url)
 
-target_metadata = None
+# Import models so Alembic can detect schema changes for autogenerate
+import models.session  # noqa: E402, F401
+from models.db import Base  # noqa: E402
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
