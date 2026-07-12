@@ -5,10 +5,14 @@ import logging
 import re
 from dataclasses import dataclass
 
+from fastapi import BackgroundTasks
+
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
 from core import conversation_policy, session_manager
 from core.session_manager import SessionState
+from extraction import entity_extractor, story_extractor
+from memory import fact_store, vector_store
 from prompts.system_prompt import PriorContext, UserProfile, build_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -19,6 +23,7 @@ _EXTRACTION_RE = re.compile(r"<extraction>(.*?)</extraction>", re.DOTALL)
 _EMPTY_EXTRACTION: dict = {
     "story_atoms": [],
     "named_entities": {},
+    "significant_people": [],
     "themes": [],
     "energy_signal": "high",
     "gaps_remaining": [],
@@ -54,16 +59,77 @@ def _parse_llm_output(raw: str) -> tuple[str, dict]:
     return response_text, extraction_json
 
 
+def _extract_open_threads(recent_atoms: list) -> list[str]:
+    """Aggregate open_threads from a list of StoryAtom objects."""
+    threads: list[str] = []
+    seen: set[str] = set()
+    for atom in recent_atoms:
+        for thread in getattr(atom, "open_threads", None) or []:
+            if thread not in seen:
+                threads.append(thread)
+                seen.add(thread)
+    return threads
+
+
+async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
+    """Query fact store and vector store to build real prior context."""
+    facts = await fact_store.get_facts(user_id, db)
+    recent_atoms = await vector_store.retrieve_relevant(user_id, domain, top_k=5, db=db)
+    significant_people = await fact_store.get_significant_people(user_id, db)
+    open_threads = _extract_open_threads(recent_atoms)
+    return PriorContext(
+        facts=facts,
+        recent_stories=[
+            getattr(a, "verbatim_quote", None)
+            or (a.narrative[:200] if hasattr(a, "narrative") else "")
+            for a in recent_atoms
+        ],
+        open_threads=open_threads,
+        significant_people=significant_people,
+    )
+
+
+async def run_post_session(
+    extraction_json: dict,
+    transcript: str,
+    session_id: str,
+    user_id: str,
+    db,
+) -> None:
+    """
+    Background task triggered after session close.
+    Runs story extraction and entity extraction sequentially.
+    Logs exceptions — never raises (voice turn already delivered).
+    """
+    try:
+        await story_extractor.process_extraction(
+            extraction_json, session_id, user_id, db
+        )
+    except Exception:
+        logger.exception(
+            "Post-session story extraction failed for session %s", session_id
+        )
+
+    try:
+        await entity_extractor.extract_entities(transcript, user_id, db)
+    except Exception:
+        logger.exception(
+            "Post-session entity extraction failed for session %s", session_id
+        )
+
+
 async def process_voice_turn(
     audio_bytes: bytes,
     session_id: str,
     user_profile: UserProfile,
     db,
+    background_tasks: BackgroundTasks | None = None,
 ) -> TurnResult:
     """
-    Full Phase 2 pipeline:
-    session → STT → pre-policy → system prompt → LLM
-    → post-policy → parse → TTS → session update
+    Full Phase 3 pipeline:
+    session → STT → pre-policy → prior context → system prompt → LLM
+    → post-policy → parse → session update → TTS
+    → schedule post-session (if session end)
     """
     # 1. Load session state
     state = await session_manager.get_session(session_id, db)
@@ -103,8 +169,8 @@ async def process_voice_turn(
             crisis_detected=pre_check.crisis_detected,
         )
 
-    # 4. Build prior context (Phase 3 will fill this from vector store)
-    prior_context = PriorContext()
+    # 4. Build real prior context from fact store + vector store
+    prior_context = await build_prior_context(state.user_id, state.domain, db)
 
     # 5. Build system prompt
     system_prompt = build_system_prompt(user_profile, state, prior_context)
@@ -155,6 +221,22 @@ async def process_voice_turn(
         response_text, language_code=stt_result.language_code
     )
     logger.info("TTS: produced %d bytes", len(audio_out))
+
+    # 11. Schedule post-session processing if session ended
+    session_ended = extraction_json.get(
+        "session_end_suggested"
+    ) or session_manager.should_end_session(state)
+    if session_ended:
+        if background_tasks is not None:
+            background_tasks.add_task(
+                run_post_session,
+                extraction_json,
+                stt_result.transcript,
+                session_id,
+                state.user_id,
+                db,
+            )
+            logger.info("Scheduled post-session processing for %s", session_id)
 
     return TurnResult(
         response_audio=audio_out,
