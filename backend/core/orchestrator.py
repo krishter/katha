@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import BackgroundTasks
 
@@ -40,6 +41,7 @@ class TurnResult:
     detected_language: str
     session_state: SessionState
     crisis_detected: bool
+    response_mime_type: str = field(default="audio/x-wav")
 
 
 def _parse_llm_output(raw: str) -> tuple[str, dict]:
@@ -116,6 +118,49 @@ async def run_post_session(
         logger.exception(
             "Post-session entity extraction failed for session %s", session_id
         )
+
+
+async def convert_wav_to_ogg(wav_bytes: bytes) -> bytes:
+    """
+    Convert WAV bytes to OGG/Opus using ffmpeg subprocess.
+    Required because Sarvam TTS returns WAV but WhatsApp expects OGG/Opus.
+    ffmpeg must be available in the environment (installed via apt / Docker).
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-f", "wav",
+        "-i", "pipe:0",
+        "-c:a", "libopus",
+        "-f", "ogg",
+        "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(input=wav_bytes)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg conversion failed: {stderr.decode()[:200]}")
+    return stdout
+
+
+async def close_and_process_session(
+    session_id: str,
+    transcript: str,
+    extraction_json: dict,
+    db,
+) -> None:
+    """
+    Background task. Called when a session ends via the webhook.
+    Runs post-session processing (story + entity extraction).
+    """
+    try:
+        state = await session_manager.get_session(session_id, db)
+        await run_post_session(
+            extraction_json, transcript, session_id, state.user_id, db
+        )
+        logger.info("Session %s closed and processed", session_id)
+    except Exception:
+        logger.exception("close_and_process_session failed for session %s", session_id)
 
 
 async def process_voice_turn(
