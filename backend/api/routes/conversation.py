@@ -3,7 +3,15 @@ from __future__ import annotations
 import logging
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +41,7 @@ async def conversation_turn(
     user_name: str = Form(default="Friend"),
     preferred_language: str = Form(default="hi-IN"),
     onboarding_context: str = Form(default=""),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     try:
@@ -43,7 +52,7 @@ async def conversation_turn(
             onboarding_context=onboarding_context,
         )
         result = await orchestrator.process_voice_turn(
-            audio_bytes, session_id, user_profile, db
+            audio_bytes, session_id, user_profile, db, background_tasks
         )
         return Response(
             content=result.response_audio,
@@ -61,3 +70,37 @@ async def conversation_turn(
     except Exception as exc:
         logger.exception("Error processing conversation turn")
         return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.post("/close")
+async def close_session(
+    session_id: str = Form(...),
+    extraction_json_str: str = Form(default="{}"),
+    transcript: str = Form(default=""),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Explicit session close endpoint. Triggers post-session processing as a
+    background task (story extraction + entity extraction). Called by the
+    client when the session_end_suggested flag is seen in response headers,
+    or when the user explicitly ends the session.
+    """
+    import json as _json
+
+    try:
+        extraction_json = _json.loads(extraction_json_str)
+    except _json.JSONDecodeError:
+        extraction_json = {}
+
+    state = await session_manager.get_session(session_id, db)
+    background_tasks.add_task(
+        orchestrator.run_post_session,
+        extraction_json,
+        transcript,
+        session_id,
+        state.user_id,
+        db,
+    )
+    logger.info("Session %s closed; post-session processing scheduled", session_id)
+    return {"status": "closed", "session_id": session_id}

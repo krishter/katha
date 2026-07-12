@@ -48,9 +48,9 @@ def test_prompt_contains_icall_crisis_number():
     assert "9152987821" in prompt
 
 
-def test_prompt_length_under_4000_chars():
+def test_prompt_length_under_4500_chars():
     prompt = _build()
-    assert len(prompt) < 4000, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 4500, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():
@@ -58,3 +58,34 @@ def test_prompt_contains_language_name_not_code():
     # Should say "Tamil" not "ta-IN"
     assert "Tamil" in prompt
     assert "ta-IN" not in prompt
+
+
+def test_prompt_contains_sixth_principle_unforgettable_people():
+    prompt = _build()
+    assert "unforgettable people" in prompt.lower()
+
+
+def test_prompt_layer3_includes_significant_people_when_present():
+    prior = PriorContext(
+        significant_people=[
+            {
+                "name": "Mr. Iyer",
+                "relationship": "school teacher",
+                "why_significant": "Inspired teaching career",
+            }
+        ]
+    )
+    prompt = build_system_prompt(_PROFILE, _SESSION, prior)
+    assert "Mr. Iyer" in prompt
+    assert "Not yet fully explored" in prompt
+
+
+def test_prompt_layer3_omits_significant_people_block_when_empty():
+    prior = PriorContext(significant_people=[])
+    prompt = build_system_prompt(_PROFILE, _SESSION, prior)
+    assert "Not yet fully explored" not in prompt
+
+
+def test_prompt_layer5_includes_significant_people_field():
+    prompt = _build()
+    assert "significant_people" in prompt

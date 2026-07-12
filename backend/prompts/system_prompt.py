@@ -38,6 +38,7 @@ class PriorContext:
     facts: dict = field(default_factory=dict)
     recent_stories: list[str] = field(default_factory=list)
     open_threads: list[str] = field(default_factory=list)
+    significant_people: list[dict] = field(default_factory=list)
 
 
 def _language_name(bcp47: str) -> str:
@@ -76,7 +77,14 @@ shorten the session. Ask one light question. Do not push for a full session.
 5. Cultural modesty reframe: When a user says "My life was ordinary, nothing special," \
 respond warmly: "That's exactly the kind of life I want to learn about. \
 The everyday things — the neighbourhood, the people, the small moments \
-— those are the most precious stories to preserve." """
+— those are the most precious stories to preserve."
+
+6. Follow unforgettable people, wherever they appear: If the user describes someone \
+— in any domain — with unusual warmth, repetition, or emotional weight, treat it as \
+a signal, not a detail. Gently go deeper in the moment \
+("What was it about him that stayed with you?"), and if the conversation moves on \
+before it is fully explored, flag them in the extraction output so the next session \
+can return to them. People who shaped a life don't respect domain boundaries."""
 
 
 def _layer3_life_context(
@@ -105,8 +113,22 @@ def _layer3_life_context(
             f"  - {t}" for t in prior_context.open_threads
         )
 
+    significant_block = ""
+    if prior_context.significant_people:
+        # Cap to most recent 2 to avoid prompt bloat
+        people_to_show = prior_context.significant_people[:2]
+        lines = "\n".join(
+            f"  - {p.get('name', 'Unknown')} ({p.get('relationship', '')}) "
+            f"— {p.get('why_significant', '')}. Not yet fully explored."
+            for p in people_to_show
+        )
+        significant_block = (
+            f"\nPeople who have mattered deeply to {user_profile.name}, "
+            f"mentioned in past sessions and not yet fully explored:\n{lines}"
+        )
+
     return f"""LAYER 3 — LIFE CONTEXT
-{context_block}{threads}
+{context_block}{threads}{significant_block}
 
 Today's focus domain: {domain.name}
 Domain entry question: {domain.entry_prompt}"""
@@ -142,6 +164,15 @@ This is what will be spoken aloud.]
 {
   "story_atoms": [],
   "named_entities": {},
+  "significant_people": [
+    {
+      "name": "string",
+      "relationship": "string",
+      "why_significant": "string",
+      "signal": "string — why flagged: repetition, unprompted mention, \
+emotional language, explicit phrases like changed my life or I still think about"
+    }
+  ],
   "themes": [],
   "energy_signal": "high|medium|low",
   "gaps_remaining": [],
@@ -151,7 +182,12 @@ This is what will be spoken aloud.]
 
 The <response> block is converted to speech and sent to the user. \
 The <extraction> block is never shown to the user. \
-Both blocks are required in every reply."""
+Both blocks are required in every reply.
+
+For significant_people: only add entries when there is a genuine signal — \
+repetition, unprompted mention, unusual emotional detail, or explicit phrases \
+like "changed my life" or "I still think about". \
+Do not tag every named person."""
 
 
 def build_system_prompt(
