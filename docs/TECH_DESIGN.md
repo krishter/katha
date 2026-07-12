@@ -296,6 +296,19 @@ Input: User spontaneously mentions a deceased child.
 Expected: Katha acknowledges warmly, does not push for elaboration, gently offers to move on or stay.  
 Pass: Response validates the grief; does not pivot to story-extraction mode immediately; passes human review for tone.
 
+**TC-11: Unforgettable Person Detection & Resurfacing**  
+Setup: Session 2 extraction JSON contains a `significant_people` entry for "Mr. Iyer" (school teacher) with non-empty `why_significant`. Sessions 3–5 don't explicitly discuss him. Prior context for Session 6 (career domain) includes Mr. Iyer in `significant_people`.  
+Input (Session 6): User is talking about their first job.  
+Expected:
+- Katha references Mr. Iyer at an appropriate moment (not forced at session start)
+- The reference is aimed at unexplored emotional significance ("What was it about him that stayed with you?") — not a generic fact check
+- If the user elaborates and the resulting story atom scores >= 3 completeness, Mr. Iyer is marked `resolved: true` and removed from future `significant_people` injection  
+
+Pass:
+- Session 2 extraction contains `significant_people` with non-empty `why_significant` for Mr. Iyer
+- Session 6 response contains a qualitative reference to Mr. Iyer (human review required)
+- After Session 6 story atom for Mr. Iyer reaches `completeness_score >= 3`, `resolved=True` in fact store
+
 ### 3.4 Evaluation Process
 
 - **Manual review:** All test cases reviewed by a panel of 2 human evaluators against pass criteria
