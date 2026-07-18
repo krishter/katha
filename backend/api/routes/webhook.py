@@ -124,7 +124,7 @@ async def whatsapp_incoming(
             )
 
             await whatsapp.send_voice_note(
-                from_number, result.response_audio, mime_type="audio/ogg"
+                from_number, result.response_audio, mime_type=result.response_mime_type
             )
 
             # Update last_user_message_at

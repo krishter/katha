@@ -147,9 +147,7 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
                 "I'm here. \U0001f64f"
             )
             await whatsapp.send_text(profile.whatsapp_number, followup_text)
-            logger.info(
-                "Scheduler: sent 30-min follow-up to user %s", profile.user_id
-            )
+            logger.info("Scheduler: sent 30-min follow-up to user %s", profile.user_id)
         except Exception:
             logger.exception(
                 "Scheduler: failed to send follow-up for user %s", profile.user_id

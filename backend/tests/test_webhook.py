@@ -12,9 +12,11 @@ _FROM_NUMBER = "+919876543210"
 _FAKE_WAV = b"RIFF" + b"\x00" * 40
 _MEDIA_URL = "https://api.twilio.com/Accounts/AC/Messages/MM/Media/ME"
 
+
 # Override DB dependency
 async def _override_db():
     yield AsyncMock()
+
 
 app.dependency_overrides[get_db] = _override_db
 

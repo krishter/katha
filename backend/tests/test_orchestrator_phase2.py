@@ -69,6 +69,16 @@ def mock_tts():
 
 
 @pytest.fixture(autouse=True)
+def mock_convert_wav_to_ogg():
+    """Avoid shelling out to real ffmpeg in unit tests; pass audio through unchanged."""
+    with patch(
+        "core.orchestrator.convert_wav_to_ogg",
+        new=AsyncMock(side_effect=lambda audio_bytes: audio_bytes),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def mock_get_session():
     with patch(
         "core.orchestrator.session_manager.get_session",

@@ -128,10 +128,14 @@ async def convert_wav_to_ogg(wav_bytes: bytes) -> bytes:
     """
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg",
-        "-f", "wav",
-        "-i", "pipe:0",
-        "-c:a", "libopus",
-        "-f", "ogg",
+        "-f",
+        "wav",
+        "-i",
+        "pipe:0",
+        "-c:a",
+        "libopus",
+        "-f",
+        "ogg",
         "pipe:1",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -204,6 +208,7 @@ async def process_voice_turn(
             pre_check.override_response,  # type: ignore[arg-type]
             language_code=stt_result.language_code,
         )
+        audio_out = await convert_wav_to_ogg(audio_out)
         return TurnResult(
             response_audio=audio_out,
             response_text=pre_check.override_response or "",
@@ -212,6 +217,7 @@ async def process_voice_turn(
             detected_language=stt_result.language_code,
             session_state=state,
             crisis_detected=pre_check.crisis_detected,
+            response_mime_type="audio/ogg",
         )
 
     # 4. Build real prior context from fact store + vector store
@@ -238,6 +244,7 @@ async def process_voice_turn(
             post_check.override_response,  # type: ignore[arg-type]
             language_code=stt_result.language_code,
         )
+        audio_out = await convert_wav_to_ogg(audio_out)
         return TurnResult(
             response_audio=audio_out,
             response_text=post_check.override_response or "",
@@ -246,6 +253,7 @@ async def process_voice_turn(
             detected_language=stt_result.language_code,
             session_state=state,
             crisis_detected=False,
+            response_mime_type="audio/ogg",
         )
 
     # 8. Parse dual output
@@ -266,6 +274,9 @@ async def process_voice_turn(
         response_text, language_code=stt_result.language_code
     )
     logger.info("TTS: produced %d bytes", len(audio_out))
+
+    # Convert WAV → OGG/Opus for WhatsApp delivery
+    audio_out = await convert_wav_to_ogg(audio_out)
 
     # 11. Schedule post-session processing if session ended
     session_ended = extraction_json.get(
@@ -291,4 +302,5 @@ async def process_voice_turn(
         detected_language=stt_result.language_code,
         session_state=state,
         crisis_detected=False,
+        response_mime_type="audio/ogg",
     )

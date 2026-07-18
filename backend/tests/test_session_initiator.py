@@ -159,9 +159,7 @@ async def test_followup_sent_for_non_responsive_session():
     # No users due this minute
     factory, _ = _make_db_factory(
         profile=None,
-        followup_rows=[
-            (MagicMock(user_id="user-test"), _make_profile(8, 0))
-        ],
+        followup_rows=[(MagicMock(user_id="user-test"), _make_profile(8, 0))],
     )
 
     stub_adapter = MagicMock()

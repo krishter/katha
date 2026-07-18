@@ -231,6 +231,10 @@ async def test_voice_turn_schedules_background_task_not_awaits():
             new=AsyncMock(return_value=_FAKE_WAV),
         ),
         patch(
+            "core.orchestrator.convert_wav_to_ogg",
+            new=AsyncMock(side_effect=lambda audio_bytes: audio_bytes),
+        ),
+        patch(
             "core.orchestrator.session_manager.update_session",
             new=AsyncMock(return_value=session_state),
         ),
