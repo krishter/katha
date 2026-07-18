@@ -35,6 +35,19 @@ class StubWhatsAppAdapter:
         )
         return sid
 
+    async def send_image(
+        self, to_number: str, image_bytes: bytes, caption: str = ""
+    ) -> str:
+        sid = self._fake_sid()
+        logger.info(
+            "[STUB] send_image to=%s bytes=%d caption=%r sid=%s",
+            to_number,
+            len(image_bytes),
+            caption[:80],
+            sid,
+        )
+        return sid
+
     async def send_text(
         self,
         to_number: str,

@@ -16,6 +16,12 @@ async def test_stub_send_voice_note_returns_fake_sid():
     assert sid.startswith("STUB_MSG_")
 
 
+async def test_stub_send_image_returns_fake_sid():
+    adapter = StubWhatsAppAdapter()
+    sid = await adapter.send_image(_TO, b"fake-png-bytes", caption="A memory")
+    assert sid.startswith("STUB_MSG_")
+
+
 async def test_stub_send_text_returns_fake_sid():
     adapter = StubWhatsAppAdapter()
     sid = await adapter.send_text(_TO, "Hello Subramaniam!")
@@ -50,7 +56,7 @@ async def test_twilio_send_voice_note_uploads_then_sends():
     with (
         patch("adapters.whatsapp.TwilioClient", return_value=mock_twilio),
         patch(
-            "adapters.whatsapp.storage.upload_audio",
+            "adapters.whatsapp.storage.upload_media",
             new=AsyncMock(
                 return_value="https://s3.amazonaws.com/katha-media/audio/test.ogg"
             ),
@@ -64,6 +70,36 @@ async def test_twilio_send_voice_note_uploads_then_sends():
     call_kwargs = mock_twilio.messages.create.call_args.kwargs
     assert call_kwargs["to"] == f"whatsapp:{_TO}"
     assert sid == "SM_TEST_123"
+
+
+async def test_twilio_send_image_uploads_then_sends():
+    from adapters.whatsapp import TwilioWhatsAppAdapter
+
+    mock_msg = MagicMock()
+    mock_msg.sid = "SM_IMG_789"
+
+    mock_twilio = MagicMock()
+    mock_twilio.messages.create.return_value = mock_msg
+
+    with (
+        patch("adapters.whatsapp.TwilioClient", return_value=mock_twilio),
+        patch(
+            "adapters.whatsapp.storage.upload_media",
+            new=AsyncMock(
+                return_value="https://s3.amazonaws.com/katha-media/cards/test.png"
+            ),
+        ) as mock_upload,
+    ):
+        adapter = TwilioWhatsAppAdapter("ACtest", "authtest", "whatsapp:+14155238886")
+        sid = await adapter.send_image(_TO, b"fake-png-bytes", caption="A memory")
+
+    mock_upload.assert_called_once()
+    upload_kwargs = mock_upload.call_args.args
+    assert upload_kwargs[2] == "image/png"
+    call_kwargs = mock_twilio.messages.create.call_args.kwargs
+    assert call_kwargs["to"] == f"whatsapp:{_TO}"
+    assert call_kwargs["body"] == "A memory"
+    assert sid == "SM_IMG_789"
 
 
 async def test_twilio_send_text_correct_format():

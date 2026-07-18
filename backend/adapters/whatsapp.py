@@ -23,6 +23,12 @@ class WhatsAppAdapter(Protocol):
         """Upload audio to S3, send via Twilio. Returns MessageSid."""
         ...
 
+    async def send_image(
+        self, to_number: str, image_bytes: bytes, caption: str = ""
+    ) -> str:
+        """Upload PNG to S3, send via Twilio as an image message. Returns MessageSid."""
+        ...
+
     async def send_text(
         self,
         to_number: str,
@@ -56,14 +62,30 @@ class TwilioWhatsAppAdapter:
     ) -> str:
         import uuid
 
-        filename = f"katha-{uuid.uuid4().hex[:12]}.ogg"
-        public_url = await storage.upload_audio(audio_bytes, filename, mime_type)
+        key = f"audio/katha-{uuid.uuid4().hex[:12]}.ogg"
+        public_url = await storage.upload_media(audio_bytes, key, mime_type)
         msg = self._client.messages.create(
             from_=self._from,
             to=f"whatsapp:{to_number}",
             media_url=[public_url],
         )
         logger.info("Sent voice note to %s: %s", to_number, msg.sid)
+        return msg.sid
+
+    async def send_image(
+        self, to_number: str, image_bytes: bytes, caption: str = ""
+    ) -> str:
+        import uuid
+
+        key = f"cards/katha-{uuid.uuid4().hex[:12]}.png"
+        public_url = await storage.upload_media(image_bytes, key, "image/png")
+        msg = self._client.messages.create(
+            from_=self._from,
+            to=f"whatsapp:{to_number}",
+            media_url=[public_url],
+            body=caption,
+        )
+        logger.info("Sent image to %s: %s", to_number, msg.sid)
         return msg.sid
 
     async def send_text(
