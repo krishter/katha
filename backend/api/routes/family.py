@@ -10,7 +10,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import get_current_user
+from core.freemium import FREE_SESSION_LIMIT
 from models.db import get_db
+from models.family_account import FamilyAccount
 from models.memory_card import MemoryCard
 from models.session import Session
 from models.story_atom import StoryAtom
@@ -67,6 +69,11 @@ async def get_stats(
     profile = profile_result.scalar_one_or_none()
     user_name = profile.name if profile else "Friend"
 
+    account_result = await db.execute(
+        select(FamilyAccount.plan).where(FamilyAccount.user_id == user_id)
+    )
+    plan = account_result.scalar_one_or_none() or "free"
+
     session_count_result = await db.execute(
         select(func.count(Session.id)).where(Session.user_id == user_id)
     )
@@ -112,6 +119,9 @@ async def get_stats(
         "domains_covered": domains_covered,
         "domain_breakdown": domain_breakdown,
         "latest_card_url": latest_card_url,
+        "plan": plan,
+        "session_count": total_sessions,
+        "session_limit": FREE_SESSION_LIMIT,
     }
 
 
