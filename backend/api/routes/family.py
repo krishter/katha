@@ -70,9 +70,15 @@ async def get_stats(
     user_name = profile.name if profile else "Friend"
 
     account_result = await db.execute(
-        select(FamilyAccount.plan).where(FamilyAccount.user_id == user_id)
+        select(FamilyAccount.plan, FamilyAccount.onboarding_complete).where(
+            FamilyAccount.user_id == user_id
+        )
     )
-    plan = account_result.scalar_one_or_none() or "free"
+    account_row = account_result.first()
+    plan = (account_row.plan if account_row else None) or "free"
+    onboarding_complete = (
+        bool(account_row.onboarding_complete) if account_row else False
+    )
 
     session_count_result = await db.execute(
         select(func.count(Session.id)).where(Session.user_id == user_id)
@@ -122,6 +128,7 @@ async def get_stats(
         "plan": plan,
         "session_count": total_sessions,
         "session_limit": FREE_SESSION_LIMIT,
+        "onboarding_complete": onboarding_complete,
     }
 
 

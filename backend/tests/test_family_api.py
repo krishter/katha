@@ -88,7 +88,8 @@ def _make_atom(**overrides):
 
 def test_stats_returns_session_count_and_domain_breakdown(db):
     profile_result = _query_result(scalar_one_or_none=_make_profile())
-    plan_result = _query_result(scalar_one_or_none="free")
+    account_row = MagicMock(plan="free", onboarding_complete=True)
+    plan_result = _query_result(first=account_row)
     session_count_result = _query_result(scalar_one=5)
     domain_counts_result = MagicMock()
     domain_counts_result.all.return_value = [("childhood", 2), ("career", 1)]
@@ -124,6 +125,7 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
     assert body["plan"] == "free"
     assert body["session_count"] == 5
     assert body["session_limit"] == 10
+    assert body["onboarding_complete"] is True
 
 
 # ── /family/stories ──────────────────────────────────────────────────────────
