@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, time
+from typing import Optional
 
 from sqlalchemy import DateTime, String, Text, Time, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -25,6 +26,7 @@ class UserProfileModel(Base):
         String, nullable=False, default="hi-IN"
     )
     onboarding_context: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    family_whatsapp_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     scheduled_time: Mapped[time] = mapped_column(Time, nullable=False)
     timezone: Mapped[str] = mapped_column(
         String, nullable=False, default="Asia/Kolkata"

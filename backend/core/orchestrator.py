@@ -4,16 +4,26 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import BackgroundTasks
+from sqlalchemy import select
 
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
+from adapters.whatsapp_stub import get_whatsapp_adapter
 from core import conversation_policy, session_manager
 from core.session_manager import SessionState
 from extraction import entity_extractor, story_extractor
+from media import storage
 from memory import fact_store, vector_store
+from memory_cards import generator as memory_card_generator
+from memory_cards.generator import MemoryCardResult
+from models.memory_card import MemoryCard
+from models.user_profile import UserProfileModel
 from prompts.system_prompt import PriorContext, UserProfile, build_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -147,6 +157,93 @@ async def convert_wav_to_ogg(wav_bytes: bytes) -> bytes:
     return stdout
 
 
+async def get_user_profile(user_id: str, db) -> Optional[UserProfileModel]:
+    """Load the full user profile row, including family_whatsapp_number."""
+    result = await db.execute(
+        select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def save_memory_card(
+    session_id: str,
+    user_id: str,
+    card_result: MemoryCardResult,
+    s3_key: str,
+    public_url: str,
+    message_sid: Optional[str],
+    db,
+) -> None:
+    """Persist a MemoryCard row for a generated and delivered card."""
+    card = MemoryCard(
+        session_id=uuid.UUID(session_id),
+        user_id=user_id,
+        story_atom_id=(
+            uuid.UUID(card_result.story_atom_id) if card_result.story_atom_id else None
+        ),
+        verbatim_quote=card_result.verbatim_quote,
+        domain=card_result.domain,
+        image_s3_key=s3_key,
+        image_public_url=public_url,
+        delivered_at=datetime.now(timezone.utc) if message_sid else None,
+        twilio_message_sid=message_sid,
+    )
+    db.add(card)
+    await db.commit()
+
+
+async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -> None:
+    """
+    Generate a memory card from the session's best story atom and deliver
+    it to the adult child's WhatsApp. No-ops (with a warning log) if there's
+    no usable quote or no family_whatsapp_number on file — not every session
+    produces a card-worthy quote.
+    """
+    user_profile = await get_user_profile(user_id, db)
+    if user_profile is None:
+        logger.warning("No user_profile found for %s — skipping memory card", user_id)
+        return
+
+    card_result = await memory_card_generator.generate_memory_card(
+        session_id, user_id, user_profile.name, db
+    )
+    if not card_result:
+        logger.warning(
+            "No story atoms with quotes in session %s — no card generated", session_id
+        )
+        return
+
+    if not user_profile.family_whatsapp_number:
+        logger.warning(
+            "No family_whatsapp_number set for user %s — card not delivered", user_id
+        )
+        return
+
+    s3_key = f"cards/{session_id}.png"
+    public_url = await storage.upload_media(
+        card_result.image_bytes, s3_key, content_type="image/png"
+    )
+
+    caption = f"A memory from today's conversation with {user_profile.name} \U0001f338"
+    whatsapp = get_whatsapp_adapter()
+    message_sid = await whatsapp.send_image(
+        to_number=user_profile.family_whatsapp_number,
+        image_bytes=card_result.image_bytes,
+        caption=caption,
+    )
+
+    await save_memory_card(
+        session_id=session_id,
+        user_id=user_id,
+        card_result=card_result,
+        s3_key=s3_key,
+        public_url=public_url,
+        message_sid=message_sid,
+        db=db,
+    )
+    logger.info("Memory card delivered for session %s: %s", session_id, message_sid)
+
+
 async def close_and_process_session(
     session_id: str,
     transcript: str,
@@ -154,8 +251,9 @@ async def close_and_process_session(
     db,
 ) -> None:
     """
-    Background task. Called when a session ends via the webhook.
-    Runs post-session processing (story + entity extraction).
+    Background task. Called when a session ends via the webhook or the
+    /conversation/close endpoint. Runs post-session processing (story +
+    entity extraction), then generates and delivers a memory card.
     """
     try:
         state = await session_manager.get_session(session_id, db)
@@ -165,6 +263,14 @@ async def close_and_process_session(
         logger.info("Session %s closed and processed", session_id)
     except Exception:
         logger.exception("close_and_process_session failed for session %s", session_id)
+        return
+
+    try:
+        await _generate_and_deliver_memory_card(session_id, state.user_id, db)
+    except Exception:
+        logger.exception(
+            "Memory card generation/delivery failed for session %s", session_id
+        )
 
 
 async def process_voice_turn(

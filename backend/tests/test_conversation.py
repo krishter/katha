@@ -110,3 +110,27 @@ def test_conversation_turn_returns_audio_bytes():
         },
     )
     assert response.content == _FAKE_WAV
+
+
+def test_close_session_schedules_close_and_process_session():
+    """The /close endpoint should trigger the full post-session pipeline
+    (extraction + memory card generation/delivery), not just extraction."""
+    with patch(
+        "api.routes.conversation.orchestrator.close_and_process_session",
+        new=AsyncMock(),
+    ) as mock_close:
+        response = client.post(
+            "/conversation/close",
+            data={
+                "session_id": "test-session-id",
+                "extraction_json_str": "{}",
+                "transcript": "some transcript",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "closed"
+    mock_close.assert_called_once()
+    call_args = mock_close.call_args.args
+    assert call_args[0] == "test-session-id"
+    assert call_args[1] == "some transcript"
