@@ -1,12 +1,23 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
 import { DomainProgress } from "@/components/DomainProgress";
 import { api } from "@/lib/api";
 
 export default function FamilyDashboard() {
+  const router = useRouter();
   const { data: stats, error, isLoading } = useSWR("stats", api.getStats);
+
+  // A valid session cookie doesn't guarantee onboarding is finished — e.g. a
+  // browser-history entry to /family from before the wizard was completed.
+  useEffect(() => {
+    if (stats && !stats.onboarding_complete) {
+      router.replace("/family/onboarding");
+    }
+  }, [stats, router]);
 
   if (isLoading) {
     return <main className="p-8 text-[#6B5B4E]">Loading...</main>;
@@ -17,6 +28,9 @@ export default function FamilyDashboard() {
         Couldn&apos;t load the dashboard. Please try again.
       </main>
     );
+  }
+  if (!stats.onboarding_complete) {
+    return <main className="p-8 text-[#6B5B4E]">Redirecting...</main>;
   }
 
   return (

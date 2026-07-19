@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import useSWR from "swr";
 
 import { api } from "@/lib/api";
 
@@ -14,7 +15,13 @@ export default function FamilyLayout({
   const router = useRouter();
 
   const isAuthPage =
-    pathname?.startsWith("/family/login") || pathname?.startsWith("/family/auth");
+    pathname?.startsWith("/family/login") ||
+    pathname?.startsWith("/family/auth") ||
+    pathname?.startsWith("/family/onboarding");
+
+  // SWR dedupes this against the same "stats" key used by the dashboard
+  // home page, so this doesn't add an extra request there.
+  const { data: stats } = useSWR(isAuthPage ? null : "stats", api.getStats);
 
   async function handleLogout() {
     await api.logout();
@@ -24,6 +31,9 @@ export default function FamilyLayout({
   if (isAuthPage) {
     return <>{children}</>;
   }
+
+  const showUpgradeBanner =
+    !!stats && stats.plan === "free" && stats.session_count >= stats.session_limit;
 
   return (
     <div className="min-h-screen bg-[#FDF6EC]">
@@ -47,6 +57,22 @@ export default function FamilyLayout({
           </button>
         </div>
       </nav>
+
+      {showUpgradeBanner && (
+        <div className="flex flex-wrap items-center justify-center gap-2 bg-[#C8956C] px-6 py-3 text-center text-sm text-white">
+          <span>
+            {stats.user_name} has completed all {stats.session_limit} free
+            sessions with Katha.
+          </span>
+          <a
+            href="mailto:hello@katha.life?subject=Upgrade"
+            className="font-semibold underline"
+          >
+            Contact us to continue →
+          </a>
+        </div>
+      )}
+
       {children}
     </div>
   );
