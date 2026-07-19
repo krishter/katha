@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import uuid
 from dataclasses import dataclass
@@ -111,3 +113,40 @@ def should_end_session(state: SessionState) -> bool:
     if state.energy_signal == "low" and state.exchange_count >= 3:
         return True
     return False
+
+
+async def get_active_session_by_number(
+    whatsapp_number: str, db: AsyncSession
+) -> SessionState | None:
+    """
+    Look up the most recent non-ended session for a given WhatsApp number.
+    Returns None if no active session found.
+    """
+    from sqlalchemy import desc
+
+    result = await db.execute(
+        select(Session)
+        .where(Session.whatsapp_number == whatsapp_number)
+        .where(Session.session_end_suggested.is_(False))
+        .where(Session.goal_met.is_(False))
+        .order_by(desc(Session.started_at))
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return _to_state(row)
+
+
+async def touch_last_message(session_id: str, db: AsyncSession) -> None:
+    """Update last_user_message_at to now for the given session."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update
+
+    await db.execute(
+        update(Session)
+        .where(Session.id == uuid.UUID(session_id))
+        .values(last_user_message_at=datetime.now(timezone.utc))
+    )
+    await db.commit()

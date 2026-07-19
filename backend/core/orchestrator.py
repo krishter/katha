@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import BackgroundTasks
 
@@ -40,6 +41,7 @@ class TurnResult:
     detected_language: str
     session_state: SessionState
     crisis_detected: bool
+    response_mime_type: str = field(default="audio/x-wav")
 
 
 def _parse_llm_output(raw: str) -> tuple[str, dict]:
@@ -118,6 +120,53 @@ async def run_post_session(
         )
 
 
+async def convert_wav_to_ogg(wav_bytes: bytes) -> bytes:
+    """
+    Convert WAV bytes to OGG/Opus using ffmpeg subprocess.
+    Required because Sarvam TTS returns WAV but WhatsApp expects OGG/Opus.
+    ffmpeg must be available in the environment (installed via apt / Docker).
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-f",
+        "wav",
+        "-i",
+        "pipe:0",
+        "-c:a",
+        "libopus",
+        "-f",
+        "ogg",
+        "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(input=wav_bytes)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg conversion failed: {stderr.decode()[:200]}")
+    return stdout
+
+
+async def close_and_process_session(
+    session_id: str,
+    transcript: str,
+    extraction_json: dict,
+    db,
+) -> None:
+    """
+    Background task. Called when a session ends via the webhook.
+    Runs post-session processing (story + entity extraction).
+    """
+    try:
+        state = await session_manager.get_session(session_id, db)
+        await run_post_session(
+            extraction_json, transcript, session_id, state.user_id, db
+        )
+        logger.info("Session %s closed and processed", session_id)
+    except Exception:
+        logger.exception("close_and_process_session failed for session %s", session_id)
+
+
 async def process_voice_turn(
     audio_bytes: bytes,
     session_id: str,
@@ -159,6 +208,7 @@ async def process_voice_turn(
             pre_check.override_response,  # type: ignore[arg-type]
             language_code=stt_result.language_code,
         )
+        audio_out = await convert_wav_to_ogg(audio_out)
         return TurnResult(
             response_audio=audio_out,
             response_text=pre_check.override_response or "",
@@ -167,6 +217,7 @@ async def process_voice_turn(
             detected_language=stt_result.language_code,
             session_state=state,
             crisis_detected=pre_check.crisis_detected,
+            response_mime_type="audio/ogg",
         )
 
     # 4. Build real prior context from fact store + vector store
@@ -193,6 +244,7 @@ async def process_voice_turn(
             post_check.override_response,  # type: ignore[arg-type]
             language_code=stt_result.language_code,
         )
+        audio_out = await convert_wav_to_ogg(audio_out)
         return TurnResult(
             response_audio=audio_out,
             response_text=post_check.override_response or "",
@@ -201,6 +253,7 @@ async def process_voice_turn(
             detected_language=stt_result.language_code,
             session_state=state,
             crisis_detected=False,
+            response_mime_type="audio/ogg",
         )
 
     # 8. Parse dual output
@@ -221,6 +274,9 @@ async def process_voice_turn(
         response_text, language_code=stt_result.language_code
     )
     logger.info("TTS: produced %d bytes", len(audio_out))
+
+    # Convert WAV → OGG/Opus for WhatsApp delivery
+    audio_out = await convert_wav_to_ogg(audio_out)
 
     # 11. Schedule post-session processing if session ended
     session_ended = extraction_json.get(
@@ -246,4 +302,5 @@ async def process_voice_turn(
         detected_language=stt_result.language_code,
         session_state=state,
         crisis_detected=False,
+        response_mime_type="audio/ogg",
     )
