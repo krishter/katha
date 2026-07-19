@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Katha — Every family has a story. Coming soon.</title>
+<meta name="description" content="Katha is a gentle WhatsApp companion that turns your parents' daily conversations into a living family archive. Launching soon at katha.life.">
+<meta property="og:title" content="Katha — Coming Soon">
+<meta property="og:description" content="Daily voice conversations on WhatsApp that preserve your family's stories, forever.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://katha.life">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,700;0,900;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --saffron: oklch(72% 0.18 55);
+    --saffron-soft: oklch(88% 0.09 60);
+    --gold: oklch(68% 0.17 75);
+    --gold-soft: oklch(90% 0.08 80);
+    --deep-indigo: oklch(28% 0.12 280);
+    --indigo-mid: oklch(38% 0.14 275);
+    --indigo-soft: oklch(88% 0.05 275);
+    --warm-white: oklch(97% 0.01 80);
+    --parchment: oklch(94% 0.02 80);
+    --parchment-dark: oklch(88% 0.03 75);
+    --text-dark: oklch(22% 0.04 280);
+    --text-mid: oklch(42% 0.05 275);
+    --text-light: oklch(62% 0.04 275);
+    --accent-green: oklch(62% 0.16 160);
+    --accent-rose: oklch(62% 0.16 10);
+    --rose-soft: oklch(90% 0.06 10);
+    --whatsapp: oklch(56% 0.18 155);
+    --whatsapp-soft: oklch(93% 0.05 155);
+    --shadow-soft: 0 18px 45px -18px oklch(28% 0.12 280 / 0.28);
+    --shadow-card: 0 10px 30px -10px oklch(28% 0.12 280 / 0.22);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-dark);
+    background:
+      radial-gradient(1100px 700px at 85% 12%, var(--gold-soft) 0%, transparent 55%),
+      radial-gradient(900px 650px at 8% 88%, var(--indigo-soft) 0%, transparent 55%),
+      radial-gradient(700px 500px at 20% 15%, var(--rose-soft) 0%, transparent 50%),
+      var(--parchment);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 40px 64px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: 1.6rem;
+    color: var(--deep-indigo);
+    letter-spacing: 0.5px;
+  }
+  .logo-mark {
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--saffron), var(--gold));
+    display: grid;
+    place-items: center;
+    color: var(--warm-white);
+    font-size: 1.15rem;
+    box-shadow: var(--shadow-card);
+  }
+  .header-tag {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* ---------- Layout ---------- */
+  .hero {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(340px, 1.05fr) minmax(320px, 1fr);
+    gap: 48px;
+    align-items: center;
+    padding-top: 24px;
+  }
+
+  /* ---------- Left column ---------- */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--warm-white);
+    border: 1px solid var(--parchment-dark);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--indigo-mid);
+    box-shadow: var(--shadow-card);
+    margin-bottom: 26px;
+  }
+  .eyebrow .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--saffron);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.55; }
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: clamp(2.4rem, 4.6vw, 3.6rem);
+    line-height: 1.12;
+    color: var(--deep-indigo);
+    margin-bottom: 20px;
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 600;
+    background: linear-gradient(120deg, var(--saffron), var(--gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .sub {
+    font-size: 1.08rem;
+    font-weight: 300;
+    line-height: 1.65;
+    color: var(--text-mid);
+    max-width: 46ch;
+    margin-bottom: 34px;
+  }
+  .sub strong { font-weight: 600; color: var(--text-dark); }
+
+  /* ---------- Waitlist form ---------- */
+  .waitlist {
+    display: flex;
+    gap: 10px;
+    max-width: 460px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .waitlist input {
+    flex: 1;
+    min-width: 220px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.98rem;
+    padding: 15px 18px;
+    border: 1.5px solid var(--parchment-dark);
+    border-radius: 14px;
+    background: var(--warm-white);
+    color: var(--text-dark);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .waitlist input::placeholder { color: var(--text-light); }
+  .waitlist input:focus {
+    border-color: var(--saffron);
+    box-shadow: 0 0 0 4px oklch(72% 0.18 55 / 0.15);
+  }
+  .waitlist button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 600;
+    padding: 15px 26px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--saffron), var(--gold));
+    color: var(--warm-white);
+    cursor: pointer;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .waitlist button:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); }
+  .waitlist button:active { transform: translateY(0); }
+  .form-note {
+    font-size: 0.82rem;
+    color: var(--text-light);
+  }
+  .form-status {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 10px;
+    min-height: 1.3em;
+  }
+  .form-status.ok { color: var(--accent-green); }
+  .form-status.err { color: var(--accent-rose); }
+
+  /* ---------- Right column: animated scene ---------- */
+  .scene {
+    position: relative;
+    height: 560px;
+    display: grid;
+    place-items: center;
+    perspective: 1400px;
+  }
+
+  .scene .blob {
+    position: absolute;
+    width: 440px; height: 440px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--saffron-soft), var(--gold-soft) 55%, transparent 75%);
+    filter: blur(6px);
+    opacity: 0.9;
+  }
+
+  /* Phone */
+  .phone {
+    position: relative;
+    width: 270px;
+    background: var(--deep-indigo);
+    border-radius: 34px;
+    padding: 10px;
+    box-shadow: var(--shadow-soft);
+    transform: rotateY(-10deg) rotateX(4deg);
+    animation: float-a 6s ease-in-out infinite;
+    z-index: 3;
+  }
+  .phone-screen {
+    background: var(--parchment);
+    border-radius: 26px;
+    overflow: hidden;
+  }
+  .chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--whatsapp);
+    padding: 12px 14px;
+  }
+  .avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), var(--saffron));
+    display: grid;
+    place-items: center;
+    font-size: 1rem;
+  }
+  .chat-title { color: var(--warm-white); }
+  .chat-title .name { font-weight: 600; font-size: 0.9rem; }
+  .chat-title .status { font-size: 0.7rem; opacity: 0.85; }
+  .chat-body {
+    padding: 14px 12px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 260px;
+    background:
+      radial-gradient(circle at 80% 20%, oklch(90% 0.04 80 / 0.6), transparent 40%),
+      var(--parchment);
+  }
+
+  .bubble {
+    max-width: 88%;
+    border-radius: 16px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    box-shadow: 0 2px 6px oklch(28% 0.12 280 / 0.08);
+  }
+  .bubble.in  { background: var(--warm-white); border-top-left-radius: 6px; align-self: flex-start; }
+  .bubble.out { background: var(--whatsapp-soft); border-top-right-radius: 6px; align-self: flex-end; }
+  .bubble .label { font-size: 0.68rem; color: var(--text-light); margin-bottom: 6px; }
+
+  /* Voice note */
+  .voice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .play {
+    width: 26px; height: 26px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--whatsapp);
+    display: grid;
+    place-items: center;
+  }
+  .play::after {
+    content: '';
+    border-left: 8px solid var(--warm-white);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    margin-left: 2px;
+  }
+  .wave { display: flex; align-items: center; gap: 2.5px; height: 24px; }
+  .wave span {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--whatsapp);
+    animation: wave 1.15s ease-in-out infinite;
+  }
+  .bubble.out .wave span { background: var(--accent-green); }
+  .wave span:nth-child(1) { height: 8px;  animation-delay: 0s; }
+  .wave span:nth-child(2) { height: 16px; animation-delay: 0.1s; }
+  .wave span:nth-child(3) { height: 11px; animation-delay: 0.2s; }
+  .wave span:nth-child(4) { height: 20px; animation-delay: 0.3s; }
+  .wave span:nth-child(5) { height: 9px;  animation-delay: 0.4s; }
+  .wave span:nth-child(6) { height: 17px; animation-delay: 0.5s; }
+  .wave span:nth-child(7) { height: 12px; animation-delay: 0.6s; }
+  .wave span:nth-child(8) { height: 18px; animation-delay: 0.7s; }
+  .wave span:nth-child(9) { height: 7px;  animation-delay: 0.8s; }
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.55); }
+    50% { transform: scaleY(1.25); }
+  }
+  .duration { font-size: 0.66rem; color: var(--text-light); }
+
+  /* Typing indicator */
+  .typing { display: flex; gap: 4px; padding: 4px 2px; }
+  .typing span {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-light);
+    animation: blink 1.3s ease-in-out infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  /* Floating cards */
+  .float-card {
+    position: absolute;
+    background: var(--warm-white);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    z-index: 4;
+  }
+
+  .story-card {
+    top: 46px; right: 14px;
+    width: 150px;
+    padding: 10px;
+    transform: rotate(6deg);
+    animation: float-b 7s ease-in-out infinite;
+  }
+  .story-photo {
+    height: 84px;
+    border-radius: 10px;
+    background:
+      radial-gradient(circle at 65% 35%, var(--gold) 0%, transparent 32%),
+      linear-gradient(160deg, var(--saffron-soft), var(--indigo-soft));
+    position: relative;
+    overflow: hidden;
+  }
+  .story-photo::after {
+    content: '';
+    position: absolute;
+    bottom: -12px; left: 12px;
+    width: 90px; height: 42px;
+    border-radius: 50% 50% 0 0;
+    background: var(--indigo-mid);
+    opacity: 0.7;
+  }
+  .story-card .story-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 0.78rem;
+    color: var(--deep-indigo);
+    margin-top: 8px;
+  }
+  .story-card .story-meta { font-size: 0.64rem; color: var(--text-light); margin-top: 2px; }
+
+  .memory-chip {
+    bottom: 96px; left: -6px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    transform: rotate(-5deg);
+    animation: float-c 5.5s ease-in-out infinite;
+  }
+  .memory-chip .chip-icon {
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    background: var(--rose-soft);
+    display: grid;
+    place-items: center;
+    font-size: 0.95rem;
+  }
+  .memory-chip .chip-text .t { font-size: 0.74rem; font-weight: 600; color: var(--text-dark); }
+  .memory-chip .chip-text .s { font-size: 0.64rem; color: var(--text-light); }
+
+  .book-card {
+    top: 120px; left: 6px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transform: rotate(-8deg);
+    animation: float-b 8s ease-in-out infinite reverse;
+  }
+  .book {
+    width: 34px; height: 26px;
+    position: relative;
+    flex: none;
+  }
+  .book::before, .book::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    width: 17px; height: 24px;
+    background: linear-gradient(var(--warm-white), var(--parchment-dark));
+    border: 1.5px solid var(--gold);
+  }
+  .book::before { left: 0; border-radius: 3px 8px 2px 3px; transform: skewY(6deg); border-right-width: 0.5px; }
+  .book::after  { right: 0; border-radius: 8px 3px 3px 2px; transform: skewY(-6deg); border-left-width: 0.5px; }
+  .book-card .t { font-size: 0.74rem; font-weight: 600; color: var(--text-dark); }
+  .book-card .s { font-size: 0.64rem; color: var(--text-light); }
+
+  /* Sparkles */
+  .spark {
+    position: absolute;
+    border-radius: 50%;
+    z-index: 2;
+    animation: twinkle 3.4s ease-in-out infinite;
+  }
+  .spark.s1 { width: 10px; height: 10px; top: 90px;  left: 60px;  background: var(--saffron); }
+  .spark.s2 { width: 7px;  height: 7px;  top: 210px; right: 34px; background: var(--gold); animation-delay: 0.7s; }
+  .spark.s3 { width: 12px; height: 12px; bottom: 60px; right: 90px; background: var(--accent-rose); opacity: 0.7; animation-delay: 1.3s; }
+  .spark.s4 { width: 6px;  height: 6px;  bottom: 140px; left: 40px; background: var(--indigo-mid); animation-delay: 1.9s; }
+  .spark.s5 { width: 8px;  height: 8px;  top: 30px; right: 150px; background: var(--accent-green); opacity: 0.6; animation-delay: 2.4s; }
+  @keyframes twinkle {
+    0%, 100% { transform: scale(1); opacity: 0.55; }
+    50% { transform: scale(1.6); opacity: 1; }
+  }
+
+  @keyframes float-a {
+    0%, 100% { transform: rotateY(-10deg) rotateX(4deg) translateY(0); }
+    50% { transform: rotateY(-10deg) rotateX(4deg) translateY(-16px); }
+  }
+  @keyframes float-b {
+    0%, 100% { transform: rotate(6deg) translateY(0); }
+    50% { transform: rotate(4deg) translateY(-14px); }
+  }
+  @keyframes float-c {
+    0%, 100% { transform: rotate(-5deg) translateY(0); }
+    50% { transform: rotate(-3deg) translateY(-11px); }
+  }
+
+  /* ---------- Footer ---------- */
+  footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 30px;
+    font-size: 0.82rem;
+    color: var(--text-light);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  footer .heart { color: var(--accent-rose); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 900px) {
+    .page { padding: 24px 22px 40px; }
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      text-align: center;
+      padding-top: 12px;
+    }
+    .hero-copy { display: flex; flex-direction: column; align-items: center; order: 2; }
+    .scene { order: 1; height: 470px; transform: scale(0.88); }
+    .sub { margin-left: auto; margin-right: auto; }
+    .waitlist { justify-content: center; }
+    footer { justify-content: center; text-align: center; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="logo"><span class="logo-mark">क</span>Katha</div>
+    <div class="header-tag">katha.life</div>
+  </header>
+
+  <main class="hero">
+    <div class="hero-copy">
+      <span class="eyebrow"><span class="dot"></span>Coming Soon</span>
+      <h1>Every family has a story.<br>We're building its <em>home</em>.</h1>
+      <p class="sub">
+        <strong>Katha</strong> is a gentle companion on WhatsApp that has daily voice
+        conversations with your parents and grandparents — in their own language —
+        and lovingly turns their memories into a living family archive.
+      </p>
+
+      <!-- Replace YOUR_FORM_ID with your Formspree form ID (formspree.io) -->
+      <form class="waitlist" id="waitlist-form" action="https://formspree.io/f/maqrorwa" method="POST">
+        <input type="email" name="email" placeholder="Your email address" required aria-label="Email address">
+        <button type="submit">Join the waitlist</button>
+      </form>
+      <p class="form-note">Be the first to know when we launch. No spam, ever.</p>
+      <p class="form-status" id="form-status" role="status"></p>
+    </div>
+
+    <div class="scene" aria-hidden="true">
+      <div class="blob"></div>
+
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="chat-header">
+            <div class="avatar">क</div>
+            <div class="chat-title">
+              <div class="name">Katha</div>
+              <div class="status">listening…</div>
+            </div>
+          </div>
+          <div class="chat-body">
+            <div class="bubble in">
+              <div class="label">Katha</div>
+              <div class="voice">
+                <div class="play"></div>
+                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                <div class="duration">0:32</div>
+              </div>
+            </div>
+            <div class="bubble out">
+              <div class="label">Amma</div>
+              <div class="voice">
+                <div class="play"></div>
+                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                <div class="duration">2:47</div>
+              </div>
+            </div>
+            <div class="bubble in">
+              <div class="typing"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="float-card story-card">
+        <div class="story-photo"></div>
+        <div class="story-title">"Our first Diwali in Bombay, 1972"</div>
+        <div class="story-meta">Story saved · Childhood</div>
+      </div>
+
+      <div class="float-card memory-chip">
+        <div class="chip-icon">❤</div>
+        <div class="chip-text">
+          <div class="t">Memory card created</div>
+          <div class="s">Shared with 4 family members</div>
+        </div>
+      </div>
+
+      <div class="float-card book-card">
+        <div class="book"></div>
+        <div>
+          <div class="t">128 stories</div>
+          <div class="s">and counting…</div>
+        </div>
+      </div>
+
+      <span class="spark s1"></span>
+      <span class="spark s2"></span>
+      <span class="spark s3"></span>
+      <span class="spark s4"></span>
+      <span class="spark s5"></span>
+    </div>
+  </main>
+
+  <footer>
+    <span>© 2026 Katha · Made with <span class="heart">♥</span> in India</span>
+    <span>Their voice. Their words. Forever yours.</span>
+  </footer>
+
+</div>
+
+<script>
+  // Progressive enhancement: submit via fetch so the user stays on the page.
+  const form = document.getElementById('waitlist-form');
+  const status = document.getElementById('form-status');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.textContent = 'Joining…';
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'Accept': 'application/json' }
+      });
+      if (res.ok) {
+        status.textContent = "You're on the list! We'll write to you soon. ✦";
+        status.className = 'form-status ok';
+        form.reset();
+      } else {
+        throw new Error();
+      }
+    } catch {
+      status.textContent = 'Something went wrong — please try again in a moment.';
+      status.className = 'form-status err';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Join the waitlist';
+    }
+  });
+</script>
+</body>
+</html>
