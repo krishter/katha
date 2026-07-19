@@ -4,11 +4,13 @@ import logging
 
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from core import auth
 from models.db import get_db
+from models.family_account import FamilyAccount
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,17 @@ async def verify(token: str, db: AsyncSession = Depends(get_db)) -> RedirectResp
         )
     jwt_token = auth.create_jwt(email, user_id)
 
-    redirect = RedirectResponse(url=f"{settings.APP_BASE_URL}/family", status_code=302)
+    account_result = await db.execute(
+        select(FamilyAccount.onboarding_complete).where(
+            FamilyAccount.user_id == user_id
+        )
+    )
+    onboarding_complete = account_result.scalar_one_or_none()
+    destination = "/family" if onboarding_complete else "/family/onboarding"
+
+    redirect = RedirectResponse(
+        url=f"{settings.APP_BASE_URL}{destination}", status_code=302
+    )
     redirect.set_cookie(
         key=_COOKIE_NAME,
         value=jwt_token,
