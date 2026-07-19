@@ -18,7 +18,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 
 - **STT:** Sarvam Saaras V3 (all 22 Indian languages, code-mixing, elderly speech)
 - **TTS:** Sarvam Bulbul V3 (35+ Indian voices, emotional prosody)
-- **LLM:** GPT-4o for MVP (evaluate Sarvam native LLM in Phase 2)
+- **LLM:** Claude Sonnet 4.6 (`claude-sonnet-4-6`) for MVP (evaluate Sarvam native LLM in Phase 2)
 - **Messaging:** WhatsApp Business API (via Meta or Twilio/360Dialog intermediary)
 - **Memory/RAG:** Pinecone or pgvector + OpenAI text-embedding-3-small
 - **Frontend:** Next.js (family dashboard at katha.life/family)
