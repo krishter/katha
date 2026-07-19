@@ -1,5 +1,6 @@
 # Personal Claude overrides — never commit
 CLAUDE.local.md
+.claude/settings.local.json
 
 # Environment variables
 .env

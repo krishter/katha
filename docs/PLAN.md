@@ -101,7 +101,7 @@ Meta's WhatsApp Business API approval takes **1–3 weeks**. This is the single 
 
 **`backend/adapters/llm.py`**
 - `chat(messages: list[Message], functions=None) -> LLMResponse`
-- Wraps GPT-4o (OpenAI SDK)
+- Wraps Claude Sonnet 4.6 (`claude-sonnet-4-6`) via Anthropic SDK
 - Handles function calling for extraction
 - Test: pass a minimal message, assert response
 

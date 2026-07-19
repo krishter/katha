@@ -32,5 +32,13 @@ class Settings(BaseSettings):
     AWS_S3_BUCKET: str = "katha-media"
     AWS_S3_REGION: str = "ap-south-1"
 
+    # Family dashboard auth (Phase 6)
+    JWT_SECRET: str = "dev-only-insecure-secret-change-me"
+    JWT_EXPIRE_DAYS: int = 7
+    MAGIC_LINK_EXPIRE_MINUTES: int = 15
+    SES_FROM_EMAIL: str = "noreply@katha.life"
+    APP_BASE_URL: str = "http://localhost:3000"
+    SES_MOCK: bool = True  # print the magic link instead of sending via SES
+
 
 settings = Settings()
