@@ -9,6 +9,7 @@ from api.routes.auth import router as auth_router
 from api.routes.conversation import router as conversation_router
 from api.routes.family import router as family_router
 from api.routes.health import router as health_router
+from api.routes.onboarding import router as onboarding_router
 from api.routes.webhook import router as webhook_router
 from config import settings
 
@@ -57,3 +58,4 @@ app.include_router(conversation_router, prefix="/conversation")
 app.include_router(webhook_router)
 app.include_router(auth_router)
 app.include_router(family_router)
+app.include_router(onboarding_router)
