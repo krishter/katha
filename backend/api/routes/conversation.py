@@ -82,9 +82,10 @@ async def close_session(
 ) -> dict:
     """
     Explicit session close endpoint. Triggers post-session processing as a
-    background task (story extraction + entity extraction). Called by the
-    client when the session_end_suggested flag is seen in response headers,
-    or when the user explicitly ends the session.
+    background task (story extraction + entity extraction + memory card
+    generation and delivery). Called by the client when the
+    session_end_suggested flag is seen in response headers, or when the
+    user explicitly ends the session.
     """
     import json as _json
 
@@ -93,13 +94,11 @@ async def close_session(
     except _json.JSONDecodeError:
         extraction_json = {}
 
-    state = await session_manager.get_session(session_id, db)
     background_tasks.add_task(
-        orchestrator.run_post_session,
-        extraction_json,
-        transcript,
+        orchestrator.close_and_process_session,
         session_id,
-        state.user_id,
+        transcript,
+        extraction_json,
         db,
     )
     logger.info("Session %s closed; post-session processing scheduled", session_id)

@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import logging
 import uuid
 from dataclasses import dataclass
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import freemium
 from models.session import Session
 from prompts.domains import get_domain, get_domain_sequence
 
@@ -38,6 +42,12 @@ def _to_state(row: Session) -> SessionState:
 
 async def start_session(user_id: str, db: AsyncSession) -> SessionState:
     """Create a new session record. Domain defaults to 'childhood' for session 1."""
+    if not await freemium.is_session_allowed(user_id, db):
+        await freemium.send_upgrade_prompt(user_id, db)
+        raise HTTPException(
+            status_code=402, detail="Session limit reached. Please upgrade to continue."
+        )
+
     session = Session(
         id=uuid.uuid4(),
         user_id=user_id,
@@ -111,3 +121,40 @@ def should_end_session(state: SessionState) -> bool:
     if state.energy_signal == "low" and state.exchange_count >= 3:
         return True
     return False
+
+
+async def get_active_session_by_number(
+    whatsapp_number: str, db: AsyncSession
+) -> SessionState | None:
+    """
+    Look up the most recent non-ended session for a given WhatsApp number.
+    Returns None if no active session found.
+    """
+    from sqlalchemy import desc
+
+    result = await db.execute(
+        select(Session)
+        .where(Session.whatsapp_number == whatsapp_number)
+        .where(Session.session_end_suggested.is_(False))
+        .where(Session.goal_met.is_(False))
+        .order_by(desc(Session.started_at))
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return _to_state(row)
+
+
+async def touch_last_message(session_id: str, db: AsyncSession) -> None:
+    """Update last_user_message_at to now for the given session."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update
+
+    await db.execute(
+        update(Session)
+        .where(Session.id == uuid.UUID(session_id))
+        .values(last_user_message_at=datetime.now(timezone.utc))
+    )
+    await db.commit()

@@ -47,7 +47,13 @@ async def test_start_session_domain_is_childhood():
     db.refresh = AsyncMock(side_effect=lambda r: None)
 
     # Patch Session constructor to return our mock row
-    with patch("core.session_manager.Session", return_value=row):
+    with (
+        patch("core.session_manager.Session", return_value=row),
+        patch(
+            "core.session_manager.freemium.is_session_allowed",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
         state = await start_session("user-1", db)
 
     assert state.domain == "childhood"
@@ -62,7 +68,13 @@ async def test_start_session_returns_session_state():
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    with patch("core.session_manager.Session", return_value=row):
+    with (
+        patch("core.session_manager.Session", return_value=row),
+        patch(
+            "core.session_manager.freemium.is_session_allowed",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
         state = await start_session("user-1", db)
 
     assert isinstance(state, SessionState)
