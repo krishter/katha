@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -47,6 +47,10 @@ def test_magic_link_request_returns_200_even_on_internal_error(db):
 
 
 def test_verify_sets_cookie_and_redirects_to_dashboard(db):
+    onboarding_complete_result = MagicMock()
+    onboarding_complete_result.scalar_one_or_none.return_value = True
+    db.execute = AsyncMock(return_value=onboarding_complete_result)
+
     with (
         patch(
             "api.routes.auth.auth.verify_magic_link",
@@ -59,6 +63,24 @@ def test_verify_sets_cookie_and_redirects_to_dashboard(db):
     assert response.status_code == 302
     assert response.headers["location"].endswith("/family")
     assert "katha_token=fake.jwt.token" in response.headers.get("set-cookie", "")
+
+
+def test_verify_redirects_to_onboarding_when_incomplete(db):
+    onboarding_complete_result = MagicMock()
+    onboarding_complete_result.scalar_one_or_none.return_value = False
+    db.execute = AsyncMock(return_value=onboarding_complete_result)
+
+    with (
+        patch(
+            "api.routes.auth.auth.verify_magic_link",
+            new=AsyncMock(return_value=("dev@katha.life", "test_user_wa")),
+        ),
+        patch("api.routes.auth.auth.create_jwt", return_value="fake.jwt.token"),
+    ):
+        response = client.get("/auth/verify", params={"token": "real-token"})
+
+    assert response.status_code == 302
+    assert response.headers["location"].endswith("/family/onboarding")
 
 
 def test_verify_redirects_to_frontend_error_state_for_bad_token(db):

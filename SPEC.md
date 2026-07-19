@@ -1,80 +1,72 @@
 # Katha — Active Implementation Spec
 
-**Phase:** 6 — Family Dashboard  
+**Phase:** 7 — Onboarding + Business Layer  
 **Status:** Ready for implementation  
-**References:** docs/PLAN.md Phase 6, docs/PRD.md Section 7
+**References:** docs/PLAN.md Phase 7, docs/PRD.md Sections 8 and 12
 
 ---
 
 ## Goal
 
-Adult children can log in to `katha.life/family` and browse everything Katha has captured: stories by life domain, memory cards from each session, and overall progress across the 8-domain arc. Read-only for MVP — no editing, no commenting.
+A new family can discover Katha, sign up, set up their elderly parent, give DPDP consent, and have their first session automatically scheduled — all without any manual intervention from the Katha team.
 
-By the end of this phase, a family member can enter their email, click a magic link, and see their parent's story archive.
+This phase also closes the two remaining compliance and business requirements before pilot launch: the freemium gate (10 free sessions per family) and the data deletion endpoint (DPDP Act mandate).
+
+After Phase 7, the product is pilot-ready.
 
 ---
 
 ## Out of Scope
 
-- Story editing or commenting (post-MVP)
-- Audio playback of original voice notes (post-MVP)
-- Multiple family members per account (Phase 7 handles multi-user access)
-- Sharing / export (post-MVP)
+- Payment processing (freemium gate shows "Contact us" for upgrade — no Stripe integration in MVP)
+- Multi-user family accounts (one adult child per family for pilot)
+- Email marketing or drip campaigns
+- In-app notifications beyond the upgrade banner
 
 ---
 
 ## New Dependencies
 
-**Backend:**
-```
-python-jose[cryptography]   # JWT signing and verification
-```
-
-**Frontend:**
-```
-swr                         # Data fetching with caching (already in many Next.js setups)
-```
-
-Email delivery reuses AWS SES via `boto3` (already in `requirements.txt`).
-
----
-
-## New Environment Variables
-
-```
-JWT_SECRET=                         # Long random string — generate with: openssl rand -hex 32
-JWT_EXPIRE_DAYS=7
-MAGIC_LINK_EXPIRE_MINUTES=15
-SES_FROM_EMAIL=noreply@katha.life   # Must be verified in AWS SES
-APP_BASE_URL=https://katha.life     # Used to build magic link URLs; use http://localhost:3000 in dev
-```
-
-Add to `.env.example` and `backend/config.py`.
+No new packages. Phase 6 already introduced `python-jose`, `boto3`, and SES. Phase 4 introduced APScheduler and Twilio. All reused here.
 
 ---
 
 ## DB Migrations Required
 
 ```sql
-CREATE TABLE family_accounts (
+-- DPDP consent log — never fully deleted (anonymized on user deletion, not hard-deleted)
+CREATE TABLE consent_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR NOT NULL UNIQUE,
-    user_id VARCHAR NOT NULL,              -- Which elderly user this account tracks
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    user_id VARCHAR NOT NULL,
+    email_hash VARCHAR NOT NULL,          -- SHA-256 of email address (retained after deletion)
+    consent_version VARCHAR NOT NULL,     -- e.g. "1.0" — bump when policy changes
+    consented_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ip_address VARCHAR,                   -- For audit trail
+    user_agent VARCHAR                    -- For audit trail
 );
 
-CREATE TABLE magic_link_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR NOT NULL,
-    token VARCHAR NOT NULL UNIQUE,         -- Random hex token
-    expires_at TIMESTAMPTZ NOT NULL,
-    used BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Track freemium status
+ALTER TABLE family_accounts ADD COLUMN plan VARCHAR NOT NULL DEFAULT 'free';
+ALTER TABLE family_accounts ADD COLUMN upgraded_at TIMESTAMPTZ;
 
--- Index for fast token lookup
-CREATE INDEX idx_magic_link_token ON magic_link_tokens(token) WHERE used = FALSE;
+-- Track onboarding completion
+ALTER TABLE family_accounts ADD COLUMN onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE;
 ```
+
+---
+
+## DPDP Compliance Checklist
+
+These must all be verifiable before any real users are onboarded. Include them as test assertions.
+
+- [ ] Consent recorded with timestamp, policy version, IP, and user agent
+- [ ] `DELETE /user/{user_id}` removes: story_atoms, memory_cards (DB + S3), facts, sessions, user_profile, magic_link_tokens, family_account
+- [ ] Consent records are anonymized (email replaced with SHA-256 hash), never hard-deleted
+- [ ] Raw user voice notes are never persisted — audio bytes are processed in memory and discarded
+- [ ] Sarvam API: confirm in data processing agreement that audio is not retained server-side
+- [ ] OpenAI API: confirm embeddings API does not train on input data (opt-out is default for API usage)
+- [ ] All S3 storage confirmed in `ap-south-1` (Mumbai)
+- [ ] Privacy policy v1.0 live at `katha.life/privacy` before first real user (static HTML page — not part of this spec, but must exist)
 
 ---
 
@@ -83,420 +75,410 @@ CREATE INDEX idx_magic_link_token ON magic_link_tokens(token) WHERE used = FALSE
 ```
 backend/
 ├── api/routes/
-│   ├── auth.py                     # POST /auth/magic-link, GET /auth/verify (NEW)
-│   └── family.py                   # GET /family/stats, /stories, /cards (NEW)
+│   ├── onboarding.py           # POST /onboarding/start, /onboarding/profile,
+│   │                           # /onboarding/consent (NEW)
+│   └── admin.py                # DELETE /user/{user_id} (NEW)
 ├── core/
-│   └── auth.py                     # JWT issue/verify, magic link send (NEW)
+│   └── freemium.py             # is_session_allowed(), send_upgrade_prompt() (NEW)
 ├── models/
-│   ├── family_account.py           # SQLAlchemy model (NEW)
-│   └── magic_link_token.py         # SQLAlchemy model (NEW)
+│   └── consent_record.py       # SQLAlchemy model (NEW)
+├── core/
+│   └── session_manager.py      # UPDATE — freemium check in start_session
+├── scheduler/
+│   └── session_initiator.py    # UPDATE — freemium check before initiating
 
 frontend/
 ├── app/
+│   ├── page.tsx                # Landing page / entry point — redirect to login or onboarding (UPDATE/NEW)
 │   ├── family/
-│   │   ├── page.tsx                # Dashboard home (NEW)
-│   │   ├── layout.tsx              # Auth guard + nav shell (NEW)
-│   │   ├── login/
-│   │   │   └── page.tsx            # Email entry (NEW)
-│   │   ├── auth/
-│   │   │   └── verify/
-│   │   │       └── page.tsx        # Magic link landing (NEW)
-│   │   ├── stories/
-│   │   │   ├── page.tsx            # Story browser (NEW)
-│   │   │   └── [id]/
-│   │   │       └── page.tsx        # Single story view (NEW)
-│   │   └── cards/
-│   │       └── page.tsx            # Memory card gallery (NEW)
-├── components/
-│   ├── DomainProgress.tsx          # 8-domain coverage bar (NEW)
-│   ├── StoryCard.tsx               # Single story atom card (NEW)
-│   └── MemoryCardGallery.tsx       # Image grid (NEW)
-├── lib/
-│   └── api.ts                      # Typed fetch helpers for backend routes (NEW)
-└── middleware.ts                   # Next.js auth middleware (NEW)
+│   │   ├── layout.tsx          # UPDATE — add upgrade banner if at session limit
+│   │   ├── page.tsx            # UPDATE — redirect to /onboarding if not complete
+│   │   └── onboarding/
+│   │       └── page.tsx        # 5-step onboarding wizard (NEW)
+│   └── privacy/
+│       └── page.tsx            # Static privacy policy page (NEW)
 
 tests/
-└── test_auth.py                    # Backend auth tests (NEW)
-└── test_family_api.py              # Backend family route tests (NEW)
+├── test_onboarding.py
+├── test_freemium.py
+└── test_data_deletion.py
 ```
 
 ---
 
 ## Implementation Steps
 
-### Step 1 — DB models + migration
+### Step 1 — `backend/models/consent_record.py` + Alembic migration
 
-Create `FamilyAccount` and `MagicLinkToken` SQLAlchemy models matching the schemas above. Run `make migrate`.
-
-**Seed one family account for testing** (add to a dev seed script or run manually):
-```sql
-INSERT INTO family_accounts (email, user_id) VALUES ('test@katha.life', 'test_user_wa');
+```python
+class ConsentRecord(Base):
+    __tablename__ = "consent_records"
+    id: UUID
+    user_id: str
+    email_hash: str        # SHA-256 of original email
+    consent_version: str
+    consented_at: datetime
+    ip_address: str | None
+    user_agent: str | None
 ```
+
+Run `make migrate` for all schema changes in this phase.
 
 ---
 
-### Step 2 — `backend/core/auth.py`
+### Step 2 — `backend/api/routes/onboarding.py`
+
+Three endpoints that correspond to the three data-capture stages of the wizard. The frontend calls them in sequence.
 
 ```python
-# JWT
-def create_jwt(email: str, user_id: str) -> str:
+@router.post("/onboarding/start")
+async def onboarding_start(email: str = Form(...), db = Depends(get_db)):
     """
-    Issue a signed JWT.
-    Payload: {sub: email, user_id: user_id, exp: now + JWT_EXPIRE_DAYS}
-    Sign with JWT_SECRET using HS256.
-    """
-
-def verify_jwt(token: str) -> dict:
-    """
-    Decode and verify JWT. Raise HTTPException(401) if expired or invalid.
-    Return payload dict.
-    """
-
-def get_current_user(request: Request) -> dict:
-    """
-    FastAPI dependency. Extract JWT from httpOnly cookie named 'katha_token'.
-    Call verify_jwt. Return payload.
-    Raise HTTPException(401) if missing or invalid.
+    Step 1: Email registration.
+    1. If family_account already exists for this email AND onboarding_complete=True:
+       return {"status": "existing", "message": "Account already set up. Check your email for a login link."}
+       and send a magic link (reuse Phase 6 auth.send_magic_link)
+    2. If family_account exists but onboarding_complete=False:
+       return {"status": "incomplete"} — frontend resumes wizard
+    3. If new email:
+       Create family_account(email, onboarding_complete=False, plan='free')
+       Send magic link email
+       Return {"status": "new"}
+    All cases return 200. Cookie is set when user clicks magic link (Phase 6 flow).
+    This endpoint requires no auth — it's the entry point.
     """
 
-# Magic link
-async def send_magic_link(email: str, db) -> None:
-    """
-    1. Verify email exists in family_accounts. Raise HTTPException(404) if not.
-       (Don't reveal whether the email exists — return 200 either way to prevent enumeration)
-    2. Generate token: secrets.token_hex(32)
-    3. Insert into magic_link_tokens with expires_at = now() + MAGIC_LINK_EXPIRE_MINUTES
-    4. Build URL: {APP_BASE_URL}/family/auth/verify?token={token}
-    5. Send email via AWS SES:
-       To: email
-       From: SES_FROM_EMAIL
-       Subject: "Your Katha login link"
-       Body (plain text + HTML):
-         "Click to log in to Katha (link expires in 15 minutes):
-          {url}
-          If you didn't request this, ignore this email."
-    """
-
-async def verify_magic_link(token: str, db) -> tuple[str, str]:
-    """
-    1. Look up token in magic_link_tokens WHERE used=FALSE AND expires_at > NOW()
-    2. If not found: raise HTTPException(400, "Invalid or expired link")
-    3. Mark token used=TRUE
-    4. Look up family_account by email
-    5. Return (email, user_id)
-    """
-```
-
-**SES email helper:**
-```python
-def send_email_ses(to: str, subject: str, body_text: str, body_html: str) -> None:
-    """Send via boto3 SES client. Region: ap-south-1 (data residency)."""
-```
-
-**Test (`test_auth.py`):**
-- Assert `create_jwt` + `verify_jwt` round-trip correctly
-- Assert `verify_jwt` raises 401 for expired token (mock time)
-- Assert `verify_jwt` raises 401 for tampered token
-- Assert `send_magic_link` returns 200 for unknown email (enumeration protection)
-- Assert `send_magic_link` calls SES for known email (mock SES)
-- Assert `verify_magic_link` raises 400 for expired token
-- Assert `verify_magic_link` marks token as used and returns email + user_id
-
----
-
-### Step 3 — `backend/api/routes/auth.py`
-
-```python
-@router.post("/auth/magic-link")
-async def request_magic_link(email: str = Form(...), db = Depends(get_db)):
-    """
-    Always return 200 (enumeration protection).
-    Call auth.send_magic_link(email, db) — if family_account not found, log silently and return 200.
-    Response: {"message": "If that email is registered, a login link is on its way."}
-    """
-
-@router.get("/auth/verify")
-async def verify_magic_link(token: str, response: Response, db = Depends(get_db)):
-    """
-    1. Call auth.verify_magic_link(token, db) → (email, user_id)
-    2. Call auth.create_jwt(email, user_id) → jwt_token
-    3. Set httpOnly cookie:
-       response.set_cookie(
-           key="katha_token",
-           value=jwt_token,
-           httponly=True,
-           secure=True,        # False in dev (HTTP)
-           samesite="lax",
-           max_age=60*60*24*JWT_EXPIRE_DAYS,
-       )
-    4. Redirect to /family (302)
-    """
-
-@router.post("/auth/logout")
-async def logout(response: Response):
-    """Delete the katha_token cookie. Redirect to /family/login."""
-```
-
----
-
-### Step 4 — `backend/api/routes/family.py`
-
-All routes require `current_user = Depends(auth.get_current_user)`. The `user_id` for all queries comes from the JWT payload, not the URL — family members can only see their linked elderly user's data.
-
-```python
-@router.get("/family/stats")
-async def get_stats(current_user = Depends(get_current_user), db = Depends(get_db)):
-    """
-    Returns:
-    {
-      "user_name": str,
-      "total_sessions": int,
-      "total_story_atoms": int,
-      "domains_covered": int,        # Domains with at least 1 story atom
-      "domain_breakdown": [
-        {"domain_id": str, "domain_label": str, "story_count": int, "target": int}
-      ],
-      "latest_card_url": str | null  # Most recent memory card image URL
-    }
-    """
-
-@router.get("/family/stories")
-async def list_stories(
-    domain: str | None = None,    # Filter by domain ID
-    page: int = 1,
-    limit: int = 20,
+@router.post("/onboarding/profile")
+async def onboarding_profile(
+    parent_name: str = Form(...),
+    whatsapp_number: str = Form(...),      # E.164 format, e.g. +919876543210
+    preferred_language: str = Form(...),   # BCP-47, e.g. ta-IN
+    session_time: str = Form(...),         # HH:MM in 24h IST, e.g. "09:30"
+    onboarding_context: str = Form(...),   # Free text seed facts, up to 1000 chars
     current_user = Depends(get_current_user),
     db = Depends(get_db),
 ):
     """
-    Paginated story atoms for this user.
-    If domain provided, filter by domain.
-    Order: created_at DESC.
-    Returns:
-    {
-      "stories": [StoryAtomResponse],
-      "total": int,
-      "page": int,
-      "pages": int
-    }
+    Steps 2 + 3 combined: parent profile + seed context.
+    1. Validate whatsapp_number is E.164 format
+    2. Validate session_time is a valid HH:MM string
+    3. Upsert user_profile for current_user['user_id']:
+       name, whatsapp_number, preferred_language, scheduled_time, onboarding_context
+    4. Return {"status": "ok"}
     """
 
-@router.get("/family/stories/{story_id}")
-async def get_story(
-    story_id: str,
-    current_user = Depends(get_current_user),
-    db = Depends(get_db),
-):
-    """Single story atom. Verify user_id matches before returning."""
-
-@router.get("/family/cards")
-async def list_cards(
-    page: int = 1,
-    limit: int = 20,
+@router.post("/onboarding/consent")
+async def onboarding_consent(
+    request: Request,
+    consent_given: bool = Form(...),
     current_user = Depends(get_current_user),
     db = Depends(get_db),
 ):
     """
-    Memory cards for this user, newest first.
-    Returns image_public_url directly (images are already public on S3).
-    {
-      "cards": [
-        {"id": str, "verbatim_quote": str, "domain": str, "image_url": str, "created_at": str}
-      ],
-      "total": int
-    }
+    Step 4: DPDP consent.
+    1. If consent_given is False: return 400 — cannot proceed without consent
+    2. Record ConsentRecord:
+       user_id = current_user['user_id']
+       email_hash = sha256(current_user['email'])
+       consent_version = "1.0"
+       ip_address = request.client.host
+       user_agent = request.headers.get('user-agent')
+    3. Mark family_account.onboarding_complete = True
+    4. Schedule first session:
+       The user_profile.scheduled_time is already set.
+       APScheduler will pick it up automatically on the next minute tick.
+       Log: "First session scheduled for user {user_id} at {scheduled_time} IST"
+    5. Return {"status": "complete", "parent_name": user_profile.name, "session_time": scheduled_time}
     """
 ```
 
-**Pydantic response model for `StoryAtomResponse`:**
+**Test (`test_onboarding.py`):**
+- Assert `/onboarding/start` with new email creates family_account and sends magic link
+- Assert `/onboarding/start` with existing complete account returns status="existing"
+- Assert `/onboarding/profile` with invalid phone number format returns 422
+- Assert `/onboarding/consent` with `consent_given=False` returns 400
+- Assert `/onboarding/consent` with `consent_given=True` creates ConsentRecord and sets `onboarding_complete=True`
+- Assert ConsentRecord stores email_hash (SHA-256), not the raw email
+
+---
+
+### Step 3 — `backend/core/freemium.py`
+
 ```python
-class StoryAtomResponse(BaseModel):
-    id: str
-    domain: str
-    domain_label: str        # Human-readable domain name (from domains.get_domain)
-    title: str | None
-    narrative: str
-    who: list[str]
-    what: str | None
-    when_approx: str | None
-    where_approx: str | None
-    why: str | None
-    completeness_score: int
-    verbatim_quote: str | None
-    created_at: str          # ISO 8601
+FREE_SESSION_LIMIT = 10
+
+async def is_session_allowed(user_id: str, db) -> bool:
+    """
+    Count completed sessions for this user from the sessions table.
+    Return True if count < FREE_SESSION_LIMIT OR family_account.plan != 'free'.
+    """
+
+async def send_upgrade_prompt(user_id: str, db) -> None:
+    """
+    Called when is_session_allowed returns False.
+    1. Look up family_account email for this user_id
+    2. Send email via SES:
+       Subject: "{parent_name} has completed 10 conversations with Katha"
+       Body: "Subramaniam has shared 10 wonderful sessions with Katha.
+              To continue preserving their stories, upgrade to Katha Premium.
+              Reply to this email or visit katha.life/upgrade to continue."
+    3. Log the upgrade prompt (avoid sending duplicate emails — check if prompt was sent in last 7 days)
+    """
+
+async def get_session_count(user_id: str, db) -> int:
+    """Count all sessions for this user."""
 ```
 
-**Test (`test_family_api.py`):**
-- Mock DB, seed test data
-- Assert `/family/stats` returns correct session count and domain breakdown
-- Assert `/family/stories` returns paginated results; domain filter works
-- Assert `/family/stories/{id}` returns 404 for a story belonging to a different user (auth isolation)
-- Assert all routes return 401 without a valid JWT cookie
+**Update `backend/core/session_manager.py`:**
+
+```python
+async def start_session(user_id: str, db) -> SessionState:
+    # ADD at the top:
+    if not await freemium.is_session_allowed(user_id, db):
+        await freemium.send_upgrade_prompt(user_id, db)
+        raise HTTPException(402, "Session limit reached. Please upgrade to continue.")
+    # ... rest of existing start_session logic
+```
+
+**Update `backend/scheduler/session_initiator.py`:**
+
+In `initiate_sessions`, before creating a new session:
+```python
+if not await freemium.is_session_allowed(user.user_id, db):
+    await freemium.send_upgrade_prompt(user.user_id, db)
+    logger.info(f"Skipped session initiation for {user.user_id} — session limit reached")
+    continue
+```
+
+**Test (`test_freemium.py`):**
+- Assert `is_session_allowed` returns True when session count is 0
+- Assert `is_session_allowed` returns True when session count is 9
+- Assert `is_session_allowed` returns False when session count is 10
+- Assert `is_session_allowed` returns True for plan='premium' regardless of count
+- Assert `send_upgrade_prompt` calls SES (mock)
+- Assert `start_session` raises 402 when limit reached (mock `is_session_allowed` to return False)
 
 ---
 
-### Step 5 — `frontend/middleware.ts`
+### Step 4 — `backend/api/routes/admin.py` — Data deletion
+
+```python
+@router.delete("/user/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db),
+):
+    """
+    DPDP Act data deletion endpoint.
+    Only callable by the family account linked to this user_id (JWT check).
+    
+    Deletion order (respect FK constraints):
+    1. Fetch all memory_cards for user_id → collect S3 keys
+    2. Delete S3 objects: for each s3_key, call storage.delete_media(s3_key)
+    3. DELETE FROM memory_cards WHERE user_id = ?
+    4. DELETE FROM story_atoms WHERE user_id = ?
+    5. DELETE FROM facts WHERE user_id = ?
+    6. DELETE FROM sessions WHERE user_id = ?
+    7. DELETE FROM user_profiles WHERE user_id = ?
+    8. DELETE FROM magic_link_tokens WHERE email = (SELECT email FROM family_accounts WHERE user_id = ?)
+    9. Anonymize consent_records: UPDATE consent_records SET user_id='DELETED', ip_address=NULL, user_agent=NULL WHERE user_id = ?
+       (email_hash is retained for audit — this is intentional per DPDP Act)
+    10. DELETE FROM family_accounts WHERE user_id = ?
+    11. Clear the katha_token cookie in the response
+    12. Return {"status": "deleted", "message": "All data has been permanently removed."}
+    
+    If any step fails: log the error, continue with remaining steps (best-effort deletion).
+    Log the full deletion event with timestamp for internal audit.
+    """
+```
+
+**Auth check:** `current_user['user_id']` must match the `user_id` in the route param. A family account can only delete their own linked user, not someone else's.
+
+**Test (`test_data_deletion.py`):**
+- Assert deletion fails with 403 if JWT user_id doesn't match route user_id
+- Assert deletion calls S3 delete for each memory card (mock S3)
+- Assert deletion removes story_atoms, facts, sessions, user_profiles from DB (mock DB, assert correct DELETE calls)
+- Assert consent_records are anonymized, not deleted (check user_id='DELETED', email_hash still present)
+- Assert family_account is deleted
+- Assert response clears the cookie
+
+---
+
+### Step 5 — Frontend: onboarding wizard
+
+**`frontend/app/family/onboarding/page.tsx`** — Single page, 5-step wizard using React state.
 
 ```typescript
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+// Step state machine: 'email' | 'verify' | 'profile' | 'consent' | 'done'
+// Each step is a separate view rendered within the same page — no navigation between steps.
+```
 
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get('katha_token')
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/family/login') ||
-                      request.nextUrl.pathname.startsWith('/family/auth')
+**Step 1 — Email:**
+- Email input + "Continue" button
+- Calls `POST /onboarding/start`
+- On success: advance to Step 2 regardless of status ("existing", "new", "incomplete")
 
-  if (!token && !isAuthRoute) {
-    return NextResponse.redirect(new URL('/family/login', request.url))
-  }
-  return NextResponse.next()
-}
+**Step 2 — Check your email:**
+- Static message: "We've sent a login link to {email}. Click it to continue."
+- The magic link redirects to `/family/auth/verify`, which sets the cookie and redirects to `/family/onboarding` (update `GET /auth/verify` redirect target: if `onboarding_complete=False`, redirect to `/family/onboarding` instead of `/family`)
+- Once the cookie is set, the wizard auto-advances to Step 3
 
-export const config = {
-  matcher: ['/family/:path*'],
-}
+**Step 3 — Parent profile + seed context:**
+Four fields:
+- Parent's name (text input)
+- WhatsApp number (tel input, placeholder: +91 98765 43210)
+- Preferred language (select: Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali, Marathi, Gujarati, English — map to BCP-47 codes)
+- Best time to call (time picker: HH:MM — IST)
+- Seed context (textarea, placeholder: "E.g. Grew up in Chennai. Worked as a schoolteacher for 35 years. Has two children.")
+- Calls `POST /onboarding/profile`
+- On success: advance to Step 4
+
+**Step 4 — DPDP consent:**
+Show clearly (not buried in fine print):
+
+```
+Before we begin, please read and agree to the following:
+
+✓ Katha will record voice conversations with [parent name] via WhatsApp
+✓ Conversations are transcribed and stored to preserve life stories
+✓ Story summaries and quotes are shared with you (the family account holder)
+✓ Your family's data is stored securely in India (Mumbai)
+✓ You can delete all data at any time from your account settings
+✓ Katha does not use your family's data to train AI models
+✓ Katha is not a medical service. For emergencies, please call 112.
+
+[Checkbox] I have read and agree to Katha's Privacy Policy and the above terms.
+
+[Link: Read Privacy Policy →]
+```
+
+- Checkbox must be checked to enable "I Agree" button
+- Calls `POST /onboarding/consent`
+- On success: advance to Step 5
+
+**Step 5 — Done:**
+- Confirmation screen: "Katha will message [parent name] tomorrow at [time] IST."
+- "Go to dashboard →" button → navigates to `/family`
+
+---
+
+### Step 6 — Update `GET /auth/verify` redirect logic
+
+In `backend/api/routes/auth.py`, after setting the cookie:
+
+```python
+# Look up if onboarding is complete
+family_account = await db.get_family_account_by_email(email)
+if not family_account.onboarding_complete:
+    return RedirectResponse("/family/onboarding", status_code=302)
+return RedirectResponse("/family", status_code=302)
 ```
 
 ---
 
-### Step 6 — `frontend/lib/api.ts`
+### Step 7 — Upgrade banner in family dashboard
 
-Typed fetch helpers. All requests send cookies (`credentials: 'include'`). On 401, redirect to login.
+**Update `frontend/app/family/layout.tsx`:**
 
-```typescript
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+Fetch session count from backend (add `GET /family/stats` — already implemented in Phase 6, add `session_count` and `session_limit` fields if not already there).
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    credentials: 'include',
-  })
-  if (res.status === 401) {
-    window.location.href = '/family/login'
-    throw new Error('Unauthorized')
-  }
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
-  return res.json()
-}
-
-export const api = {
-  getStats: () => apiFetch<Stats>('/family/stats'),
-  listStories: (domain?: string, page = 1) =>
-    apiFetch<StoriesResponse>(`/family/stories?${new URLSearchParams({ ...(domain && { domain }), page: String(page) })}`),
-  getStory: (id: string) => apiFetch<StoryAtomResponse>(`/family/stories/${id}`),
-  listCards: (page = 1) => apiFetch<CardsResponse>(`/family/cards?page=${page}`),
-}
+If `session_count >= 10 AND plan == 'free'`:
+```tsx
+<div className="upgrade-banner">
+  {parentName} has completed all 10 free sessions with Katha.
+  <a href="mailto:hello@katha.life?subject=Upgrade">Contact us to continue →</a>
+</div>
 ```
-
-Add TypeScript types matching the backend Pydantic models.
 
 ---
 
-### Step 7 — Frontend pages and components
+### Step 8 — `frontend/app/privacy/page.tsx`
 
-**`frontend/app/family/login/page.tsx`:**
-- Single email input field + "Send login link" button
-- POST to `/auth/magic-link`
-- After submit: show "Check your email for a login link" message
-- Clean, minimal design — centered card on warm cream background (`#FDF6EC`) consistent with memory card branding
+A static page with the privacy policy. Content should include:
+- What data is collected (voice transcriptions, story atoms, family contact details)
+- How it's used (story preservation, family dashboard)
+- Data residency (India, Mumbai)
+- Retention period (until user requests deletion)
+- Right to deletion (link to account settings or email)
+- No AI training on user content
+- Contact: privacy@katha.life
 
-**`frontend/app/family/auth/verify/page.tsx`:**
-- On mount: extract `token` from URL query params, call `GET /auth/verify?token={token}` (via redirect, the browser hits this URL directly)
-- Show loading state ("Logging you in...")
-- The backend sets the cookie and redirects to `/family` — no client-side JWT handling needed
-- If error (400): show "This link has expired. Request a new one." with link back to login
-
-**`frontend/app/family/layout.tsx`:**
-- Navigation bar: "Stories" | "Memory Cards" | "Logout"
-- Logout calls `POST /auth/logout` then redirects to `/family/login`
-- Wraps all authenticated family pages
-
-**`frontend/app/family/page.tsx` — Dashboard home:**
-- Fetch stats via `api.getStats()`
-- Show: user's name, total sessions, total stories captured
-- `<DomainProgress>` component showing all 8 domains
-- Latest memory card image (if any) as a hero image
-
-**`frontend/app/family/stories/page.tsx` — Story browser:**
-- Domain filter tabs (one per domain + "All")
-- `<StoryCard>` for each story atom
-- Pagination controls
-- Uses `swr` for data fetching with `api.listStories(selectedDomain, page)`
-
-**`frontend/app/family/stories/[id]/page.tsx` — Single story:**
-- Full story atom detail: narrative, 5W breakdown, verbatim quote (styled as blockquote), domain badge, date
-- Back button to story browser
-
-**`frontend/app/family/cards/page.tsx` — Memory card gallery:**
-- `<MemoryCardGallery>` component
-- Click on card → shows full-size image with download button (`<a href={url} download>`)
-
----
-
-### Step 8 — Frontend components
-
-**`frontend/components/DomainProgress.tsx`:**
-```typescript
-// Props: { domains: Array<{domain_id, domain_label, story_count, target}> }
-// Render: 8 rows, each with domain name, progress bar (story_count / target), and count
-// Color: filled segments in #C8956C (terracotta), empty in #E8DDD4
-// Accessibility: role="progressbar", aria-valuenow, aria-valuemax on each bar
-```
-
-**`frontend/components/StoryCard.tsx`:**
-```typescript
-// Props: StoryAtomResponse
-// Render: domain badge, title or first 80 chars of narrative, verbatim quote (if present),
-//         completeness score dots (5 dots, filled = score), date
-// Clickable → links to /family/stories/{id}
-```
-
-**`frontend/components/MemoryCardGallery.tsx`:**
-```typescript
-// Props: { cards: Array<{id, verbatim_quote, domain, image_url, created_at}> }
-// Render: responsive CSS grid (3 cols desktop, 2 cols tablet, 1 col mobile)
-// Each card: image thumbnail + quote preview on hover/focus
-// Lazy-load images (loading="lazy")
-```
+This is a static Next.js page — no API calls needed. Plain text / simple formatting.
 
 ---
 
 ## Verification Criteria
 
-- [ ] `make migrate` — `family_accounts` and `magic_link_tokens` tables created
-- [ ] `make test` — `test_auth.py` and `test_family_api.py` pass
-- [ ] `make lint` — backend and frontend both clean (`eslint` + `tsc --noEmit`)
-- [ ] Manual login flow — request magic link → receive email → click link → land on dashboard
-- [ ] Story and card display — seed DB and verify all pages render correctly
-- [ ] Lighthouse accessibility score ≥ 85 (run in Chrome DevTools on the dashboard home)
-- [ ] Auth isolation — verify `/family/stories/{id}` returns 404 for a story belonging to a different user
+- [ ] `make migrate` — `consent_records` table and new columns created
+- [ ] `make test` — `test_onboarding.py`, `test_freemium.py`, `test_data_deletion.py` all pass
+- [ ] `make lint` — clean
+- [ ] Full onboarding flow end-to-end (see below)
+- [ ] Data deletion end-to-end (see below)
+- [ ] Freemium gate — session 11 is blocked and upgrade email sent
+- [ ] Privacy policy page live at `/privacy`
 
-**Seed DB for frontend testing:**
-```sql
--- Seed a family account
-INSERT INTO family_accounts (email, user_id) VALUES ('dev@katha.life', 'test_user_wa');
+**Full onboarding smoke test:**
 
--- If no real story atoms exist, seed some test data
-INSERT INTO story_atoms (session_id, user_id, domain, title, narrative, verbatim_quote, completeness_score, who, what, when_approx, where_approx, why)
-VALUES 
-  ('00000000-0000-0000-0000-000000000001', 'test_user_wa', 'childhood', 'The Street in Madurai',
-   'User described the jasmine-scented street outside their childhood home.', 
-   'The street always smelled of jasmine and filter coffee in the mornings.', 4,
-   ARRAY['father', 'neighbours'], 'Daily street life', 'circa 1955', 'Madurai', 'Core childhood memory'),
-  ('00000000-0000-0000-0000-000000000001', 'test_user_wa', 'career', 'First Day as a Teacher',
-   'User described walking into their first classroom nervously.', 
-   'I thought — what if they can tell I don''t know what I''m doing?', 3,
-   ARRAY['students'], 'First teaching day', '1971', 'Government school, Madurai', 'Career beginning');
 ```
+1. Navigate to katha.life/family (or localhost:3000/family)
+2. Redirected to /family/login (no session)
+3. Enter a fresh email address
+4. Check email inbox — receive magic link
+5. Click link — cookie set, redirected to /family/onboarding
+6. Complete all 5 steps (use sandbox WhatsApp number for parent)
+7. Land on /family dashboard
+8. Verify in DB:
+   - family_accounts row exists with onboarding_complete=TRUE
+   - user_profiles row exists with scheduled_time set
+   - consent_records row exists with email_hash (not raw email)
+9. Wait for scheduled_time — verify Katha sends opening WhatsApp voice note
+```
+
+**Data deletion smoke test:**
+
+```bash
+# After completing the onboarding smoke test above:
+curl -X DELETE http://localhost:8000/user/test_user_1 \
+  -H "Cookie: katha_token=<your_jwt>"
+
+# Verify in DB — all tables should be empty for this user:
+psql $DATABASE_URL <<EOF
+SELECT COUNT(*) FROM story_atoms WHERE user_id='test_user_1';       -- expect 0
+SELECT COUNT(*) FROM memory_cards WHERE user_id='test_user_1';      -- expect 0
+SELECT COUNT(*) FROM facts WHERE user_id='test_user_1';             -- expect 0
+SELECT COUNT(*) FROM sessions WHERE user_id='test_user_1';          -- expect 0
+SELECT COUNT(*) FROM user_profiles WHERE user_id='test_user_1';     -- expect 0
+SELECT COUNT(*) FROM family_accounts WHERE user_id='test_user_1';   -- expect 0
+-- Consent record should remain but anonymized:
+SELECT user_id, email_hash FROM consent_records WHERE email_hash = encode(digest('test@email.com', 'sha256'), 'hex');
+-- expect: user_id='DELETED', email_hash=<hash>
+EOF
+```
+
+---
+
+## MVP Go/No-Go — Final Checklist
+
+After Phase 7, verify all PRD Section 12.1 criteria before pilot launch:
+
+- [ ] End-to-end voice loop working on real WhatsApp numbers
+- [ ] Onboarding: a new family can self-serve in under 10 minutes
+- [ ] DPDP: consent recorded, deletion works, data residency confirmed (S3 ap-south-1)
+- [ ] Freemium: session 11 blocked, upgrade email sent
+- [ ] Eval regression: TC-01 through TC-11 pass at 80%+ (run eval-runner subagent)
+- [ ] WhatsApp production number approved by Meta (separate track — not blocked on code)
+- [ ] Privacy policy live at katha.life/privacy
+- [ ] Crisis protocol tested: iCall India number (9152987821) appears in crisis response
 
 ---
 
 ## Notes for Claude Code
 
-- **httpOnly cookie vs. localStorage:** The JWT must be in an httpOnly cookie — never localStorage. This is enforced by the FastAPI route setting the cookie directly, never passing the token to the frontend JS.
-- **SES in dev:** In development, set `SES_MOCK=true` in `.env` and have `send_email_ses` print the magic link to the console instead of actually sending. Add this config flag to `backend/config.py`.
-- **CORS:** The FastAPI app must allow `http://localhost:3000` as an origin with `allow_credentials=True` (needed for cookie-based auth). Update `backend/main.py` CORS middleware.
-- **`NEXT_PUBLIC_API_URL`:** Add to `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:8000`
-- **Accessibility targets:** Use semantic HTML throughout — `<main>`, `<nav>`, `<article>` for story cards. All images need `alt` text. The `DomainProgress` bars need ARIA attributes. This matters because some adult children may use screen readers.
-- **Branch name:** `feature/phase6-family-dashboard`
-- **Commit after each numbered step.** Run `make lint` (both backend and frontend) and `make test` before each commit.
+- **Consent version:** hardcode `"1.0"` for MVP. When the privacy policy changes, bump this string and add a migration to re-request consent from existing users.
+- **Email hash:** use `hashlib.sha256(email.lower().encode()).hexdigest()` — lowercase before hashing to avoid case sensitivity issues.
+- **Deletion is best-effort:** if S3 delete fails for one card, log the error and continue deleting DB records. Never leave DB records behind because of an S3 failure.
+- **`/auth/verify` redirect:** update the existing Phase 6 route to check `onboarding_complete`. Don't break existing logged-in users who are already past onboarding — they should still go to `/family`.
+- **Wizard state:** use React `useState` for the 5-step wizard — not URL params, not separate routes. This avoids partial-state issues if the user navigates back.
+- **Branch name:** `feature/phase7-onboarding`
+- **Commit after each numbered step.** Run `make lint` and `make test` before each commit.

@@ -88,6 +88,8 @@ def _make_atom(**overrides):
 
 def test_stats_returns_session_count_and_domain_breakdown(db):
     profile_result = _query_result(scalar_one_or_none=_make_profile())
+    account_row = MagicMock(plan="free", onboarding_complete=True)
+    plan_result = _query_result(first=account_row)
     session_count_result = _query_result(scalar_one=5)
     domain_counts_result = MagicMock()
     domain_counts_result.all.return_value = [("childhood", 2), ("career", 1)]
@@ -99,6 +101,7 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
     db.execute = AsyncMock(
         side_effect=[
             profile_result,
+            plan_result,
             session_count_result,
             domain_counts_result,
             card_result,
@@ -119,6 +122,10 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
     )
     assert childhood_row["story_count"] == 2
     assert body["latest_card_url"] == "https://s3.amazonaws.com/katha-media/cards/x.png"
+    assert body["plan"] == "free"
+    assert body["session_count"] == 5
+    assert body["session_limit"] == 10
+    assert body["onboarding_complete"] is True
 
 
 # ── /family/stories ──────────────────────────────────────────────────────────

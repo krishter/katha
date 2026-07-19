@@ -20,6 +20,7 @@ _db_url = os.environ.get(
 config.set_main_option("sqlalchemy.url", _db_url)
 
 # Import models so Alembic can detect schema changes for autogenerate
+import models.consent_record  # noqa: E402, F401
 import models.fact  # noqa: E402, F401
 import models.family_account  # noqa: E402, F401
 import models.magic_link_token  # noqa: E402, F401

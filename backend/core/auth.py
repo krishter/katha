@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 _ALGORITHM = "HS256"
 _COOKIE_NAME = "katha_token"
+
+
+def hash_email(email: str) -> str:
+    """SHA-256 of a lowercased email — used for consent-record audit trail."""
+    return hashlib.sha256(email.lower().encode()).hexdigest()
 
 
 def create_jwt(email: str, user_id: str) -> str:

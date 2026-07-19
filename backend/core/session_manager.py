@@ -4,9 +4,11 @@ import logging
 import uuid
 from dataclasses import dataclass
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import freemium
 from models.session import Session
 from prompts.domains import get_domain, get_domain_sequence
 
@@ -40,6 +42,12 @@ def _to_state(row: Session) -> SessionState:
 
 async def start_session(user_id: str, db: AsyncSession) -> SessionState:
     """Create a new session record. Domain defaults to 'childhood' for session 1."""
+    if not await freemium.is_session_allowed(user_id, db):
+        await freemium.send_upgrade_prompt(user_id, db)
+        raise HTTPException(
+            status_code=402, detail="Session limit reached. Please upgrade to continue."
+        )
+
     session = Session(
         id=uuid.uuid4(),
         user_id=user_id,

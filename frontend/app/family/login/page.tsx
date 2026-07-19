@@ -15,7 +15,14 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await api.requestMagicLink(email);
+      // /onboarding/start (not /auth/magic-link) — this page is the
+      // universal email entry point, reachable by both new and returning
+      // visitors. /auth/magic-link only sends a link for emails that
+      // already have a family_account, so a first-time visitor here would
+      // see "check your email" and nothing would ever arrive.
+      // /onboarding/start creates the account (and sends the link) for a
+      // new email, and still sends a normal login link for an existing one.
+      await api.startOnboarding(email);
       setSubmitted(true);
     } catch {
       setError("Something went wrong. Please try again.");

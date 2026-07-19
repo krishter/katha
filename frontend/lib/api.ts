@@ -12,6 +12,10 @@ export interface Stats {
   domains_covered: number;
   domain_breakdown: DomainBreakdownEntry[];
   latest_card_url: string | null;
+  plan: string;
+  session_count: number;
+  session_limit: number;
+  onboarding_complete: boolean;
 }
 
 export interface StoryAtomResponse {
@@ -50,6 +54,27 @@ export interface CardsResponse {
   total: number;
 }
 
+export interface OnboardingStartResponse {
+  status: "new" | "existing" | "incomplete";
+  message?: string;
+}
+
+export interface OnboardingProfilePayload {
+  [key: string]: string;
+  parent_name: string;
+  whatsapp_number: string;
+  family_whatsapp_number: string;
+  preferred_language: string;
+  session_time: string;
+  onboarding_context: string;
+}
+
+export interface OnboardingConsentResponse {
+  status: "complete";
+  parent_name: string;
+  session_time: string;
+}
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -71,6 +96,21 @@ function storiesQuery(domain?: string, page = 1): string {
   const params: Record<string, string> = { page: String(page) };
   if (domain && domain !== "all") params.domain = domain;
   return new URLSearchParams(params).toString();
+}
+
+/**
+ * Lightweight "am I logged in" check that deliberately bypasses apiFetch's
+ * global 401 -> redirect-to-login behavior. The onboarding page needs this
+ * distinction: an unauthenticated visitor there should see step 1 (email
+ * entry), not get bounced to the login screen.
+ */
+async function isAuthenticated(): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/family/stats`, { credentials: "include" });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 export const api = {
@@ -99,5 +139,28 @@ export const api = {
       method: "POST",
       credentials: "include",
       redirect: "manual",
+    }),
+
+  isAuthenticated,
+
+  startOnboarding: (email: string) =>
+    apiFetch<OnboardingStartResponse>("/onboarding/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ email }),
+    }),
+
+  submitProfile: (payload: OnboardingProfilePayload) =>
+    apiFetch<{ status: string }>("/onboarding/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(payload),
+    }),
+
+  submitConsent: (consentGiven: boolean) =>
+    apiFetch<OnboardingConsentResponse>("/onboarding/consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ consent_given: String(consentGiven) }),
     }),
 };
