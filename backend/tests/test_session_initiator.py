@@ -92,6 +92,10 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
             new=AsyncMock(return_value=state),
         ),
         patch(
+            "scheduler.session_initiator.freemium.is_session_allowed",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
             "scheduler.session_initiator.sarvam_tts.synthesize",
             new=AsyncMock(return_value=b"fake-audio"),
         ),

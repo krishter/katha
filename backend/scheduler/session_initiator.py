@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_tts
 from adapters.whatsapp_stub import get_whatsapp_adapter
-from core import session_manager
+from core import freemium, session_manager
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
 from prompts.domains import get_domain_sequence
@@ -67,6 +67,17 @@ async def initiate_sessions(db_session_factory) -> None:
                         "Scheduler: user %s already has active session %s — skipping",
                         profile.user_id,
                         active.session_id,
+                    )
+                    continue
+
+                # Freemium gate — skip cleanly rather than let start_session
+                # raise HTTPException(402) into the generic except below.
+                if not await freemium.is_session_allowed(profile.user_id, db):
+                    await freemium.send_upgrade_prompt(profile.user_id, db)
+                    logger.info(
+                        "Scheduler: skipped session initiation for %s — "
+                        "session limit reached",
+                        profile.user_id,
                     )
                     continue
 
