@@ -54,14 +54,11 @@ def upgrade() -> None:
         ),
         sa.Column("audio_timestamp_start", sa.Float(), nullable=True),
         sa.Column("audio_timestamp_end", sa.Float(), nullable=True),
-        sa.Column(
-            "embedding",
-            sa.Text().with_variant(
-                sa.text("vector(1536)"),  # type: ignore[arg-type]
-                "postgresql",
-            ),
-            nullable=True,
-        ),
+        # Placeholder type — SQLAlchemy can't natively express pgvector's
+        # `vector` type, so this column is immediately re-typed via raw DDL
+        # below (with_variant() requires a type object, not a text clause,
+        # so `sa.text("vector(1536)")` here would raise AttributeError).
+        sa.Column("embedding", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

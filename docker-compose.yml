@@ -27,6 +27,13 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend:/app
+      # Anonymous volumes so the container's own Linux-built node_modules/
+      # (from `npm ci` in the Dockerfile) and .next cache aren't shadowed by
+      # the host bind mount above — the host's node_modules contains macOS
+      # native binaries (e.g. lightningcss, @next/swc) that don't load in
+      # the Linux container.
+      - /app/node_modules
+      - /app/.next
 
 volumes:
   postgres_data:
