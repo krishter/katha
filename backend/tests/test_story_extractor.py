@@ -3,23 +3,25 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from extraction.story_extractor import (
     ExtractionResult,
+    _embed_atom_safe,
     compute_completeness,
     process_extraction,
 )
+from models.story_atom import StoryAtom
 
 
-def _no_op_create_task(coro, **kwargs):
-    """Close the coroutine so it doesn't warn about never being awaited."""
-    coro.close()
-    return MagicMock()
-
-
-def _make_db():
+def _make_db(existing_atom_for_turn=None):
+    """
+    existing_atom_for_turn controls the idempotency-check query's result:
+    None means no prior atoms exist for the given turn_id.
+    """
     db = AsyncMock()
     db.add = MagicMock()
     result = MagicMock()
-    result.scalar_one_or_none.return_value = None
+    result.scalar_one_or_none.return_value = existing_atom_for_turn
     db.execute = AsyncMock(return_value=result)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
     return db
 
 
@@ -70,14 +72,85 @@ async def test_process_extraction_inserts_story_atoms():
     extraction = {"story_atoms": [_FULL_ATOM], "significant_people": []}
 
     with patch(
-        "extraction.story_extractor.asyncio.create_task",
-        side_effect=_no_op_create_task,
+        "extraction.story_extractor.vector_store.embed_and_store",
+        new=AsyncMock(),
     ):
         result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
 
     assert isinstance(result, ExtractionResult)
     assert len(result.story_atoms) == 1
     db.add.assert_called_once()
+    db.commit.assert_called()
+
+
+async def test_process_extraction_embeds_inline_not_fire_and_forget():
+    """Embedding must be awaited within process_extraction, not scheduled as
+    a detached task that could outlive the request-scoped DB session (C3)."""
+    db = _make_db()
+    extraction = {"story_atoms": [_FULL_ATOM], "significant_people": []}
+
+    with patch(
+        "extraction.story_extractor.vector_store.embed_and_store",
+        new=AsyncMock(),
+    ) as mock_embed:
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_embed.assert_awaited_once()
+    assert mock_embed.call_args.args[0] is result.story_atoms[0]
+
+
+async def test_process_extraction_sets_turn_id_on_atoms():
+    db = _make_db()
+    turn_id = uuid.uuid4()
+    extraction = {"story_atoms": [_FULL_ATOM], "significant_people": []}
+
+    with patch(
+        "extraction.story_extractor.vector_store.embed_and_store",
+        new=AsyncMock(),
+    ):
+        result = await process_extraction(
+            extraction, _SESSION_ID, _USER_ID, db, turn_id=turn_id
+        )
+
+    assert result.story_atoms[0].turn_id == turn_id
+
+
+async def test_process_extraction_skips_if_atoms_already_exist_for_turn():
+    """Idempotency guard: re-processing the same turn must not double-insert."""
+    existing_atom_id = uuid.uuid4()
+    db = _make_db(existing_atom_for_turn=existing_atom_id)
+    turn_id = uuid.uuid4()
+    extraction = {"story_atoms": [_FULL_ATOM], "significant_people": []}
+
+    result = await process_extraction(
+        extraction, _SESSION_ID, _USER_ID, db, turn_id=turn_id
+    )
+
+    assert result.story_atoms == []
+    db.add.assert_not_called()
+
+
+async def test_embed_atom_safe_flags_embedding_failed_on_exception():
+    """A failed embedding must not raise, and must be queryable — not just
+    logged and silently discarded (C3)."""
+    atom = StoryAtom(
+        id=uuid.uuid4(),
+        session_id=uuid.uuid4(),
+        user_id=_USER_ID,
+        domain="childhood",
+        narrative="Test narrative",
+    )
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+
+    with patch(
+        "extraction.story_extractor.vector_store.embed_and_store",
+        new=AsyncMock(side_effect=RuntimeError("OpenAI down")),
+    ):
+        await _embed_atom_safe(atom, db)
+
+    assert atom.embedding_failed is True
     db.commit.assert_called()
 
 
@@ -130,8 +203,8 @@ async def test_process_extraction_marks_resolved_when_atom_scores_3():
             new=AsyncMock(),
         ) as mock_resolve,
         patch(
-            "extraction.story_extractor.asyncio.create_task",
-            side_effect=_no_op_create_task,
+            "extraction.story_extractor.vector_store.embed_and_store",
+            new=AsyncMock(),
         ),
     ):
         result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)

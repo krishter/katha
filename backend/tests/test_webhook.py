@@ -222,6 +222,51 @@ def test_returns_200_even_when_orchestrator_raises():
     assert response.status_code == 200
 
 
+def test_session_end_schedules_close_and_process_session():
+    stub = _make_stub()
+    turn = _make_turn_result(session_end=True)
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+                new=AsyncMock(return_value=turn),
+            ),
+            patch(
+                "api.routes.webhook.session_manager.touch_last_message",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.close_and_process_session",
+                new=AsyncMock(),
+            ) as mock_close,
+            patch(
+                "api.routes.webhook._load_user_profile_for_session",
+                new=AsyncMock(
+                    return_value=MagicMock(
+                        name="Subramaniam",
+                        preferred_language="hi-IN",
+                        onboarding_context="",
+                    )
+                ),
+            ),
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    mock_close.assert_called_once()
+    # New signature is (session_id, db) — no transcript/extraction_json.
+    assert mock_close.call_args.args[0] == _SESSION_ID
+    assert len(mock_close.call_args.args) == 2
+
+
 def test_no_active_session_sends_not_scheduled():
     stub = _make_stub()
     app.dependency_overrides[get_whatsapp_adapter] = lambda: stub

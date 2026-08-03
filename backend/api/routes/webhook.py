@@ -92,7 +92,10 @@ async def whatsapp_incoming(
         from_number = raw_from.replace("whatsapp:", "")
         media_url = params.get("MediaUrl0", "")
         media_type = params.get("MediaContentType0", "")
-        message_sid = params.get("MessageSid", "")
+        # None (not "") when absent — turns.inbound_message_sid is unique,
+        # and Postgres treats multiple NULLs as distinct but multiple ""
+        # values as a genuine collision.
+        message_sid = params.get("MessageSid") or None
 
         logger.info(
             "Webhook: from=%s media_type=%s sid=%s",
@@ -120,7 +123,7 @@ async def whatsapp_incoming(
                 state.session_id,
                 user_profile,
                 db,
-                background_tasks,
+                inbound_message_sid=message_sid,
             )
 
             await whatsapp.send_voice_note(
@@ -133,12 +136,10 @@ async def whatsapp_incoming(
             if result.crisis_detected:
                 await whatsapp.send_text(from_number, _CRISIS_TEXT)
 
-            if result.session_state.session_end_suggested:
+            if session_manager.should_end_session(result.session_state):
                 background_tasks.add_task(
                     orchestrator.close_and_process_session,
                     state.session_id,
-                    result.transcript,
-                    result.extraction_json,
                     db,
                 )
 

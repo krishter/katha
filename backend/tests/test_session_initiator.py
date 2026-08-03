@@ -19,11 +19,13 @@ def _make_profile(hour: int, minute: int, number: str = "+919876543210") -> Magi
     return p
 
 
-def _make_session_state(session_id: str | None = None) -> MagicMock:
+def _make_session_state(
+    session_id: str | None = None, domain: str = "childhood"
+) -> MagicMock:
     s = MagicMock()
     s.session_id = session_id or str(uuid.uuid4())
     s.user_id = "user-test"
-    s.domain = "childhood"
+    s.domain = domain
     return s
 
 
@@ -84,6 +86,10 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
             return_value=stub_adapter,
         ),
         patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=0),
+        ),
+        patch(
             "scheduler.session_initiator.session_manager.get_active_session_by_number",
             new=AsyncMock(return_value=None),
         ),
@@ -108,6 +114,81 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
 
 
 @pytest.mark.asyncio
+async def test_initiate_sessions_uses_session_domain_not_hardcoded_childhood():
+    """The opening voice note must reflect whatever domain start_session
+    actually chose, not a hardcoded 'childhood' default."""
+    from prompts.domains import get_domain
+    from scheduler.session_initiator import initiate_sessions
+
+    now_ist_hour = datetime.now(timezone.utc).astimezone(
+        __import__("pytz").timezone("Asia/Kolkata")
+    )
+    profile = _make_profile(now_ist_hour.hour, now_ist_hour.minute)
+    state = _make_session_state(domain="career")
+    factory, mock_db = _make_db_factory(profile=profile)
+
+    stub_adapter = MagicMock()
+    stub_adapter.send_voice_note = AsyncMock(return_value="STUB_MSG_001")
+    stub_adapter.send_text = AsyncMock(return_value="STUB_MSG_002")
+
+    with (
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=0),
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.get_active_session_by_number",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.start_session",
+            new=AsyncMock(return_value=state),
+        ),
+        patch(
+            "scheduler.session_initiator.freemium.is_session_allowed",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "scheduler.session_initiator.sarvam_tts.synthesize",
+            new=AsyncMock(return_value=b"fake-audio"),
+        ) as mock_synth,
+    ):
+        await initiate_sessions(factory)
+
+    opening_text = mock_synth.call_args.args[0]
+    assert get_domain("career").entry_prompt in opening_text
+
+
+@pytest.mark.asyncio
+async def test_initiate_sessions_sweeps_stale_sessions_first():
+    from scheduler.session_initiator import initiate_sessions
+
+    factory, _ = _make_db_factory(profile=None)
+
+    stub_adapter = MagicMock()
+    stub_adapter.send_voice_note = AsyncMock()
+    stub_adapter.send_text = AsyncMock()
+
+    with (
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=1),
+        ) as mock_abandon,
+    ):
+        await initiate_sessions(factory)
+
+    mock_abandon.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_initiate_sessions_skips_user_with_active_session():
     from scheduler.session_initiator import initiate_sessions
 
@@ -125,6 +206,10 @@ async def test_initiate_sessions_skips_user_with_active_session():
         patch(
             "scheduler.session_initiator.get_whatsapp_adapter",
             return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=0),
         ),
         patch(
             "scheduler.session_initiator.session_manager.get_active_session_by_number",
@@ -146,9 +231,15 @@ async def test_initiate_sessions_no_users_due():
     stub_adapter.send_voice_note = AsyncMock()
     stub_adapter.send_text = AsyncMock()
 
-    with patch(
-        "scheduler.session_initiator.get_whatsapp_adapter",
-        return_value=stub_adapter,
+    with (
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=0),
+        ),
     ):
         await initiate_sessions(factory)
 
@@ -170,9 +261,15 @@ async def test_followup_sent_for_non_responsive_session():
     stub_adapter.send_voice_note = AsyncMock()
     stub_adapter.send_text = AsyncMock(return_value="STUB_MSG_003")
 
-    with patch(
-        "scheduler.session_initiator.get_whatsapp_adapter",
-        return_value=stub_adapter,
+    with (
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=0),
+        ),
     ):
         await initiate_sessions(factory)
 

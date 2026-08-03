@@ -13,7 +13,7 @@ from adapters.whatsapp_stub import get_whatsapp_adapter
 from core import freemium, session_manager
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
-from prompts.domains import get_domain_sequence
+from prompts.domains import get_domain
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,10 @@ async def initiate_sessions(db_session_factory) -> None:
     current_minute = now_ist.minute
 
     async with db_session_factory() as db:
+        # 0. A session left active with no reply must never block tomorrow's
+        # conversation — sweep it to 'abandoned' before looking up who's due.
+        await session_manager.abandon_stale_sessions(db)
+
         # 1. Find users scheduled for this minute
         result = await db.execute(
             select(UserProfile).where(
@@ -54,7 +58,6 @@ async def initiate_sessions(db_session_factory) -> None:
         )
 
         whatsapp = get_whatsapp_adapter()
-        domain_sequence = get_domain_sequence()
 
         for profile in due_profiles:
             try:
@@ -81,13 +84,12 @@ async def initiate_sessions(db_session_factory) -> None:
                     )
                     continue
 
-                # Create new session
+                # Create new session — session_number and domain are chosen
+                # by start_session based on the user's actual progress.
                 state = await session_manager.start_session(profile.user_id, db)
 
-                # Build opening message
-                domain_name = domain_sequence[0]  # Default to childhood for session 1
-                from prompts.domains import get_domain
-
+                # Build opening message from the session's actual domain
+                domain_name = state.domain
                 domain = get_domain(domain_name)
                 opening_text = (
                     f"Namaste {profile.name} ji! "
@@ -145,8 +147,7 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
         .where(Session.session_open_message_id.is_not(None))
         .where(Session.last_user_message_at.is_(None))
         .where(Session.started_at < cutoff)
-        .where(Session.session_end_suggested.is_(False))
-        .where(Session.goal_met.is_(False))
+        .where(Session.status == "active")
     )
     rows = result.all()
 

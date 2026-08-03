@@ -47,7 +47,9 @@ def _make_profile(family_number="+919876543210"):
 
 
 def _make_db():
-    return AsyncMock()
+    db = AsyncMock()
+    db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    return db
 
 
 @contextmanager
@@ -61,6 +63,12 @@ def _patched(profile, card_result):
         stack.enter_context(
             patch(
                 "core.orchestrator.session_manager.get_session",
+                new=AsyncMock(return_value=_SESSION_STATE),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "core.orchestrator.session_manager.close_session",
                 new=AsyncMock(return_value=_SESSION_STATE),
             )
         )
@@ -101,7 +109,7 @@ async def test_close_and_process_session_delivers_card_when_family_number_set():
     profile = _make_profile()
 
     with _patched(profile, _CARD_RESULT) as (mock_whatsapp, mock_save):
-        await close_and_process_session(_SESSION_ID, "transcript", _EXTRACTION_JSON, db)
+        await close_and_process_session(_SESSION_ID, db)
 
     mock_whatsapp.send_image.assert_called_once()
     call_kwargs = mock_whatsapp.send_image.call_args.kwargs
@@ -115,7 +123,7 @@ async def test_close_and_process_session_skips_delivery_without_family_number():
     profile = _make_profile(family_number=None)
 
     with _patched(profile, _CARD_RESULT) as (mock_whatsapp, mock_save):
-        await close_and_process_session(_SESSION_ID, "transcript", _EXTRACTION_JSON, db)
+        await close_and_process_session(_SESSION_ID, db)
 
     mock_whatsapp.send_image.assert_not_called()
     mock_save.assert_not_called()
@@ -126,7 +134,7 @@ async def test_close_and_process_session_skips_when_no_card_generated():
     profile = _make_profile()
 
     with _patched(profile, None) as (mock_whatsapp, mock_save):
-        await close_and_process_session(_SESSION_ID, "transcript", _EXTRACTION_JSON, db)
+        await close_and_process_session(_SESSION_ID, db)
 
     mock_whatsapp.send_image.assert_not_called()
     mock_save.assert_not_called()
@@ -140,6 +148,10 @@ async def test_close_and_process_session_does_not_raise_when_card_step_fails():
             "core.orchestrator.session_manager.get_session",
             new=AsyncMock(return_value=_SESSION_STATE),
         ),
+        patch(
+            "core.orchestrator.session_manager.close_session",
+            new=AsyncMock(return_value=_SESSION_STATE),
+        ),
         patch("core.orchestrator.run_post_session", new=AsyncMock()),
         patch(
             "core.orchestrator.get_user_profile",
@@ -147,7 +159,7 @@ async def test_close_and_process_session_does_not_raise_when_card_step_fails():
         ),
     ):
         # Should not raise even though memory-card generation blew up.
-        await close_and_process_session(_SESSION_ID, "transcript", _EXTRACTION_JSON, db)
+        await close_and_process_session(_SESSION_ID, db)
 
 
 async def test_close_and_process_session_does_not_generate_card_when_extraction_fails():
@@ -161,6 +173,10 @@ async def test_close_and_process_session_does_not_generate_card_when_extraction_
             new=AsyncMock(return_value=_SESSION_STATE),
         ),
         patch(
+            "core.orchestrator.session_manager.close_session",
+            new=AsyncMock(return_value=_SESSION_STATE),
+        ),
+        patch(
             "core.orchestrator.run_post_session",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
@@ -169,6 +185,6 @@ async def test_close_and_process_session_does_not_generate_card_when_extraction_
             mock_generate_card,
         ),
     ):
-        await close_and_process_session(_SESSION_ID, "transcript", _EXTRACTION_JSON, db)
+        await close_and_process_session(_SESSION_ID, db)
 
     mock_generate_card.assert_not_called()

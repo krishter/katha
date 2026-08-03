@@ -16,6 +16,7 @@ from models.magic_link_token import MagicLinkToken
 from models.memory_card import MemoryCard
 from models.session import Session
 from models.story_atom import StoryAtom
+from models.turn import Turn
 from models.user_profile import UserProfileModel
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ async def delete_user(
     for label, stmt in [
         ("memory_cards", delete(MemoryCard).where(MemoryCard.user_id == user_id)),
         ("story_atoms", delete(StoryAtom).where(StoryAtom.user_id == user_id)),
+        ("turns", delete(Turn).where(Turn.user_id == user_id)),
         ("facts", delete(Fact).where(Fact.user_id == user_id)),
         ("sessions", delete(Session).where(Session.user_id == user_id)),
         (
