@@ -100,6 +100,24 @@ def test_prompt_layer5_does_not_include_extraction_schema():
     assert "significant_people" not in prompt
 
 
+def test_prompt_instructs_closing_when_goal_already_met():
+    """
+    Regression guard (WS2.1 eval): since session_end_suggested is now
+    decided by a separate, deferred extraction call, the dialogue call
+    needs its own synchronous signal that the domain goal is already met
+    so it can close warmly and preview tomorrow, instead of the two calls
+    disagreeing about whether this is the last exchange.
+    """
+    met_session = SimpleNamespace(**{**_SESSION.__dict__, "goal_met": True})
+    prompt = build_system_prompt(_PROFILE, met_session, _PRIOR)
+    assert "closing exchange" in prompt.lower()
+
+
+def test_prompt_omits_closing_instruction_when_goal_not_met():
+    prompt = _build()
+    assert "closing exchange" not in prompt.lower()
+
+
 # ── build_extraction_prompt ───────────────────────────────────────────────────
 
 

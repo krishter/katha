@@ -138,11 +138,19 @@ Domain entry question: {domain.entry_prompt}"""
 
 def _layer4_session_state(session_state: SessionState) -> str:
     domain = get_domain(session_state.domain)
+    closing_instruction = ""
+    if session_state.goal_met:
+        closing_instruction = (
+            "\nThis domain's goal is already met as of your last reply — treat "
+            "this turn as your closing exchange: wrap up warmly and let them "
+            "know what you'd love to hear about tomorrow."
+        )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
 Current domain: {domain.name}
 Exchanges so far this session: {session_state.exchange_count}
 Target story atoms for this domain: {domain.target_story_atoms}
+Domain goal already met: {session_state.goal_met}{closing_instruction}
 
 Hard constraints:
 - Never bring up medical details or financial struggles unless the user initiates them.

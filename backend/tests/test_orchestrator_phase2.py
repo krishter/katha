@@ -41,6 +41,9 @@ _WELL_FORMED_LLM = (
 def _make_db():
     db = AsyncMock()
     db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    no_prior_turn = MagicMock()
+    no_prior_turn.first.return_value = None
+    db.execute = AsyncMock(return_value=no_prior_turn)
     return db
 
 

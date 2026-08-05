@@ -161,11 +161,18 @@ async def test_run_post_session_does_not_raise_on_exception():
 
 
 def _make_turn_db() -> AsyncMock:
-    """A db mock sufficient for _persist_turn's add/commit/refresh sequence."""
+    """
+    A db mock sufficient for _persist_turn's add/commit/refresh sequence.
+    db.execute defaults to "no prior turn found" (.first() -> None), which
+    is what _load_last_turn_messages expects for a first-in-session turn.
+    """
     db = AsyncMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
+    no_prior_turn = MagicMock()
+    no_prior_turn.first.return_value = None
+    db.execute = AsyncMock(return_value=no_prior_turn)
     return db
 
 
@@ -263,6 +270,45 @@ def _make_session_state(**overrides):
     )
     defaults.update(overrides)
     return SessionState(**defaults)
+
+
+async def test_process_voice_turn_includes_last_turn_in_dialogue_call():
+    """
+    Regression guard (WS2.1 eval, TC-08): the dialogue call must see the
+    immediately preceding turn's raw exchange directly, not rely solely on
+    the deferred extraction pipeline for continuity — a story that unfolds
+    over two turns would otherwise lose context if extraction for the
+    prior turn hadn't finished by the time this one arrives.
+    """
+    from core.orchestrator import process_voice_turn
+
+    session_state = _make_session_state(exchange_count=1)
+    db = _make_turn_db()
+    prior_turn_result = MagicMock()
+    prior_turn_result.first.return_value = (
+        "There was a man who made the best sweets in our street.",
+        "That sounds wonderful — what did he sell?",
+    )
+    db.execute = AsyncMock(return_value=prior_turn_result)
+
+    mock_llm = AsyncMock(
+        return_value=SimpleNamespace(
+            content=_DIALOGUE_ONLY_LLM, input_tokens=100, output_tokens=50
+        )
+    )
+
+    with ExitStack() as stack:
+        _voice_turn_patches(stack, session_state, _DIALOGUE_ONLY_LLM)
+        stack.enter_context(patch("core.orchestrator.llm.chat", new=mock_llm))
+        await process_voice_turn(b"audio", _SESSION_ID, _make_profile(), db)
+
+    sent_messages = mock_llm.call_args.args[0]
+    assert sent_messages[0].role == "user"
+    assert "best sweets" in sent_messages[0].content
+    assert sent_messages[1].role == "assistant"
+    assert "what did he sell" in sent_messages[1].content
+    # The current turn's transcript is still the last message.
+    assert sent_messages[-1].content == "I grew up in Madurai near the temple."
 
 
 async def test_process_voice_turn_persists_turn_with_placeholder_extraction():

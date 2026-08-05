@@ -150,6 +150,31 @@ async def _load_session_transcript(session_id: str, db) -> str:
     return "\n".join(result.scalars().all())
 
 
+async def _load_last_turn_messages(session_id: str, db) -> list[Message]:
+    """
+    Fetch the immediately preceding turn's raw exchange (transcript +
+    Katha's reply), if any, as user/assistant messages to prepend to the
+    dialogue call. Turn rows are written synchronously per turn (see
+    _persist_turn) — this does not depend on the deferred extraction
+    pipeline, so a story that unfolds over two turns doesn't lose
+    continuity if extraction for the prior turn hasn't finished yet.
+    """
+    result = await db.execute(
+        select(Turn.transcript, Turn.response_text)
+        .where(Turn.session_id == uuid.UUID(session_id))
+        .order_by(Turn.turn_number.desc())
+        .limit(1)
+    )
+    row = result.first()
+    if row is None:
+        return []
+    transcript, response_text = row
+    return [
+        Message(role="user", content=transcript),
+        Message(role="assistant", content=response_text),
+    ]
+
+
 async def run_post_session(session_id: str, user_id: str, db) -> None:
     """
     Background task triggered after session close. Story atoms were already
@@ -496,9 +521,13 @@ async def process_voice_turn(
     # 4. Build real prior context from fact store + vector store
     prior_context = await build_prior_context(state.user_id, state.domain, db)
 
-    # 5. Build dialogue prompt and call the dialogue LLM
+    # 5. Build dialogue prompt and call the dialogue LLM. The immediately
+    # preceding turn's raw exchange is included directly (not just via the
+    # deferred fact/vector-store pipeline) so a story that unfolds over two
+    # turns keeps continuity even if that turn's extraction hasn't run yet.
     dialogue_prompt = build_system_prompt(user_profile, state, prior_context)
-    messages = [Message(role="user", content=stt_result.transcript)]
+    messages = await _load_last_turn_messages(session_id, db)
+    messages.append(Message(role="user", content=stt_result.transcript))
     try:
         llm_response = await llm.chat(
             messages, system=dialogue_prompt, max_tokens=_DIALOGUE_MAX_TOKENS
