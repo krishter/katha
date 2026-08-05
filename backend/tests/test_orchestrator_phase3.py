@@ -1003,6 +1003,100 @@ async def test_run_extraction_for_turn_triggers_close_when_session_should_end():
     mock_close.assert_called_once_with(_SESSION_ID, db)
 
 
+async def test_run_extraction_for_turn_defers_close_when_goal_just_met():
+    """
+    Regression (WS5 pilot rehearsal): if goal_met flips false->true on
+    this turn, the dialogue reply already sent was generated before this
+    extraction ran and never got a chance to be a closing message —
+    closing must defer to the next turn.
+    """
+    from core.orchestrator import run_extraction_for_turn
+
+    turn_id = uuid.uuid4()
+    turn_row = SimpleNamespace(
+        id=turn_id, extraction_json={}, input_tokens=0, output_tokens=0
+    )
+    db = _make_extraction_db(turn_row=turn_row)
+    session_state = _make_session_state(goal_met=False)
+    newly_met_state = _make_session_state(goal_met=True, session_end_suggested=False)
+
+    with (
+        patch(
+            "core.orchestrator.llm.chat",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    content=_EXTRACTION_LLM_CONTENT, input_tokens=10, output_tokens=5
+                )
+            ),
+        ),
+        patch("core.orchestrator.story_extractor.process_extraction", new=AsyncMock()),
+        patch(
+            "core.orchestrator.session_manager.apply_extraction",
+            new=AsyncMock(return_value=newly_met_state),
+        ),
+        patch(
+            "core.orchestrator.close_and_process_session", new=AsyncMock()
+        ) as mock_close,
+    ):
+        await run_extraction_for_turn(
+            turn_id,
+            _SESSION_ID,
+            session_state,
+            _make_profile(),
+            PriorContext(),
+            "transcript",
+            "response",
+            db,
+        )
+
+    mock_close.assert_not_called()
+
+
+async def test_run_extraction_for_turn_closes_when_goal_was_already_met():
+    """The turn after goal_met first flipped true: the dialogue call for
+    this turn already knew, and closing may proceed."""
+    from core.orchestrator import run_extraction_for_turn
+
+    turn_id = uuid.uuid4()
+    turn_row = SimpleNamespace(
+        id=turn_id, extraction_json={}, input_tokens=0, output_tokens=0
+    )
+    db = _make_extraction_db(turn_row=turn_row)
+    session_state = _make_session_state(goal_met=True)
+    still_met_state = _make_session_state(goal_met=True, session_end_suggested=False)
+
+    with (
+        patch(
+            "core.orchestrator.llm.chat",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    content=_EXTRACTION_LLM_CONTENT, input_tokens=10, output_tokens=5
+                )
+            ),
+        ),
+        patch("core.orchestrator.story_extractor.process_extraction", new=AsyncMock()),
+        patch(
+            "core.orchestrator.session_manager.apply_extraction",
+            new=AsyncMock(return_value=still_met_state),
+        ),
+        patch(
+            "core.orchestrator.close_and_process_session", new=AsyncMock()
+        ) as mock_close,
+    ):
+        await run_extraction_for_turn(
+            turn_id,
+            _SESSION_ID,
+            session_state,
+            _make_profile(),
+            PriorContext(),
+            "transcript",
+            "response",
+            db,
+        )
+
+    mock_close.assert_called_once_with(_SESSION_ID, db)
+
+
 async def test_run_extraction_for_turn_does_not_close_when_session_continues():
     from core.orchestrator import run_extraction_for_turn
 

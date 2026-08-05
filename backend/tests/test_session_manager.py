@@ -308,6 +308,58 @@ def test_should_end_when_goal_met():
     assert should_end_session(state) is True
 
 
+def test_should_not_end_when_goal_just_became_met_this_turn():
+    """
+    Regression (WS5 pilot rehearsal): the turn where goal_met first flips
+    true must not close the session — the dialogue reply for that turn was
+    generated before this fact was known, so it never got a chance to be a
+    closing message. goal_met_before_this_turn=False signals exactly that.
+    """
+    state = SessionState(
+        session_id="s1",
+        user_id="u1",
+        session_number=1,
+        domain="childhood",
+        exchange_count=5,
+        energy_signal="high",
+        goal_met=True,
+        session_end_suggested=False,
+    )
+    assert should_end_session(state, goal_met_before_this_turn=False) is False
+
+
+def test_should_end_when_goal_was_already_met_before_this_turn():
+    """The turn *after* goal_met first flipped true — the dialogue call for
+    this turn already knew and (per Layer 4) should have wrapped up."""
+    state = SessionState(
+        session_id="s1",
+        user_id="u1",
+        session_number=1,
+        domain="childhood",
+        exchange_count=6,
+        energy_signal="high",
+        goal_met=True,
+        session_end_suggested=False,
+    )
+    assert should_end_session(state, goal_met_before_this_turn=True) is True
+
+
+def test_should_still_end_on_session_end_suggested_even_if_goal_just_met():
+    """The LLM's own real-time signal always closes immediately, regardless
+    of the goal_met deferral timing."""
+    state = SessionState(
+        session_id="s1",
+        user_id="u1",
+        session_number=1,
+        domain="childhood",
+        exchange_count=5,
+        energy_signal="high",
+        goal_met=True,
+        session_end_suggested=True,
+    )
+    assert should_end_session(state, goal_met_before_this_turn=False) is True
+
+
 def test_should_end_when_llm_signals_end():
     state = SessionState(
         session_id="s1",

@@ -192,15 +192,30 @@ async def apply_extraction(
     return _to_state(row)
 
 
-def should_end_session(state: SessionState) -> bool:
+def should_end_session(
+    state: SessionState, *, goal_met_before_this_turn: bool | None = None
+) -> bool:
     """
     Return True if the LLM signalled the end, the domain goal is met, or
     the user is low-energy and the session has run long enough. This is
     the single source of truth for "is this session over" — callers must
     not re-derive it from session_end_suggested/goal_met directly.
+
+    goal_met_before_this_turn distinguishes "the goal was already met
+    going into this turn" from "the goal just became met this turn": the
+    dialogue reply for the turn where goal_met first flips true was
+    generated before the extraction that learned that fact, so it never
+    got a chance to be a closing message (see Layer 4's closing
+    instruction in build_system_prompt). Passing it as False when it just
+    flipped true defers closing by one turn, giving the next dialogue call
+    a chance to see goal_met=True and wrap up before the session actually
+    closes. Omit it (None) to fall back to the plain goal_met check —
+    e.g. for a one-off snapshot with no "before" state to compare against.
     """
     if state.session_end_suggested:
         return True
+    if state.goal_met and goal_met_before_this_turn is False:
+        return False
     if state.goal_met:
         return True
     if state.energy_signal == "low" and state.exchange_count >= 3:
