@@ -69,6 +69,9 @@ class TurnResult:
     session_state: SessionState
     crisis_detected: bool
     response_mime_type: str = field(default="audio/x-wav")
+    # None when no Turn row was persisted for this result (STT/LLM total
+    # failure, or the pre-turn crisis/malformed-response paths).
+    turn_id: Optional[uuid.UUID] = field(default=None)
 
 
 def _parse_response_only(raw: str) -> str:
@@ -205,11 +208,12 @@ async def save_memory_card(
     user_id: str,
     card_result: MemoryCardResult,
     s3_key: str,
-    public_url: str,
     message_sid: Optional[str],
     db,
 ) -> None:
-    """Persist a MemoryCard row for a generated and delivered card."""
+    """Persist a MemoryCard row for a generated and delivered card. Stores
+    only the S3 key — the dashboard generates a short-lived presigned URL
+    on demand (see api/routes/family.py); no permanent public URL exists."""
     card = MemoryCard(
         session_id=uuid.UUID(session_id),
         user_id=user_id,
@@ -219,7 +223,6 @@ async def save_memory_card(
         verbatim_quote=card_result.verbatim_quote,
         domain=card_result.domain,
         image_s3_key=s3_key,
-        image_public_url=public_url,
         delivered_at=datetime.now(timezone.utc) if message_sid else None,
         twilio_message_sid=message_sid,
     )
@@ -255,13 +258,13 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
         return
 
     s3_key = f"cards/{session_id}.png"
-    public_url = await storage.upload_media(
+    await storage.upload_media(
         card_result.image_bytes, s3_key, content_type="image/png"
     )
 
     caption = f"A memory from today's conversation with {user_profile.name} \U0001f338"
     whatsapp = get_whatsapp_adapter()
-    message_sid = await whatsapp.send_image(
+    message_sid, _delivery_s3_key = await whatsapp.send_image(
         to_number=user_profile.family_whatsapp_number,
         image_bytes=card_result.image_bytes,
         caption=caption,
@@ -272,7 +275,6 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
         user_id=user_id,
         card_result=card_result,
         s3_key=s3_key,
-        public_url=public_url,
         message_sid=message_sid,
         db=db,
     )
@@ -287,9 +289,8 @@ async def close_and_process_session(
     Called when a session ends. This is the single entry point for session
     close — marks the session completed, runs post-session entity
     extraction, then generates and delivers a memory card. Triggered from
-    run_extraction_for_turn (the extraction call is what learns
-    session_end_suggested/goal_met) or from the /conversation/close
-    dev endpoint.
+    run_extraction_for_turn, since that's what learns
+    session_end_suggested/goal_met.
     """
     try:
         state = await session_manager.get_session(session_id, db)
@@ -353,6 +354,23 @@ async def _persist_turn(
     return turn
 
 
+async def set_turn_audio_key(turn_id: uuid.UUID, s3_key: str, db) -> None:
+    """
+    Record the S3 key of the voice note actually sent for this turn. The
+    send happens at the webhook layer, after the turn is already
+    committed — this lets the deletion sweep find and remove it later
+    (every uploaded object must be enumerable, per the DPDP review's P4).
+    """
+    result = await db.execute(select(Turn).where(Turn.id == turn_id))
+    turn = result.scalar_one_or_none()
+    if turn is None:
+        logger.warning("set_turn_audio_key: turn %s not found", turn_id)
+        return
+    turn.response_audio_s3_key = s3_key
+    db.add(turn)
+    await db.commit()
+
+
 async def _synthesize_and_convert(text: str, language_code: str) -> bytes:
     """TTS then OGG conversion — the two steps that must succeed together
     for a voice note to go out, or degrade to text (see _send_or_degrade)."""
@@ -367,6 +385,7 @@ async def _send_or_degrade(
     session_state: SessionState,
     extraction_json: dict,
     crisis_detected: bool,
+    turn_id: Optional[uuid.UUID] = None,
 ) -> TurnResult:
     """
     Try to synthesize voice for response_text. If TTS or the WAV->OGG
@@ -385,6 +404,7 @@ async def _send_or_degrade(
             session_state=session_state,
             crisis_detected=crisis_detected,
             response_mime_type="audio/ogg",
+            turn_id=turn_id,
         )
     except Exception:
         logger.error(
@@ -402,6 +422,7 @@ async def _send_or_degrade(
             session_state=session_state,
             crisis_detected=crisis_detected,
             response_mime_type="text/plain",
+            turn_id=turn_id,
         )
 
 
@@ -624,6 +645,7 @@ async def process_voice_turn(
         state,
         dict(_EMPTY_EXTRACTION),
         crisis_detected=crisis_detected,
+        turn_id=turn.id,
     )
 
 

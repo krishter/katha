@@ -15,7 +15,9 @@ _MEDIA_URL = "https://api.twilio.com/Accounts/AC/Messages/MM/Media/ME"
 
 # Override DB dependency
 async def _override_db():
-    yield AsyncMock()
+    db = AsyncMock()
+    db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    yield db
 
 
 app.dependency_overrides[get_db] = _override_db
@@ -36,7 +38,7 @@ def _make_session(crisis=False, session_end=False):
     )
 
 
-def _make_turn_result(crisis=False, session_end=False):
+def _make_turn_result(crisis=False, session_end=False, turn_id=None):
     from core.orchestrator import TurnResult
 
     state = _make_session(session_end=session_end)
@@ -49,6 +51,7 @@ def _make_turn_result(crisis=False, session_end=False):
         detected_language="hi-IN",
         session_state=state,
         crisis_detected=crisis,
+        turn_id=turn_id if turn_id is not None else uuid.uuid4(),
     )
 
 
@@ -56,7 +59,9 @@ def _make_stub(validate_ok=True):
     stub = MagicMock()
     stub.validate_signature.return_value = validate_ok
     stub.download_voice_note = AsyncMock(return_value=b"fake-ogg")
-    stub.send_voice_note = AsyncMock(return_value="STUB_MSG_001")
+    stub.send_voice_note = AsyncMock(
+        return_value=("STUB_MSG_001", "audio/stub-test.ogg")
+    )
     stub.send_text = AsyncMock(return_value="STUB_MSG_002")
     return stub
 
@@ -117,6 +122,10 @@ def test_voice_note_calls_process_voice_turn_and_send_voice_note():
                 new=AsyncMock(),
             ),
             patch(
+                "api.routes.webhook.orchestrator.set_turn_audio_key",
+                new=AsyncMock(),
+            ),
+            patch(
                 "api.routes.webhook._load_user_profile_for_session",
                 new=AsyncMock(
                     return_value=MagicMock(
@@ -135,6 +144,55 @@ def test_voice_note_calls_process_voice_turn_and_send_voice_note():
     assert response.status_code == 200
     mock_turn.assert_called_once()
     stub.send_voice_note.assert_called_once()
+
+
+def test_voice_note_records_response_audio_s3_key():
+    """
+    The upload happens inside send_voice_note, after the turn row is
+    already committed — the webhook must persist that key as a follow-up
+    write so the object is enumerable for deletion later (P4).
+    """
+    stub = _make_stub()
+    turn = _make_turn_result()
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+                new=AsyncMock(return_value=turn),
+            ),
+            patch(
+                "api.routes.webhook.session_manager.touch_last_message",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.set_turn_audio_key",
+                new=AsyncMock(),
+            ) as mock_set_key,
+            patch(
+                "api.routes.webhook._load_user_profile_for_session",
+                new=AsyncMock(
+                    return_value=MagicMock(
+                        name="Subramaniam",
+                        preferred_language="hi-IN",
+                        onboarding_context="",
+                    )
+                ),
+            ),
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    mock_set_key.assert_called_once()
+    assert mock_set_key.call_args.args[0] == turn.turn_id
+    assert mock_set_key.call_args.args[1] == "audio/stub-test.ogg"
 
 
 def test_text_message_sends_voice_prompt():
@@ -172,6 +230,10 @@ def test_crisis_sends_additional_text():
             ),
             patch(
                 "api.routes.webhook.session_manager.touch_last_message",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.set_turn_audio_key",
                 new=AsyncMock(),
             ),
             patch(
@@ -358,6 +420,10 @@ def test_voice_note_passes_background_tasks_to_process_voice_turn():
             ) as mock_turn,
             patch(
                 "api.routes.webhook.session_manager.touch_last_message",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.set_turn_audio_key",
                 new=AsyncMock(),
             ),
             patch(

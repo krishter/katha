@@ -19,7 +19,9 @@ class MagicLinkToken(Base):
         default=uuid.uuid4,
     )
     email: Mapped[str] = mapped_column(String, nullable=False)
-    token: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    # SHA-256 of the token — the raw token exists only in the emailed URL
+    # and the caller's hand; never stored at rest (C8).
+    token_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

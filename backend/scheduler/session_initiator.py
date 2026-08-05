@@ -104,7 +104,7 @@ async def initiate_sessions(db_session_factory) -> None:
                 )
 
                 # Send voice note
-                message_sid = await whatsapp.send_voice_note(
+                message_sid, _s3_key = await whatsapp.send_voice_note(
                     profile.whatsapp_number, audio_bytes, mime_type="audio/ogg"
                 )
 

@@ -33,7 +33,6 @@ class MemoryCard(Base):
     verbatim_quote: Mapped[str] = mapped_column(Text, nullable=False)
     domain: Mapped[str] = mapped_column(String, nullable=False)
     image_s3_key: Mapped[str] = mapped_column(String, nullable=False)
-    image_public_url: Mapped[str] = mapped_column(String, nullable=False)
     delivered_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

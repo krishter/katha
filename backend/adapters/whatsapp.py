@@ -19,14 +19,17 @@ logger = logging.getLogger(__name__)
 class WhatsAppAdapter(Protocol):
     async def send_voice_note(
         self, to_number: str, audio_bytes: bytes, mime_type: str = "audio/ogg"
-    ) -> str:
-        """Upload audio to S3, send via Twilio. Returns MessageSid."""
+    ) -> tuple[str, str]:
+        """Upload audio to S3 (private) and send Twilio a short-lived
+        presigned URL. Returns (MessageSid, s3_key) — callers must track
+        the key so the object can be found and deleted later."""
         ...
 
     async def send_image(
         self, to_number: str, image_bytes: bytes, caption: str = ""
-    ) -> str:
-        """Upload PNG to S3, send via Twilio as an image message. Returns MessageSid."""
+    ) -> tuple[str, str]:
+        """Upload PNG to S3 (private) and send Twilio a short-lived
+        presigned URL. Returns (MessageSid, s3_key)."""
         ...
 
     async def send_text(
@@ -59,34 +62,36 @@ class TwilioWhatsAppAdapter:
 
     async def send_voice_note(
         self, to_number: str, audio_bytes: bytes, mime_type: str = "audio/ogg"
-    ) -> str:
+    ) -> tuple[str, str]:
         import uuid
 
         key = f"audio/katha-{uuid.uuid4().hex[:12]}.ogg"
-        public_url = await storage.upload_media(audio_bytes, key, mime_type)
+        s3_key = await storage.upload_media(audio_bytes, key, mime_type)
+        presigned_url = await storage.generate_presigned_url(s3_key)
         msg = self._client.messages.create(
             from_=self._from,
             to=f"whatsapp:{to_number}",
-            media_url=[public_url],
+            media_url=[presigned_url],
         )
         logger.info("Sent voice note to %s: %s", to_number, msg.sid)
-        return msg.sid
+        return msg.sid, s3_key
 
     async def send_image(
         self, to_number: str, image_bytes: bytes, caption: str = ""
-    ) -> str:
+    ) -> tuple[str, str]:
         import uuid
 
         key = f"cards/katha-{uuid.uuid4().hex[:12]}.png"
-        public_url = await storage.upload_media(image_bytes, key, "image/png")
+        s3_key = await storage.upload_media(image_bytes, key, "image/png")
+        presigned_url = await storage.generate_presigned_url(s3_key)
         msg = self._client.messages.create(
             from_=self._from,
             to=f"whatsapp:{to_number}",
-            media_url=[public_url],
+            media_url=[presigned_url],
             body=caption,
         )
         logger.info("Sent image to %s: %s", to_number, msg.sid)
-        return msg.sid
+        return msg.sid, s3_key
 
     async def send_text(
         self,

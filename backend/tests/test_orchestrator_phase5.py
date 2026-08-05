@@ -57,7 +57,9 @@ def _patched(profile, card_result):
     """Patch the collaborators close_and_process_session touches, yielding
     the whatsapp adapter mock and the save_memory_card mock for assertions."""
     mock_whatsapp = MagicMock()
-    mock_whatsapp.send_image = AsyncMock(return_value="SM_CARD_123")
+    mock_whatsapp.send_image = AsyncMock(
+        return_value=("SM_CARD_123", "cards/delivery-x.png")
+    )
 
     with ExitStack() as stack:
         stack.enter_context(

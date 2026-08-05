@@ -24,29 +24,33 @@ class StubWhatsAppAdapter:
 
     async def send_voice_note(
         self, to_number: str, audio_bytes: bytes, mime_type: str = "audio/ogg"
-    ) -> str:
+    ) -> tuple[str, str]:
         sid = self._fake_sid()
+        s3_key = f"audio/stub-{uuid.uuid4().hex[:12]}.ogg"
         logger.info(
-            "[STUB] send_voice_note to=%s mime=%s bytes=%d sid=%s",
+            "[STUB] send_voice_note to=%s mime=%s bytes=%d sid=%s key=%s",
             to_number,
             mime_type,
             len(audio_bytes),
             sid,
+            s3_key,
         )
-        return sid
+        return sid, s3_key
 
     async def send_image(
         self, to_number: str, image_bytes: bytes, caption: str = ""
-    ) -> str:
+    ) -> tuple[str, str]:
         sid = self._fake_sid()
+        s3_key = f"cards/stub-{uuid.uuid4().hex[:12]}.png"
         logger.info(
-            "[STUB] send_image to=%s bytes=%d caption=%r sid=%s",
+            "[STUB] send_image to=%s bytes=%d caption=%r sid=%s key=%s",
             to_number,
             len(image_bytes),
             caption[:80],
             sid,
+            s3_key,
         )
-        return sid
+        return sid, s3_key
 
     async def send_text(
         self,
