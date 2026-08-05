@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
 from core import orchestrator, session_manager
+from core.fallback_audio import FailureStage, get_fallback_text
 from models.db import get_db
 from prompts.system_prompt import UserProfile
 
@@ -23,6 +24,7 @@ _CRISIS_TEXT = (
 _TEXT_ONLY_REPLY = (
     "Please send me a voice message — I'd love to hear your voice! \U0001f399"
 )
+_NOT_SCHEDULED_TEXT = "Hi! Your session isn't scheduled yet."
 
 
 async def _load_user_profile_for_session(
@@ -52,6 +54,47 @@ async def _load_user_profile_for_session(
     )
 
 
+async def _safe_send_text(whatsapp, to_number: str, text: str, *, stage: str) -> None:
+    """
+    Send a fallback text. Wrapped so a failure here — the last line of
+    defence against silence — cannot re-enter the handler and cannot
+    itself go unlogged.
+    """
+    try:
+        await whatsapp.send_text(to_number, text)
+    except Exception:
+        logger.error(
+            "Failed to send fallback text (stage=%s) to %s",
+            stage,
+            to_number,
+            exc_info=True,
+        )
+
+
+async def _deliver_turn_result(
+    whatsapp, to_number: str, result: orchestrator.TurnResult
+) -> None:
+    """
+    Deliver whatever process_voice_turn produced. If it already degraded to
+    text (TTS/conversion failed), send text. If the send itself fails,
+    fall back to text with the same content as a last resort.
+    """
+    try:
+        if result.response_mime_type == "text/plain":
+            await whatsapp.send_text(to_number, result.response_text)
+        else:
+            await whatsapp.send_voice_note(
+                to_number, result.response_audio, mime_type=result.response_mime_type
+            )
+    except Exception:
+        logger.error(
+            "Failed to deliver turn result to %s — falling back to text",
+            to_number,
+            exc_info=True,
+        )
+        await _safe_send_text(whatsapp, to_number, result.response_text, stage="send")
+
+
 @router.get("/webhook/whatsapp")
 async def whatsapp_verify(
     hub_mode: str = Query(alias="hub.mode", default=""),
@@ -74,7 +117,14 @@ async def whatsapp_incoming(
     """
     Main webhook handler for incoming Twilio WhatsApp events.
     Always returns HTTP 200 — Twilio retries on non-200.
+
+    Every inbound message produces an outbound message, including on
+    failure (P2). process_voice_turn handles STT/LLM/TTS failures
+    internally and always returns a TurnResult; this handler's own
+    try/except is the last-resort net for anything else (session lookup,
+    DB errors, etc.) — and it, too, always tries to reply.
     """
+    from_number = None
     try:
         # 1. Parse form payload
         form = await request.form()
@@ -108,8 +158,8 @@ async def whatsapp_incoming(
         state = await session_manager.get_active_session_by_number(from_number, db)
         if state is None:
             logger.info("No active session for %s", from_number)
-            await whatsapp.send_text(
-                from_number, "Hi! Your session isn't scheduled yet."
+            await _safe_send_text(
+                whatsapp, from_number, _NOT_SCHEDULED_TEXT, stage="no_active_session"
             )
             return Response(status_code=200, content="OK")
 
@@ -124,31 +174,36 @@ async def whatsapp_incoming(
                 user_profile,
                 db,
                 inbound_message_sid=message_sid,
+                background_tasks=background_tasks,
             )
 
-            await whatsapp.send_voice_note(
-                from_number, result.response_audio, mime_type=result.response_mime_type
-            )
+            await _deliver_turn_result(whatsapp, from_number, result)
 
             # Update last_user_message_at
             await session_manager.touch_last_message(state.session_id, db)
 
             if result.crisis_detected:
-                await whatsapp.send_text(from_number, _CRISIS_TEXT)
-
-            if session_manager.should_end_session(result.session_state):
-                background_tasks.add_task(
-                    orchestrator.close_and_process_session,
-                    state.session_id,
-                    db,
+                await _safe_send_text(
+                    whatsapp, from_number, _CRISIS_TEXT, stage="crisis"
                 )
+
+            # Session close is triggered from run_extraction_for_turn, once
+            # extraction learns session_end_suggested/goal_met — not here.
 
         else:
             # 6. Text message — prompt for voice note
-            await whatsapp.send_text(from_number, _TEXT_ONLY_REPLY)
+            await _safe_send_text(
+                whatsapp, from_number, _TEXT_ONLY_REPLY, stage="text_only"
+            )
 
     except Exception:
-        logger.exception("Webhook processing error")
-        # Always return 200 to prevent Twilio retries
+        logger.error("Webhook processing error for %s", from_number, exc_info=True)
+        if from_number:
+            await _safe_send_text(
+                whatsapp,
+                from_number,
+                get_fallback_text(FailureStage.OTHER),
+                stage="other",
+            )
 
     return Response(status_code=200, content="OK")

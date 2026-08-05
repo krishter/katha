@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from prompts.system_prompt import PriorContext, UserProfile, build_system_prompt
+from prompts.system_prompt import (
+    PriorContext,
+    UserProfile,
+    build_extraction_prompt,
+    build_system_prompt,
+)
 
 # Minimal SessionState stand-in (real class defined in session_manager)
 _SESSION = SimpleNamespace(
@@ -37,10 +42,12 @@ def test_prompt_contains_domain_name():
     assert "Childhood" in prompt
 
 
-def test_prompt_contains_response_extraction_tags():
+def test_prompt_contains_response_tag_only():
+    """The dialogue prompt returns <response> only — extraction is a
+    separate, off-critical-path call (see build_extraction_prompt)."""
     prompt = _build()
     assert "<response>" in prompt
-    assert "<extraction>" in prompt
+    assert "<extraction>" not in prompt
 
 
 def test_prompt_contains_icall_crisis_number():
@@ -86,6 +93,56 @@ def test_prompt_layer3_omits_significant_people_block_when_empty():
     assert "Not yet fully explored" not in prompt
 
 
-def test_prompt_layer5_includes_significant_people_field():
+def test_prompt_layer5_does_not_include_extraction_schema():
+    """Extraction fields moved to build_extraction_prompt — the dialogue
+    prompt should no longer describe the extraction JSON schema at all."""
     prompt = _build()
+    assert "significant_people" not in prompt
+
+
+# ── build_extraction_prompt ───────────────────────────────────────────────────
+
+
+def _build_extraction(prior=None) -> str:
+    return build_extraction_prompt(
+        _PROFILE,
+        _SESSION,
+        prior or _PRIOR,
+        user_transcript="I grew up in a small house near the river in Madurai.",
+        assistant_response="That sounds lovely — tell me more about the river.",
+    )
+
+
+def test_extraction_prompt_contains_extraction_tag_only():
+    prompt = _build_extraction()
+    assert "<extraction>" in prompt
+    assert "<response>" not in prompt
+
+
+def test_extraction_prompt_contains_user_transcript():
+    prompt = _build_extraction()
+    assert "Madurai" in prompt
+
+
+def test_extraction_prompt_contains_domain_name():
+    prompt = _build_extraction()
+    assert "Childhood" in prompt
+
+
+def test_extraction_prompt_contains_significant_people_field():
+    prompt = _build_extraction()
     assert "significant_people" in prompt
+
+
+def test_extraction_prompt_lists_known_significant_people():
+    prior = PriorContext(
+        significant_people=[
+            {
+                "name": "Mr. Iyer",
+                "relationship": "school teacher",
+                "why_significant": "Inspired teaching career",
+            }
+        ]
+    )
+    prompt = _build_extraction(prior=prior)
+    assert "Mr. Iyer" in prompt

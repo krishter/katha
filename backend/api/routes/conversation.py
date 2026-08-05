@@ -41,6 +41,7 @@ async def conversation_turn(
     user_name: str = Form(default="Friend"),
     preferred_language: str = Form(default="hi-IN"),
     onboarding_context: str = Form(default=""),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     try:
@@ -51,7 +52,11 @@ async def conversation_turn(
             onboarding_context=onboarding_context,
         )
         result = await orchestrator.process_voice_turn(
-            audio_bytes, session_id, user_profile, db
+            audio_bytes,
+            session_id,
+            user_profile,
+            db,
+            background_tasks=background_tasks,
         )
         return Response(
             content=result.response_audio,

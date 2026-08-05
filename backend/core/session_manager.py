@@ -124,12 +124,14 @@ async def get_session(session_id: str, db: AsyncSession) -> SessionState:
     return _to_state(row)
 
 
-async def update_session(
-    session_id: str,
-    extraction_json: dict,
-    db: AsyncSession,
-) -> SessionState:
-    """Update session state from extraction JSON, persist to DB."""
+async def record_turn(session_id: str, db: AsyncSession) -> SessionState:
+    """
+    Increment exchange_count for a turn that just happened. This is the
+    only part of session bookkeeping that must happen synchronously, on
+    the critical path — energy_signal, session_end_suggested, and goal_met
+    depend on structured extraction, which now runs as a separate,
+    latency-tolerant call (see apply_extraction).
+    """
     result = await db.execute(
         select(Session).where(Session.id == uuid.UUID(session_id))
     )
@@ -138,6 +140,29 @@ async def update_session(
         raise ValueError(f"Session not found: {session_id}")
 
     row.exchange_count += 1
+    await db.commit()
+    await db.refresh(row)
+    return _to_state(row)
+
+
+async def apply_extraction(
+    session_id: str,
+    extraction_json: dict,
+    db: AsyncSession,
+) -> SessionState:
+    """
+    Update energy_signal, session_end_suggested, and goal_met from a
+    completed extraction pass. Does not touch exchange_count — see
+    record_turn, which runs synchronously per turn regardless of when
+    extraction finishes.
+    """
+    result = await db.execute(
+        select(Session).where(Session.id == uuid.UUID(session_id))
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise ValueError(f"Session not found: {session_id}")
+
     row.energy_signal = extraction_json.get("energy_signal", row.energy_signal)
     row.session_end_suggested = extraction_json.get(
         "session_end_suggested", row.session_end_suggested
@@ -158,11 +183,11 @@ async def update_session(
     await db.commit()
     await db.refresh(row)
     logger.info(
-        "Updated session %s: exchange=%d energy=%s goal_met=%s",
+        "Applied extraction to session %s: energy=%s goal_met=%s session_end=%s",
         session_id,
-        row.exchange_count,
         row.energy_signal,
         row.goal_met,
+        row.session_end_suggested,
     )
     return _to_state(row)
 

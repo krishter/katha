@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 _MODEL = "claude-sonnet-4-6"
 
+# One client for the process, not one per call — reuses the connection pool
+# and gets a consistent timeout/retry policy everywhere.
+_client = AsyncAnthropic(
+    api_key=settings.ANTHROPIC_API_KEY, timeout=20.0, max_retries=2
+)
+
 
 @dataclass
 class Message:
@@ -28,10 +34,9 @@ class LLMResponse:
 async def chat(
     messages: list[Message],
     system: str | None = None,
+    max_tokens: int = 500,
 ) -> LLMResponse:
     """Send messages to Claude Sonnet 4.6 and return the response."""
-    client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
     # Separate any system-role message; explicit system= param takes precedence
     system_content = system
     user_messages = []
@@ -44,7 +49,7 @@ async def chat(
 
     kwargs: dict = {
         "model": _MODEL,
-        "max_tokens": 500,
+        "max_tokens": max_tokens,
         "temperature": 0.7,
         "messages": user_messages,
     }
@@ -52,7 +57,7 @@ async def chat(
         kwargs["system"] = system_content
 
     try:
-        response = await client.messages.create(**kwargs)
+        response = await _client.messages.create(**kwargs)
     except APIError as exc:
         raise RuntimeError(f"Anthropic API error: {exc}") from exc
 

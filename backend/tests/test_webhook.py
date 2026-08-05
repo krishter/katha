@@ -222,9 +222,91 @@ def test_returns_200_even_when_orchestrator_raises():
     assert response.status_code == 200
 
 
-def test_session_end_schedules_close_and_process_session():
+def test_unexpected_error_still_sends_a_fallback_message():
+    """
+    The single most important test in the suite (per the remediation plan):
+    even a totally unexpected failure — outside process_voice_turn's own
+    fallback handling — must never leave the user in silence (C4/P2).
+    """
     stub = _make_stub()
-    turn = _make_turn_result(session_end=True)
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+                new=AsyncMock(side_effect=RuntimeError("STT error")),
+            ),
+            patch(
+                "api.routes.webhook._load_user_profile_for_session",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    stub.send_text.assert_called_once()
+    assert "tomorrow" in stub.send_text.call_args.args[1].lower()
+
+
+def test_degraded_text_response_is_sent_as_text_not_voice_note():
+    """When process_voice_turn degrades to text (TTS/conversion failed),
+    the webhook must send text, not attempt a voice note with empty audio."""
+    from core.orchestrator import TurnResult
+
+    stub = _make_stub()
+    text_result = TurnResult(
+        response_audio=b"",
+        response_text="Here's what I wanted to say, as text instead.",
+        extraction_json={},
+        transcript="नमस्ते",
+        detected_language="hi-IN",
+        session_state=_make_session(),
+        crisis_detected=False,
+        response_mime_type="text/plain",
+    )
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+                new=AsyncMock(return_value=text_result),
+            ),
+            patch(
+                "api.routes.webhook.session_manager.touch_last_message",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook._load_user_profile_for_session",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    stub.send_voice_note.assert_not_called()
+    stub.send_text.assert_called_once_with(_FROM_NUMBER, text_result.response_text)
+
+
+def test_delivery_failure_falls_back_to_text():
+    """If send_voice_note itself fails, the handler must still get the
+    same content to the user as text — not swallow the failure silently."""
+    stub = _make_stub()
+    stub.send_voice_note = AsyncMock(side_effect=RuntimeError("Twilio is down"))
+    turn = _make_turn_result()
     app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
     try:
         with (
@@ -241,9 +323,43 @@ def test_session_end_schedules_close_and_process_session():
                 new=AsyncMock(),
             ),
             patch(
-                "api.routes.webhook.orchestrator.close_and_process_session",
+                "api.routes.webhook._load_user_profile_for_session",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    stub.send_text.assert_called_once_with(_FROM_NUMBER, turn.response_text)
+
+
+def test_voice_note_passes_background_tasks_to_process_voice_turn():
+    """
+    Session close is no longer scheduled by the webhook directly — it's
+    triggered from run_extraction_for_turn once extraction learns
+    session_end_suggested/goal_met (see WS2.1). The webhook's job is just
+    to pass background_tasks through so that scheduling can happen.
+    """
+    stub = _make_stub()
+    turn = _make_turn_result(session_end=True)
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+                new=AsyncMock(return_value=turn),
+            ) as mock_turn,
+            patch(
+                "api.routes.webhook.session_manager.touch_last_message",
                 new=AsyncMock(),
-            ) as mock_close,
+            ),
             patch(
                 "api.routes.webhook._load_user_profile_for_session",
                 new=AsyncMock(
@@ -261,10 +377,8 @@ def test_session_end_schedules_close_and_process_session():
         app.dependency_overrides.pop(get_whatsapp_adapter, None)
 
     assert response.status_code == 200
-    mock_close.assert_called_once()
-    # New signature is (session_id, db) — no transcript/extraction_json.
-    assert mock_close.call_args.args[0] == _SESSION_ID
-    assert len(mock_close.call_args.args) == 2
+    mock_turn.assert_called_once()
+    assert mock_turn.call_args.kwargs["background_tasks"] is not None
 
 
 def test_no_active_session_sends_not_scheduled():

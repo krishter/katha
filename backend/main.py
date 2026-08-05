@@ -26,8 +26,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         settings.LOG_LEVEL,
     )
 
+    from core.fallback_audio import preload_fallback_audio
     from models.db import AsyncSessionLocal
     from scheduler.session_initiator import create_scheduler
+
+    await preload_fallback_audio()
 
     scheduler = create_scheduler(AsyncSessionLocal)
     scheduler.start()
