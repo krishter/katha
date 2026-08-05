@@ -83,6 +83,31 @@ async def test_process_extraction_inserts_story_atoms():
     db.commit.assert_called()
 
 
+async def test_process_extraction_skips_malformed_non_dict_atom():
+    """
+    Regression guard (WS5.4 eval finding): build_extraction_prompt's
+    story_atoms schema had no per-item example, and the LLM was observed
+    returning plain strings instead of objects. One bad atom must not
+    abort the whole turn's extraction (people/state updates shouldn't be
+    held hostage by it) — the well-formed atom in the same list should
+    still be inserted.
+    """
+    db = _make_db()
+    extraction = {
+        "story_atoms": ["Born in 1948 in a village near Mysore.", _FULL_ATOM],
+        "significant_people": [],
+    }
+
+    with patch(
+        "extraction.story_extractor.vector_store.embed_and_store",
+        new=AsyncMock(),
+    ):
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    assert len(result.story_atoms) == 1
+    assert result.story_atoms[0].title == "Father's shop"
+
+
 async def test_process_extraction_embeds_inline_not_fire_and_forget():
     """Embedding must be awaited within process_extraction, not scheduled as
     a detached task that could outlive the request-scoped DB session (C3)."""

@@ -186,3 +186,53 @@ def test_extraction_prompt_notes_goal_already_met():
 def test_extraction_prompt_omits_goal_met_note_when_not_met():
     prompt = _build_extraction()
     assert "already met" not in prompt.lower()
+
+
+def test_extraction_prompt_gives_story_atoms_a_schema():
+    """
+    Regression guard (WS5.4 eval finding): significant_people had a full
+    example object but story_atoms was just `[]`, and live eval runs
+    showed the LLM returning atoms as plain strings — which crashes
+    process_extraction (compute_completeness calls atom.get(...)) and
+    silently drops the whole turn's extraction. story_atoms must show a
+    concrete per-item shape, not an empty list.
+    """
+    prompt = _build_extraction()
+    assert '"story_atoms": [\n' in prompt or '"story_atoms": [' in prompt
+    assert "narrative" in prompt
+    assert "not a plain string" in prompt.lower()
+
+
+# ── Layer 3 "early session" branch ────────────────────────────────────────
+
+
+def test_prompt_layer3_not_early_session_when_only_significant_people_known():
+    """
+    Regression guard (WS5.4 eval finding): the early-session claim only
+    checked prior_context.facts, so a session with significant_people or
+    open_threads but no structured facts yet got told "you don't yet know
+    much" right above a block naming a specific person it does know about
+    — an internally contradictory prompt.
+    """
+    prior = PriorContext(
+        significant_people=[
+            {
+                "name": "Mr. Iyer",
+                "relationship": "school teacher",
+                "why_significant": "Inspired teaching career",
+            }
+        ]
+    )
+    prompt = build_system_prompt(_PROFILE, _SESSION, prior)
+    assert "early session" not in prompt.lower()
+
+
+def test_prompt_layer3_not_early_session_when_only_open_threads_known():
+    prior = PriorContext(open_threads=["name of father's shop"])
+    prompt = build_system_prompt(_PROFILE, _SESSION, prior)
+    assert "early session" not in prompt.lower()
+
+
+def test_prompt_layer3_is_early_session_when_nothing_known():
+    prompt = build_system_prompt(_PROFILE, _SESSION, PriorContext())
+    assert "early session" in prompt.lower()

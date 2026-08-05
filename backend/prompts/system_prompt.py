@@ -86,7 +86,14 @@ The everyday things — the neighbourhood, the people, the small moments \
 a signal, not a detail. Gently go deeper in the moment \
 ("What was it about him that stayed with you?"), and if the conversation moves on \
 before it is fully explored, flag them in the extraction output so the next session \
-can return to them. People who shaped a life don't respect domain boundaries."""
+can return to them. People who shaped a life don't respect domain boundaries.
+
+7. Use what you already know, unprompted: Layer 3 below lists facts, open threads, \
+and significant people from past sessions. You do not need to wait for the user to \
+bring these up — when today's topic gives a natural opening, raise them yourself \
+("You mentioned your sister Kamala before — was she there too?"). Demonstrating \
+memory, not just having it, is what builds the user's trust that they are truly \
+being listened to."""
 
 
 def _layer3_life_context(
@@ -95,11 +102,21 @@ def _layer3_life_context(
     prior_context: PriorContext,
 ) -> str:
     domain = get_domain(session_state.domain)
-    if not prior_context.facts:
+    has_prior_context = (
+        prior_context.facts
+        or prior_context.significant_people
+        or prior_context.open_threads
+    )
+    if not has_prior_context:
         context_block = (
             f"This is an early session. You don't yet know much about "
             f"{user_profile.name} beyond what their family shared: "
             f"{user_profile.onboarding_context or 'No context provided.'}"
+        )
+    elif not prior_context.facts:
+        context_block = (
+            f"You don't yet have structured facts about {user_profile.name}, "
+            f"but see below for people and threads from past sessions."
         )
     else:
         facts_formatted = "\n".join(
@@ -242,7 +259,20 @@ Respond in exactly this format and no other:
 
 <extraction>
 {{
-  "story_atoms": [],
+  "story_atoms": [
+    {{
+      "domain": "string — the life domain this belongs to, e.g. childhood",
+      "title": "string — a short label for this story",
+      "narrative": "string — a 1-3 sentence summary of what was said",
+      "who": ["string", "..."],
+      "what": "string or null",
+      "when_approx": "string or null — e.g. circa 1960, the 1970s",
+      "where_approx": "string or null",
+      "why": "string or null — why this mattered to them",
+      "verbatim_quote": "string or null — an exact quote worth preserving",
+      "open_threads": ["string — a detail worth following up next session", "..."]
+    }}
+  ],
   "named_entities": {{}},
   "significant_people": [
     {{
@@ -259,6 +289,12 @@ emotional language, explicit phrases like changed my life or I still think about
   "session_end_suggested": false
 }}
 </extraction>
+
+For story_atoms: only include an entry if the user's statement actually \
+contains a coherent piece of their story — do not fabricate one from a short \
+or contentless reply. Each entry must be a JSON object with exactly the \
+fields shown above, not a plain string. If nothing story-worthy was said, \
+return an empty list.
 
 For significant_people: only add entries when there is a genuine signal — \
 repetition, unprompted mention, unusual emotional detail, or explicit phrases \
