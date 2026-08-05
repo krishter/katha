@@ -15,6 +15,7 @@ _SAFE_KWARGS = dict(
     TWILIO_ACCOUNT_SID="ACreal",
     TWILIO_AUTH_TOKEN="realtoken",
     APP_BASE_URL="https://katha.life",
+    PUBLIC_BASE_URL="https://api.katha.life",
 )
 
 
@@ -81,6 +82,13 @@ def test_empty_credential_raises_in_production(key):
 def test_non_https_base_url_raises_in_production():
     with pytest.raises(RuntimeError, match="APP_BASE_URL"):
         validate_production_config(_settings(APP_BASE_URL="http://katha.life"))
+
+
+def test_non_https_public_base_url_raises_in_production():
+    """Every Twilio webhook signature check derives from PUBLIC_BASE_URL —
+    left at its http:// dev default in production, every webhook 403s."""
+    with pytest.raises(RuntimeError, match="PUBLIC_BASE_URL"):
+        validate_production_config(_settings(PUBLIC_BASE_URL="http://localhost:8000"))
 
 
 def test_reports_every_problem_at_once():

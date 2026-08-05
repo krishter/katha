@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -17,6 +17,13 @@ _MEDIA_URL = "https://api.twilio.com/Accounts/AC/Messages/MM/Media/ME"
 async def _override_db():
     db = AsyncMock()
     db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    # Default: no existing turn for any MessageSid — most tests aren't
+    # exercising the idempotency check, so they shouldn't be treated as
+    # duplicates by default. See test_duplicate_message_sid_is_skipped for
+    # the dedicated positive case.
+    no_existing_turn = MagicMock()
+    no_existing_turn.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=no_existing_turn)
     yield db
 
 
@@ -101,6 +108,33 @@ def test_invalid_signature_returns_403():
         app.dependency_overrides.pop(get_whatsapp_adapter, None)
 
     assert response.status_code == 403
+
+
+def test_signature_validated_against_public_base_url_not_request_url():
+    """
+    Regression for H2: behind a TLS-terminating load balancer, the raw
+    request reports an http:// scheme that never matches what Twilio
+    actually signed. TestClient's default request (http://testserver/...)
+    stands in for exactly that proxied scenario — the validated URL must
+    come from PUBLIC_BASE_URL, not from request.url.
+    """
+    from config import settings
+
+    stub = _make_stub(validate_ok=True)
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with patch(
+            "api.routes.webhook.session_manager.get_active_session_by_number",
+            new=AsyncMock(return_value=None),
+        ):
+            client = TestClient(app)
+            client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    validated_url = stub.validate_signature.call_args.args[0]
+    assert validated_url == f"{settings.PUBLIC_BASE_URL}/webhook/whatsapp"
+    assert not validated_url.startswith("http://testserver")
 
 
 def test_voice_note_calls_process_voice_turn_and_send_voice_note():
@@ -463,3 +497,78 @@ def test_no_active_session_sends_not_scheduled():
     assert response.status_code == 200
     stub.send_text.assert_called_once()
     assert "scheduled" in stub.send_text.call_args.args[1].lower()
+
+
+def test_duplicate_message_sid_is_skipped_without_reprocessing():
+    """
+    Regression for H3: Twilio retries a webhook that didn't return a fast
+    200. A retry for a MessageSid we already have a turn for must not
+    reprocess — no session lookup, no orchestrator call, no second reply.
+    """
+    stub = _make_stub()
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.orchestrator.find_turn_by_message_sid",
+                new=AsyncMock(return_value=MagicMock()),
+            ) as mock_find,
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+            ) as mock_get_session,
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+            ) as mock_turn,
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    mock_find.assert_called_once_with("MMtest123", ANY)
+    mock_get_session.assert_not_called()
+    mock_turn.assert_not_called()
+    stub.send_voice_note.assert_not_called()
+    stub.send_text.assert_not_called()
+
+
+def test_new_message_sid_is_not_treated_as_duplicate():
+    stub = _make_stub()
+    turn = _make_turn_result()
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook.orchestrator.find_turn_by_message_sid",
+                new=AsyncMock(return_value=None),
+            ) as mock_find,
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.process_voice_turn",
+                new=AsyncMock(return_value=turn),
+            ) as mock_turn,
+            patch(
+                "api.routes.webhook.session_manager.touch_last_message",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook.orchestrator.set_turn_audio_key",
+                new=AsyncMock(),
+            ),
+            patch(
+                "api.routes.webhook._load_user_profile_for_session",
+                new=AsyncMock(return_value=MagicMock()),
+            ),
+        ):
+            client = TestClient(app)
+            response = client.post("/webhook/whatsapp", data=_voice_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    mock_find.assert_called_once()
+    mock_turn.assert_called_once()

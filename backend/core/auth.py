@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import secrets
@@ -103,7 +104,7 @@ async def send_magic_link(email: str, db: AsyncSession) -> None:
         f'<p><a href="{url}">{url}</a></p>'
         "<p>If you didn't request this, ignore this email.</p>"
     )
-    send_email_ses(email, "Your Katha login link", body_text, body_html)
+    await send_email_ses(email, "Your Katha login link", body_text, body_html)
 
 
 async def verify_magic_link(token: str, db: AsyncSession) -> tuple[str, str]:
@@ -139,7 +140,7 @@ async def verify_magic_link(token: str, db: AsyncSession) -> tuple[str, str]:
     return account.email, account.user_id
 
 
-def send_email_ses(to: str, subject: str, body_text: str, body_html: str) -> None:
+async def send_email_ses(to: str, subject: str, body_text: str, body_html: str) -> None:
     """
     Send an email via AWS SES (ap-south-1, for data residency).
     In dev (SES_MOCK=true), print the email instead of sending it.
@@ -149,7 +150,8 @@ def send_email_ses(to: str, subject: str, body_text: str, body_html: str) -> Non
         return
 
     client = boto3.client("ses", region_name=settings.AWS_S3_REGION)
-    client.send_email(
+    await asyncio.to_thread(
+        client.send_email,
         Source=settings.SES_FROM_EMAIL,
         Destination={"ToAddresses": [to]},
         Message={

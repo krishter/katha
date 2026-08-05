@@ -1,3 +1,5 @@
+import asyncio
+import time
 from unittest.mock import MagicMock, patch
 
 from media.storage import delete_media, generate_presigned_url, upload_media
@@ -78,3 +80,32 @@ async def test_delete_media_calls_delete_object():
 
     mock_client.delete_object.assert_called_once()
     assert mock_client.delete_object.call_args.kwargs["Key"] == "audio/test.ogg"
+
+
+async def test_upload_media_does_not_block_the_event_loop():
+    """
+    Regression for H1: a slow (blocking) boto3 call must not stall other
+    coroutines. put_object here sleeps synchronously — if upload_media
+    called it inline instead of via asyncio.to_thread, the concurrently
+    scheduled tick() coroutine below would be delayed by the same amount.
+    """
+    ticks: list[float] = []
+
+    async def tick():
+        for _ in range(20):
+            ticks.append(time.monotonic())
+            await asyncio.sleep(0.005)
+
+    def blocking_put_object(**kwargs):
+        time.sleep(0.1)
+
+    mock_client = MagicMock()
+    mock_client.put_object.side_effect = blocking_put_object
+
+    with patch("media.storage._s3_client", return_value=mock_client):
+        await asyncio.gather(upload_media(_AUDIO, "audio/test.ogg"), tick())
+
+    # If the event loop had been blocked for the 0.1s of the "boto3" call,
+    # ticks would show a gap far larger than the 0.005s sleep between them.
+    gaps = [b - a for a, b in zip(ticks, ticks[1:])]
+    assert max(gaps) < 0.05
