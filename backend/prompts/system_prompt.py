@@ -219,12 +219,21 @@ def build_extraction_prompt(
             f"new emotional signal beyond what's already known: {names}"
         )
 
+    goal_met_note = ""
+    if session_state.goal_met:
+        goal_met_note = (
+            "\nThis domain's goal was already met before this exchange — Katha's "
+            "reply above was treating this as the closing exchange, so "
+            "session_end_suggested should be true unless the user's statement "
+            "clearly asked to continue."
+        )
+
     return f"""You are Katha's extraction engine. You are given one exchange from \
 a reminiscence conversation with {user_profile.name}. Extract structured data \
 from the USER's statement — do not extract from Katha's own reply, which is \
 included only for context.
 
-Today's focus domain: {domain.name} ({domain.id}).{known_people_block}
+Today's focus domain: {domain.name} ({domain.id}).{known_people_block}{goal_met_note}
 
 User said: {user_transcript}
 Katha replied: {assistant_response}

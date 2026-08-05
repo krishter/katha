@@ -164,3 +164,25 @@ def test_extraction_prompt_lists_known_significant_people():
     )
     prompt = _build_extraction(prior=prior)
     assert "Mr. Iyer" in prompt
+
+
+def test_extraction_prompt_notes_goal_already_met():
+    """
+    Regression guard: the extraction call must know goal_met independently
+    of the dialogue call's closing instruction, so session_end_suggested
+    isn't decided by two calls reasoning about the same fact separately.
+    """
+    met_session = SimpleNamespace(**{**_SESSION.__dict__, "goal_met": True})
+    prompt = build_extraction_prompt(
+        _PROFILE,
+        met_session,
+        _PRIOR,
+        user_transcript="I grew up in a small house near the river in Madurai.",
+        assistant_response="That sounds lovely — tell me more about the river.",
+    )
+    assert "already met" in prompt.lower()
+
+
+def test_extraction_prompt_omits_goal_met_note_when_not_met():
+    prompt = _build_extraction()
+    assert "already met" not in prompt.lower()
