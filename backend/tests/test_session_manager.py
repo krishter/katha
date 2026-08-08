@@ -64,9 +64,14 @@ def _make_start_session_db(completed_count=0, atom_counts=None):
     return db
 
 
-def _make_update_session_db(row: MagicMock, total_atoms: int = 0):
+def _make_record_turn_db(row: MagicMock) -> AsyncMock:
+    """A db mock for record_turn's single session-row lookup."""
+    return _make_db(row)
+
+
+def _make_apply_extraction_db(row: MagicMock, total_atoms: int = 0):
     """
-    A db mock for update_session's two lookups, in call order:
+    A db mock for apply_extraction's two lookups, in call order:
     1. session row lookup -> scalar_one_or_none()
     2. cumulative story_atoms count for this session -> scalar_one()
     """
@@ -171,45 +176,80 @@ async def test_start_session_stays_on_domain_when_target_not_met():
     assert state.domain == "childhood"
 
 
-# ── update_session ────────────────────────────────────────────────────────────
+# ── record_turn ───────────────────────────────────────────────────────────────
 
 
-async def test_update_session_increments_exchange_count():
-    from core.session_manager import update_session
+async def test_record_turn_increments_exchange_count():
+    from core.session_manager import record_turn
 
     session_id = str(uuid.uuid4())
     row = _make_db_session_row(id=uuid.UUID(session_id), exchange_count=2)
-    db = _make_update_session_db(row, total_atoms=0)
+    db = _make_record_turn_db(row)
 
-    extraction = {
-        "energy_signal": "high",
-        "session_end_suggested": False,
-        "story_atoms": [],
-    }
-    state = await update_session(session_id, extraction, db)
+    state = await record_turn(session_id, db)
 
     assert state.exchange_count == 3
 
 
-async def test_update_session_updates_energy_signal():
-    from core.session_manager import update_session
+async def test_record_turn_does_not_touch_energy_or_goal_met():
+    from core.session_manager import record_turn
+
+    session_id = str(uuid.uuid4())
+    row = _make_db_session_row(
+        id=uuid.UUID(session_id), energy_signal="high", goal_met=False
+    )
+    db = _make_record_turn_db(row)
+
+    state = await record_turn(session_id, db)
+
+    assert state.energy_signal == "high"
+    assert state.goal_met is False
+
+
+# ── apply_extraction ──────────────────────────────────────────────────────────
+
+
+async def test_apply_extraction_updates_energy_signal():
+    from core.session_manager import apply_extraction
 
     session_id = str(uuid.uuid4())
     row = _make_db_session_row(id=uuid.UUID(session_id), energy_signal="high")
-    db = _make_update_session_db(row, total_atoms=0)
+    db = _make_apply_extraction_db(row, total_atoms=0)
 
-    extraction = {
-        "energy_signal": "low",
-        "session_end_suggested": False,
-        "story_atoms": [],
-    }
-    state = await update_session(session_id, extraction, db)
+    extraction = {"energy_signal": "low", "session_end_suggested": False}
+    state = await apply_extraction(session_id, extraction, db)
 
     assert state.energy_signal == "low"
 
 
-async def test_update_session_sets_goal_met_from_cumulative_atom_count():
-    from core.session_manager import update_session
+async def test_apply_extraction_updates_session_end_suggested():
+    from core.session_manager import apply_extraction
+
+    session_id = str(uuid.uuid4())
+    row = _make_db_session_row(id=uuid.UUID(session_id), session_end_suggested=False)
+    db = _make_apply_extraction_db(row, total_atoms=0)
+
+    extraction = {"energy_signal": "high", "session_end_suggested": True}
+    state = await apply_extraction(session_id, extraction, db)
+
+    assert state.session_end_suggested is True
+
+
+async def test_apply_extraction_does_not_touch_exchange_count():
+    from core.session_manager import apply_extraction
+
+    session_id = str(uuid.uuid4())
+    row = _make_db_session_row(id=uuid.UUID(session_id), exchange_count=5)
+    db = _make_apply_extraction_db(row, total_atoms=0)
+
+    extraction = {"energy_signal": "high", "session_end_suggested": False}
+    state = await apply_extraction(session_id, extraction, db)
+
+    assert state.exchange_count == 5
+
+
+async def test_apply_extraction_sets_goal_met_from_cumulative_atom_count():
+    from core.session_manager import apply_extraction
     from prompts.domains import get_domain
 
     target = get_domain("childhood").target_story_atoms
@@ -217,25 +257,21 @@ async def test_update_session_sets_goal_met_from_cumulative_atom_count():
     row = _make_db_session_row(
         id=uuid.UUID(session_id), domain="childhood", goal_met=False
     )
-    db = _make_update_session_db(row, total_atoms=target)
+    db = _make_apply_extraction_db(row, total_atoms=target)
 
-    extraction = {
-        "energy_signal": "high",
-        "session_end_suggested": False,
-        "story_atoms": [{"narrative": "one atom this turn"}],
-    }
-    state = await update_session(session_id, extraction, db)
+    extraction = {"energy_signal": "high", "session_end_suggested": False}
+    state = await apply_extraction(session_id, extraction, db)
 
     assert state.goal_met is True
 
 
-async def test_update_session_goal_met_uses_cumulative_not_current_turn_count():
+async def test_apply_extraction_goal_met_uses_cumulative_not_current_turn_count():
     """
     Regression for the original bug: a turn that itself reports `target`
     atoms must NOT set goal_met if the session's cumulative persisted count
     (read from the DB) is still short of the domain target.
     """
-    from core.session_manager import update_session
+    from core.session_manager import apply_extraction
     from prompts.domains import get_domain
 
     target = get_domain("childhood").target_story_atoms
@@ -243,14 +279,14 @@ async def test_update_session_goal_met_uses_cumulative_not_current_turn_count():
     row = _make_db_session_row(
         id=uuid.UUID(session_id), domain="childhood", goal_met=False
     )
-    db = _make_update_session_db(row, total_atoms=target - 1)
+    db = _make_apply_extraction_db(row, total_atoms=target - 1)
 
     extraction = {
         "energy_signal": "high",
         "session_end_suggested": False,
         "story_atoms": [{"narrative": f"atom {i}"} for i in range(target)],
     }
-    state = await update_session(session_id, extraction, db)
+    state = await apply_extraction(session_id, extraction, db)
 
     assert state.goal_met is False
 

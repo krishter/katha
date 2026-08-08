@@ -12,14 +12,16 @@ def _make_mock_response(text: str = "Hello! How can I help you?") -> MagicMock:
     return response
 
 
+def _mock_client(response=None, side_effect=None):
+    client = MagicMock()
+    client.messages.create = AsyncMock(return_value=response, side_effect=side_effect)
+    return client
+
+
 async def test_chat_returns_llm_response():
-    mock_response = _make_mock_response()
+    mock_client = _mock_client(response=_make_mock_response())
 
-    with patch("adapters.llm.AsyncAnthropic") as mock_anthropic_cls:
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        mock_anthropic_cls.return_value = mock_client
-
+    with patch("adapters.llm._client", mock_client):
         result = await chat([Message(role="user", content="Hello")])
 
     assert isinstance(result, LLMResponse)
@@ -28,13 +30,9 @@ async def test_chat_returns_llm_response():
 
 
 async def test_chat_returns_positive_token_counts():
-    mock_response = _make_mock_response()
+    mock_client = _mock_client(response=_make_mock_response())
 
-    with patch("adapters.llm.AsyncAnthropic") as mock_anthropic_cls:
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        mock_anthropic_cls.return_value = mock_client
-
+    with patch("adapters.llm._client", mock_client):
         result = await chat([Message(role="user", content="Hello")])
 
     assert result.input_tokens > 0
@@ -43,13 +41,9 @@ async def test_chat_returns_positive_token_counts():
 
 async def test_chat_separates_system_message():
     """System messages must be passed as system= param, not in messages list."""
-    mock_response = _make_mock_response()
+    mock_client = _mock_client(response=_make_mock_response())
 
-    with patch("adapters.llm.AsyncAnthropic") as mock_anthropic_cls:
-        mock_client = MagicMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        mock_anthropic_cls.return_value = mock_client
-
+    with patch("adapters.llm._client", mock_client):
         await chat(
             [
                 Message(role="system", content="You are a helpful assistant."),
@@ -64,22 +58,38 @@ async def test_chat_separates_system_message():
         assert msg["role"] != "system"
 
 
+async def test_chat_defaults_max_tokens_to_500():
+    mock_client = _mock_client(response=_make_mock_response())
+
+    with patch("adapters.llm._client", mock_client):
+        await chat([Message(role="user", content="Hello")])
+
+    assert mock_client.messages.create.call_args.kwargs["max_tokens"] == 500
+
+
+async def test_chat_passes_through_custom_max_tokens():
+    mock_client = _mock_client(response=_make_mock_response())
+
+    with patch("adapters.llm._client", mock_client):
+        await chat([Message(role="user", content="Hello")], max_tokens=2000)
+
+    assert mock_client.messages.create.call_args.kwargs["max_tokens"] == 2000
+
+
 async def test_chat_raises_on_api_error():
     from anthropic import APIStatusError
 
-    with patch("adapters.llm.AsyncAnthropic") as mock_anthropic_cls:
-        mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.status_code = 429
-        mock_response.headers = {}
-        mock_client.messages.create = AsyncMock(
-            side_effect=APIStatusError(
-                "Rate limit exceeded",
-                response=mock_response,
-                body={"error": {"message": "Rate limit exceeded"}},
-            )
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.headers = {}
+    mock_client = _mock_client(
+        side_effect=APIStatusError(
+            "Rate limit exceeded",
+            response=mock_response,
+            body={"error": {"message": "Rate limit exceeded"}},
         )
-        mock_anthropic_cls.return_value = mock_client
+    )
 
+    with patch("adapters.llm._client", mock_client):
         with pytest.raises(RuntimeError, match="Anthropic API error"):
             await chat([Message(role="user", content="Hello")])

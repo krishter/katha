@@ -14,10 +14,12 @@ logger = logging.getLogger(__name__)
 _EMBED_MODEL = "text-embedding-3-small"
 _EMBED_DIM = 1536
 
+# One client for the process, not one per call.
+_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=20.0, max_retries=2)
+
 
 async def _embed(text: str) -> list[float]:
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-    response = await client.embeddings.create(input=text, model=_EMBED_MODEL)
+    response = await _client.embeddings.create(input=text, model=_EMBED_MODEL)
     return response.data[0].embedding
 
 

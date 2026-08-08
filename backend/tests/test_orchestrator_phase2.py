@@ -34,16 +34,16 @@ _SESSION_STATE = SessionState(
 
 _WELL_FORMED_LLM = (
     "<response>Good morning, Subramaniam ji! Tell me about the house you grew up in."
-    "</response>\n"
-    '<extraction>{"story_atoms":[],"named_entities":{},"themes":["childhood"],'
-    '"energy_signal":"high","gaps_remaining":["house details"],'
-    '"session_end_suggested":false}</extraction>'
+    "</response>"
 )
 
 
 def _make_db():
     db = AsyncMock()
     db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    no_prior_turn = MagicMock()
+    no_prior_turn.first.return_value = None
+    db.execute = AsyncMock(return_value=no_prior_turn)
     return db
 
 
@@ -90,7 +90,7 @@ def mock_get_session():
 
 
 @pytest.fixture(autouse=True)
-def mock_update_session():
+def mock_record_turn():
     updated = SessionState(
         session_id=_SESSION_ID,
         user_id="user-1",
@@ -102,7 +102,7 @@ def mock_update_session():
         session_end_suggested=False,
     )
     with patch(
-        "core.orchestrator.session_manager.update_session",
+        "core.orchestrator.session_manager.record_turn",
         new=AsyncMock(return_value=updated),
     ):
         yield
@@ -149,7 +149,12 @@ async def test_normal_turn_returns_parsed_response_text():
     assert result.crisis_detected is False
 
 
-async def test_normal_turn_returns_extraction_json():
+async def test_normal_turn_returns_placeholder_extraction_json():
+    """
+    extraction_json on the returned TurnResult is a placeholder — real
+    structured extraction now runs as a separate, deferred call (see
+    run_extraction_for_turn) and isn't available synchronously.
+    """
     with patch(
         "core.orchestrator.llm.chat",
         new=AsyncMock(
@@ -164,6 +169,18 @@ async def test_normal_turn_returns_extraction_json():
 
     assert isinstance(result.extraction_json, dict)
     assert "energy_signal" in result.extraction_json
+
+
+async def test_normal_turn_calls_llm_with_dialogue_max_tokens():
+    mock_llm = AsyncMock(
+        return_value=SimpleNamespace(
+            content=_WELL_FORMED_LLM, input_tokens=200, output_tokens=80
+        )
+    )
+    with patch("core.orchestrator.llm.chat", new=mock_llm):
+        await process_voice_turn(b"audio", _SESSION_ID, _USER_PROFILE, _make_db())
+
+    assert mock_llm.call_args.kwargs["max_tokens"] == 300
 
 
 async def test_crisis_keyword_skips_llm():
@@ -197,8 +214,10 @@ async def test_session_state_is_updated_after_turn():
             )
         ),
     ):
-        with patch("core.orchestrator.session_manager.update_session") as mock_update:
-            mock_update.return_value = AsyncMock(return_value=_SESSION_STATE)
+        with patch(
+            "core.orchestrator.session_manager.record_turn", new=AsyncMock()
+        ) as mock_record:
+            mock_record.return_value = _SESSION_STATE
             await process_voice_turn(b"audio", _SESSION_ID, _USER_PROFILE, _make_db())
 
-    mock_update.assert_called_once()
+    mock_record.assert_called_once()

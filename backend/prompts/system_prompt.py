@@ -25,6 +25,8 @@ _LANGUAGE_NAMES: dict[str, str] = {
     "en-IN": "English",
 }
 
+SUPPORTED_LANGUAGES: list[str] = list(_LANGUAGE_NAMES.keys())
+
 
 @dataclass
 class UserProfile:
@@ -136,11 +138,19 @@ Domain entry question: {domain.entry_prompt}"""
 
 def _layer4_session_state(session_state: SessionState) -> str:
     domain = get_domain(session_state.domain)
+    closing_instruction = ""
+    if session_state.goal_met:
+        closing_instruction = (
+            "\nThis domain's goal is already met as of your last reply — treat "
+            "this turn as your closing exchange: wrap up warmly and let them "
+            "know what you'd love to hear about tomorrow."
+        )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
 Current domain: {domain.name}
 Exchanges so far this session: {session_state.exchange_count}
 Target story atoms for this domain: {domain.target_story_atoms}
+Domain goal already met: {session_state.goal_met}{closing_instruction}
 
 Hard constraints:
 - Never bring up medical details or financial struggles unless the user initiates them.
@@ -154,40 +164,15 @@ the user indicates they are okay."""
 
 def _layer5_output_format() -> str:
     return """LAYER 5 — OUTPUT FORMAT
-After each user turn, you MUST respond in exactly this format and no other:
+Respond in exactly this format and no other:
 
 <response>
 [Your conversational response here — warm, natural, in the user's language. \
 This is what will be spoken aloud.]
 </response>
-<extraction>
-{
-  "story_atoms": [],
-  "named_entities": {},
-  "significant_people": [
-    {
-      "name": "string",
-      "relationship": "string",
-      "why_significant": "string",
-      "signal": "string — why flagged: repetition, unprompted mention, \
-emotional language, explicit phrases like changed my life or I still think about"
-    }
-  ],
-  "themes": [],
-  "energy_signal": "high|medium|low",
-  "gaps_remaining": [],
-  "session_end_suggested": false
-}
-</extraction>
 
-The <response> block is converted to speech and sent to the user. \
-The <extraction> block is never shown to the user. \
-Both blocks are required in every reply.
-
-For significant_people: only add entries when there is a genuine signal — \
-repetition, unprompted mention, unusual emotional detail, or explicit phrases \
-like "changed my life" or "I still think about". \
-Do not tag every named person."""
+Return only the <response> block above. Structured extraction is handled by a \
+separate pass — do not include JSON or any other tags or commentary here."""
 
 
 def build_system_prompt(
@@ -195,7 +180,11 @@ def build_system_prompt(
     session_state: SessionState,
     prior_context: PriorContext,
 ) -> str:
-    """Assembles the full 5-layer system prompt."""
+    """
+    Assembles the dialogue system prompt — the fast, low-token-budget call
+    on the critical path. Returns <response> only; see build_extraction_prompt
+    for the separate, latency-tolerant structured-extraction call.
+    """
     layers = [
         _layer1_persona(user_profile),
         _layer2_therapeutic(),
@@ -204,3 +193,75 @@ def build_system_prompt(
         _layer5_output_format(),
     ]
     return "\n\n".join(layers)
+
+
+def build_extraction_prompt(
+    user_profile: UserProfile,
+    session_state: SessionState,
+    prior_context: PriorContext,
+    user_transcript: str,
+    assistant_response: str,
+) -> str:
+    """
+    Builds the standalone extraction-only prompt for the second, off-critical-
+    path LLM call (see REMEDIATION_PLAN WS2.1). Given the exchange that just
+    happened, extract the same structured fields the dialogue call used to
+    produce inline — decoupled so a long, detailed story never gets truncated
+    by a token budget sized for a warm two-sentence reply.
+    """
+    domain = get_domain(session_state.domain)
+
+    known_people_block = ""
+    if prior_context.significant_people:
+        names = ", ".join(p.get("name", "") for p in prior_context.significant_people)
+        known_people_block = (
+            f"\nAlready-known significant people — do not re-flag unless there is "
+            f"new emotional signal beyond what's already known: {names}"
+        )
+
+    goal_met_note = ""
+    if session_state.goal_met:
+        goal_met_note = (
+            "\nThis domain's goal was already met before this exchange — Katha's "
+            "reply above was treating this as the closing exchange, so "
+            "session_end_suggested should be true unless the user's statement "
+            "clearly asked to continue."
+        )
+
+    return f"""You are Katha's extraction engine. You are given one exchange from \
+a reminiscence conversation with {user_profile.name}. Extract structured data \
+from the USER's statement — do not extract from Katha's own reply, which is \
+included only for context.
+
+Today's focus domain: {domain.name} ({domain.id}).{known_people_block}{goal_met_note}
+
+User said: {user_transcript}
+Katha replied: {assistant_response}
+
+Respond in exactly this format and no other:
+
+<extraction>
+{{
+  "story_atoms": [],
+  "named_entities": {{}},
+  "significant_people": [
+    {{
+      "name": "string",
+      "relationship": "string",
+      "why_significant": "string",
+      "signal": "string — why flagged: repetition, unprompted mention, \
+emotional language, explicit phrases like changed my life or I still think about"
+    }}
+  ],
+  "themes": [],
+  "energy_signal": "high|medium|low",
+  "gaps_remaining": [],
+  "session_end_suggested": false
+}}
+</extraction>
+
+For significant_people: only add entries when there is a genuine signal — \
+repetition, unprompted mention, unusual emotional detail, or explicit phrases \
+like "changed my life" or "I still think about". Do not tag every named person.
+
+Return only the <extraction> block above — no other text."""

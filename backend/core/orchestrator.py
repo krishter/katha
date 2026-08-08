@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
@@ -9,22 +8,31 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from core import conversation_policy, session_manager
+from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
 from extraction import entity_extractor, story_extractor
 from media import storage
+from media.audio_convert import convert_wav_to_ogg
 from memory import fact_store, vector_store
 from memory_cards import generator as memory_card_generator
 from memory_cards.generator import MemoryCardResult
+from models.crisis_event import CrisisEvent
 from models.memory_card import MemoryCard
 from models.turn import Turn
 from models.user_profile import UserProfileModel
-from prompts.system_prompt import PriorContext, UserProfile, build_system_prompt
+from prompts.system_prompt import (
+    PriorContext,
+    UserProfile,
+    build_extraction_prompt,
+    build_system_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +49,15 @@ _EMPTY_EXTRACTION: dict = {
     "session_end_suggested": False,
 }
 
+_DIALOGUE_MAX_TOKENS = 300
+_EXTRACTION_MAX_TOKENS = 2000
+_EXTRACTION_RETRY_INSTRUCTION = (
+    "\n\nIMPORTANT: Your previous reply did not match the required format. "
+    "Return ONLY the <extraction>{...}</extraction> block with syntactically "
+    "valid JSON inside — no other text, no markdown fences, nothing before "
+    "or after it."
+)
+
 
 @dataclass
 class TurnResult:
@@ -54,21 +71,22 @@ class TurnResult:
     response_mime_type: str = field(default="audio/x-wav")
 
 
-def _parse_llm_output(raw: str) -> tuple[str, dict]:
-    """Extract <response> text and <extraction> JSON from raw LLM output."""
-    response_match = _RESPONSE_RE.search(raw)
-    extraction_match = _EXTRACTION_RE.search(raw)
+def _parse_response_only(raw: str) -> str:
+    """Extract <response> text from the dialogue call's output."""
+    match = _RESPONSE_RE.search(raw)
+    return match.group(1).strip() if match else raw.strip()
 
-    response_text = response_match.group(1).strip() if response_match else raw.strip()
 
-    extraction_json = dict(_EMPTY_EXTRACTION)
-    if extraction_match:
-        try:
-            extraction_json = json.loads(extraction_match.group(1).strip())
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse extraction JSON; using empty defaults")
-
-    return response_text, extraction_json
+def _parse_extraction_only(raw: str) -> dict:
+    """Extract <extraction> JSON from the extraction call's output."""
+    match = _EXTRACTION_RE.search(raw)
+    if not match:
+        return dict(_EMPTY_EXTRACTION)
+    try:
+        return json.loads(match.group(1).strip())
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse extraction JSON; using empty defaults")
+        return dict(_EMPTY_EXTRACTION)
 
 
 def _extract_open_threads(recent_atoms: list) -> list[str]:
@@ -101,6 +119,27 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
     )
 
 
+async def _log_crisis_event(
+    session_id: str,
+    turn_id: Optional[uuid.UUID],
+    source: str,
+    matched_pattern: str,
+    db,
+) -> None:
+    """
+    Record a crisis detection so someone can review it during the pilot —
+    a log line alone is not enough for content this sensitive.
+    """
+    event = CrisisEvent(
+        session_id=uuid.UUID(session_id),
+        turn_id=turn_id,
+        source=source,
+        matched_pattern=matched_pattern,
+    )
+    db.add(event)
+    await db.commit()
+
+
 async def _load_session_transcript(session_id: str, db) -> str:
     """Concatenate every turn's transcript for this session, in order."""
     result = await db.execute(
@@ -111,12 +150,37 @@ async def _load_session_transcript(session_id: str, db) -> str:
     return "\n".join(result.scalars().all())
 
 
+async def _load_last_turn_messages(session_id: str, db) -> list[Message]:
+    """
+    Fetch the immediately preceding turn's raw exchange (transcript +
+    Katha's reply), if any, as user/assistant messages to prepend to the
+    dialogue call. Turn rows are written synchronously per turn (see
+    _persist_turn) — this does not depend on the deferred extraction
+    pipeline, so a story that unfolds over two turns doesn't lose
+    continuity if extraction for the prior turn hasn't finished yet.
+    """
+    result = await db.execute(
+        select(Turn.transcript, Turn.response_text)
+        .where(Turn.session_id == uuid.UUID(session_id))
+        .order_by(Turn.turn_number.desc())
+        .limit(1)
+    )
+    row = result.first()
+    if row is None:
+        return []
+    transcript, response_text = row
+    return [
+        Message(role="user", content=transcript),
+        Message(role="assistant", content=response_text),
+    ]
+
+
 async def run_post_session(session_id: str, user_id: str, db) -> None:
     """
     Background task triggered after session close. Story atoms were already
-    persisted per-turn as they happened (see process_voice_turn); this only
-    handles the work that genuinely needs the whole session: entity
-    extraction over the full concatenated transcript.
+    persisted per-turn as they happened; this only handles the work that
+    genuinely needs the whole session: entity extraction over the full
+    concatenated transcript.
     Logs exceptions — never raises (voice turns were already delivered).
     """
     try:
@@ -126,33 +190,6 @@ async def run_post_session(session_id: str, user_id: str, db) -> None:
         logger.exception(
             "Post-session entity extraction failed for session %s", session_id
         )
-
-
-async def convert_wav_to_ogg(wav_bytes: bytes) -> bytes:
-    """
-    Convert WAV bytes to OGG/Opus using ffmpeg subprocess.
-    Required because Sarvam TTS returns WAV but WhatsApp expects OGG/Opus.
-    ffmpeg must be available in the environment (installed via apt / Docker).
-    """
-    proc = await asyncio.create_subprocess_exec(
-        "ffmpeg",
-        "-f",
-        "wav",
-        "-i",
-        "pipe:0",
-        "-c:a",
-        "libopus",
-        "-f",
-        "ogg",
-        "pipe:1",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate(input=wav_bytes)
-    if proc.returncode != 0:
-        raise RuntimeError(f"ffmpeg conversion failed: {stderr.decode()[:200]}")
-    return stdout
 
 
 async def get_user_profile(user_id: str, db) -> Optional[UserProfileModel]:
@@ -247,10 +284,12 @@ async def close_and_process_session(
     db,
 ) -> None:
     """
-    Background task. Called when a session ends via the webhook or the
-    /conversation/close endpoint. This is the single entry point for session
+    Called when a session ends. This is the single entry point for session
     close — marks the session completed, runs post-session entity
-    extraction, then generates and delivers a memory card.
+    extraction, then generates and delivers a memory card. Triggered from
+    run_extraction_for_turn (the extraction call is what learns
+    session_end_suggested/goal_met) or from the /conversation/close
+    dev endpoint.
     """
     try:
         state = await session_manager.get_session(session_id, db)
@@ -290,9 +329,11 @@ async def _persist_turn(
     db,
 ) -> Turn:
     """
-    Persist the turn's transcript, response, and extraction JSON. Called
-    after the LLM call and before TTS, so a TTS/audio-conversion failure
-    downstream can never lose what the user just told Katha.
+    Persist the turn's transcript and response. Called after the dialogue
+    LLM call and before TTS, so a TTS/audio-conversion failure downstream
+    can never lose what the user just told Katha. extraction_json starts as
+    a placeholder — the real structured extraction is a separate, slower
+    call that fills it in afterward (see run_extraction_for_turn).
     """
     turn = Turn(
         session_id=uuid.UUID(session_id),
@@ -312,20 +353,121 @@ async def _persist_turn(
     return turn
 
 
+async def _synthesize_and_convert(text: str, language_code: str) -> bytes:
+    """TTS then OGG conversion — the two steps that must succeed together
+    for a voice note to go out, or degrade to text (see _send_or_degrade)."""
+    audio_out = await sarvam_tts.synthesize(text, language_code=language_code)
+    return await convert_wav_to_ogg(audio_out)
+
+
+async def _send_or_degrade(
+    response_text: str,
+    detected_language: str,
+    transcript: str,
+    session_state: SessionState,
+    extraction_json: dict,
+    crisis_detected: bool,
+) -> TurnResult:
+    """
+    Try to synthesize voice for response_text. If TTS or the WAV->OGG
+    conversion fails, degrade the channel (send text) rather than the
+    response — the user still gets the same words, just typed instead of
+    spoken (P2: never silence).
+    """
+    try:
+        audio_out = await _synthesize_and_convert(response_text, detected_language)
+        return TurnResult(
+            response_audio=audio_out,
+            response_text=response_text,
+            extraction_json=extraction_json,
+            transcript=transcript,
+            detected_language=detected_language,
+            session_state=session_state,
+            crisis_detected=crisis_detected,
+            response_mime_type="audio/ogg",
+        )
+    except Exception:
+        logger.error(
+            "TTS/audio-conversion failed for session %s turn %d — degrading to text",
+            session_state.session_id,
+            session_state.exchange_count,
+            exc_info=True,
+        )
+        return TurnResult(
+            response_audio=b"",
+            response_text=response_text,
+            extraction_json=extraction_json,
+            transcript=transcript,
+            detected_language=detected_language,
+            session_state=session_state,
+            crisis_detected=crisis_detected,
+            response_mime_type="text/plain",
+        )
+
+
+async def _fallback_turn_result(
+    stage: FailureStage,
+    session_state: SessionState,
+    transcript: str,
+    detected_language: str,
+) -> TurnResult:
+    """
+    Build the reply for an STT or LLM failure using pre-synthesized audio —
+    never a live TTS call, since TTS may be down too. Degrades to text if
+    even the pre-synthesized clip is unavailable.
+    """
+    text = get_fallback_text(stage)
+    audio = get_fallback_audio(stage, detected_language)
+    if audio is not None:
+        return TurnResult(
+            response_audio=audio,
+            response_text=text,
+            extraction_json=dict(_EMPTY_EXTRACTION),
+            transcript=transcript,
+            detected_language=detected_language,
+            session_state=session_state,
+            crisis_detected=False,
+            response_mime_type="audio/ogg",
+        )
+    logger.error(
+        "No pre-synthesized fallback audio available for stage=%s language=%s "
+        "— degrading to text",
+        stage.value,
+        detected_language,
+    )
+    return TurnResult(
+        response_audio=b"",
+        response_text=text,
+        extraction_json=dict(_EMPTY_EXTRACTION),
+        transcript=transcript,
+        detected_language=detected_language,
+        session_state=session_state,
+        crisis_detected=False,
+        response_mime_type="text/plain",
+    )
+
+
 async def process_voice_turn(
     audio_bytes: bytes,
     session_id: str,
     user_profile: UserProfile,
     db,
     inbound_message_sid: Optional[str] = None,
+    background_tasks: BackgroundTasks | None = None,
 ) -> TurnResult:
     """
-    Full pipeline:
-    session → STT → pre-policy → prior context → system prompt → LLM
-    → post-policy → parse → persist turn → persist story atoms
-    → update session → TTS
-    Session close (when the session ends) is scheduled by the caller
-    (the webhook), not from here — see close_and_process_session.
+    session → STT → pre-policy → prior context → dialogue LLM call
+    → post-policy → crisis-on-response check → record turn → persist turn
+    → schedule extraction (background) → TTS
+
+    The dialogue call is the only LLM call on the critical path (fast,
+    max_tokens=300, <response> only). Structured extraction — story atoms,
+    themes, energy_signal, session_end_suggested — runs as a separate,
+    latency-tolerant background call; see run_extraction_for_turn, which is
+    also the sole trigger point for close_and_process_session.
+
+    Every external-call stage is wrapped so a failure there produces a
+    reply, never silence (P2) — see _fallback_turn_result/_send_or_degrade.
     """
     # 1. Load session state
     state = await session_manager.get_session(session_id, db)
@@ -337,125 +479,240 @@ async def process_voice_turn(
     )
 
     # 2. Transcribe
-    logger.info("STT: transcribing %d bytes", len(audio_bytes))
-    stt_result = await sarvam_stt.transcribe(audio_bytes)
+    try:
+        stt_result = await sarvam_stt.transcribe(audio_bytes)
+    except Exception:
+        logger.error(
+            "STT failed for session %s turn %d",
+            session_id,
+            state.exchange_count + 1,
+            exc_info=True,
+        )
+        return await _fallback_turn_result(
+            FailureStage.STT,
+            state,
+            transcript="",
+            detected_language=user_profile.preferred_language,
+        )
     logger.info(
         "STT: transcript=%r language=%s",
         stt_result.transcript,
         stt_result.language_code,
     )
 
-    # 3. Pre-turn policy check
+    # 3. Pre-turn crisis check
     pre_check = conversation_policy.check_pre_turn(stt_result.transcript, state)
     if not pre_check.allowed:
         logger.warning(
             "Pre-turn policy blocked: crisis_detected=%s", pre_check.crisis_detected
         )
-        audio_out = await sarvam_tts.synthesize(
-            pre_check.override_response,  # type: ignore[arg-type]
-            language_code=stt_result.language_code,
+        await _log_crisis_event(
+            session_id, None, "user_transcript", pre_check.matched_pattern or "", db
         )
-        audio_out = await convert_wav_to_ogg(audio_out)
-        return TurnResult(
-            response_audio=audio_out,
-            response_text=pre_check.override_response or "",
-            extraction_json=dict(_EMPTY_EXTRACTION),
-            transcript=stt_result.transcript,
-            detected_language=stt_result.language_code,
-            session_state=state,
-            crisis_detected=pre_check.crisis_detected,
-            response_mime_type="audio/ogg",
+        return await _send_or_degrade(
+            pre_check.override_response or "",
+            stt_result.language_code,
+            stt_result.transcript,
+            state,
+            dict(_EMPTY_EXTRACTION),
+            crisis_detected=True,
         )
 
     # 4. Build real prior context from fact store + vector store
     prior_context = await build_prior_context(state.user_id, state.domain, db)
 
-    # 5. Build system prompt
-    system_prompt = build_system_prompt(user_profile, state, prior_context)
-
-    # 6. Build messages and call LLM
-    messages = [Message(role="user", content=stt_result.transcript)]
-    logger.info("LLM: calling with system prompt (%d chars)", len(system_prompt))
-    llm_response = await llm.chat(messages, system=system_prompt)
+    # 5. Build dialogue prompt and call the dialogue LLM. The immediately
+    # preceding turn's raw exchange is included directly (not just via the
+    # deferred fact/vector-store pipeline) so a story that unfolds over two
+    # turns keeps continuity even if that turn's extraction hasn't run yet.
+    dialogue_prompt = build_system_prompt(user_profile, state, prior_context)
+    messages = await _load_last_turn_messages(session_id, db)
+    messages.append(Message(role="user", content=stt_result.transcript))
+    try:
+        llm_response = await llm.chat(
+            messages, system=dialogue_prompt, max_tokens=_DIALOGUE_MAX_TOKENS
+        )
+    except Exception:
+        logger.error(
+            "Dialogue LLM call failed for session %s turn %d",
+            session_id,
+            state.exchange_count + 1,
+            exc_info=True,
+        )
+        return await _fallback_turn_result(
+            FailureStage.LLM, state, stt_result.transcript, stt_result.language_code
+        )
     logger.info(
         "LLM: tokens in=%d out=%d",
         llm_response.input_tokens,
         llm_response.output_tokens,
     )
 
-    # 7. Post-turn policy check
+    # 6. Post-turn policy check (malformed dialogue response)
     post_check = conversation_policy.check_post_turn(llm_response.content, state)
     if not post_check.allowed:
         logger.warning("Post-turn policy blocked: malformed LLM response")
-        audio_out = await sarvam_tts.synthesize(
-            post_check.override_response,  # type: ignore[arg-type]
-            language_code=stt_result.language_code,
-        )
-        audio_out = await convert_wav_to_ogg(audio_out)
-        return TurnResult(
-            response_audio=audio_out,
-            response_text=post_check.override_response or "",
-            extraction_json=dict(_EMPTY_EXTRACTION),
-            transcript=stt_result.transcript,
-            detected_language=stt_result.language_code,
-            session_state=state,
+        return await _send_or_degrade(
+            post_check.override_response or "",
+            stt_result.language_code,
+            stt_result.transcript,
+            state,
+            dict(_EMPTY_EXTRACTION),
             crisis_detected=False,
-            response_mime_type="audio/ogg",
         )
 
-    # 8. Parse dual output
-    response_text, extraction_json = _parse_llm_output(llm_response.content)
-    logger.info(
-        "Extraction: energy=%s atoms=%d session_end=%s",
-        extraction_json.get("energy_signal"),
-        len(extraction_json.get("story_atoms", [])),
-        extraction_json.get("session_end_suggested"),
-    )
+    # 7. Parse the dialogue response
+    response_text = _parse_response_only(llm_response.content)
 
-    # 9. Persist this turn — before TTS, so a TTS/ffmpeg failure downstream
+    # 8. Crisis check on Katha's own generated reply — a safety net
+    # independent of what the user said.
+    response_crisis = conversation_policy.check_response_for_crisis(response_text)
+    crisis_detected = response_crisis.crisis_detected
+    if crisis_detected:
+        logger.warning("Katha's own response matched a crisis pattern — overriding")
+        response_text = response_crisis.override_response or response_text
+
+    # 9. Record the turn happened (exchange_count++). energy_signal,
+    # session_end_suggested, and goal_met are updated later by
+    # run_extraction_for_turn once structured extraction completes.
+    state = await session_manager.record_turn(session_id, db)
+
+    # 10. Persist this turn — before TTS, so a TTS/ffmpeg failure downstream
     # can never lose the story the user just told (see C1/H5 in the review).
-    turn_number = state.exchange_count + 1
     turn = await _persist_turn(
         session_id,
         state.user_id,
-        turn_number,
+        state.exchange_count,
         inbound_message_sid,
         stt_result.transcript,
         stt_result.language_code,
         response_text,
-        extraction_json,
+        dict(_EMPTY_EXTRACTION),
         llm_response.input_tokens,
         llm_response.output_tokens,
         db,
     )
 
-    # 10. Persist this turn's story atoms now — not at session close, where
-    # only the final (wind-down) turn's atoms used to survive (C1).
-    await story_extractor.process_extraction(
-        extraction_json, session_id, state.user_id, db, turn_id=turn.id
+    if crisis_detected:
+        await _log_crisis_event(
+            session_id,
+            turn.id,
+            "assistant_response",
+            response_crisis.matched_pattern or "",
+            db,
+        )
+
+    # 11. Schedule structured extraction off the critical path.
+    if background_tasks is not None:
+        background_tasks.add_task(
+            run_extraction_for_turn,
+            turn.id,
+            session_id,
+            state,
+            user_profile,
+            prior_context,
+            stt_result.transcript,
+            response_text,
+            db,
+        )
+
+    # 12. Synthesize the reply (or degrade to text if TTS/conversion fails).
+    return await _send_or_degrade(
+        response_text,
+        stt_result.language_code,
+        stt_result.transcript,
+        state,
+        dict(_EMPTY_EXTRACTION),
+        crisis_detected=crisis_detected,
     )
 
-    # 11. Update session — goal_met is computed from the cumulative atom
-    # count just persisted above, so it must run after process_extraction.
-    state = await session_manager.update_session(session_id, extraction_json, db)
 
-    # 12. Synthesize
-    logger.info("TTS: synthesizing in %s", stt_result.language_code)
-    audio_out = await sarvam_tts.synthesize(
-        response_text, language_code=stt_result.language_code
+async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
+    """
+    Call the extraction LLM. If the response is malformed, retry once with
+    a stricter instruction before giving up and returning an empty
+    extraction — this call is off the critical path, so a retry costs
+    latency the user never sees.
+    """
+    llm_response = await llm.chat(
+        [Message(role="user", content=prompt)],
+        system=None,
+        max_tokens=_EXTRACTION_MAX_TOKENS,
     )
-    logger.info("TTS: produced %d bytes", len(audio_out))
+    if conversation_policy.check_extraction_response(llm_response.content):
+        return (
+            _parse_extraction_only(llm_response.content),
+            llm_response.input_tokens,
+            llm_response.output_tokens,
+        )
 
-    # Convert WAV → OGG/Opus for WhatsApp delivery
-    audio_out = await convert_wav_to_ogg(audio_out)
-
-    return TurnResult(
-        response_audio=audio_out,
-        response_text=response_text,
-        extraction_json=extraction_json,
-        transcript=stt_result.transcript,
-        detected_language=stt_result.language_code,
-        session_state=state,
-        crisis_detected=False,
-        response_mime_type="audio/ogg",
+    logger.warning("Extraction call malformed — retrying once with a stricter prompt")
+    retry_response = await llm.chat(
+        [Message(role="user", content=prompt + _EXTRACTION_RETRY_INSTRUCTION)],
+        system=None,
+        max_tokens=_EXTRACTION_MAX_TOKENS,
     )
+    total_input = llm_response.input_tokens + retry_response.input_tokens
+    total_output = llm_response.output_tokens + retry_response.output_tokens
+    if conversation_policy.check_extraction_response(retry_response.content):
+        return (
+            _parse_extraction_only(retry_response.content),
+            total_input,
+            total_output,
+        )
+
+    logger.error("Extraction call failed validation twice — giving up on this turn")
+    return dict(_EMPTY_EXTRACTION), total_input, total_output
+
+
+async def run_extraction_for_turn(
+    turn_id: uuid.UUID,
+    session_id: str,
+    session_state: SessionState,
+    user_profile: UserProfile,
+    prior_context: PriorContext,
+    transcript: str,
+    response_text: str,
+    db,
+) -> None:
+    """
+    Background task: the structured-extraction half of a turn, decoupled
+    from the dialogue reply so a long, detailed story is never truncated by
+    a token budget sized for a warm two-sentence reply (C5). Persists story
+    atoms, updates the turn's extraction_json, applies energy/session-end/
+    goal_met to the session, and — since this is the only place that learns
+    those signals — is the sole trigger for close_and_process_session.
+    Never raises: the reply was already sent.
+    """
+    try:
+        extraction_prompt = build_extraction_prompt(
+            user_profile, session_state, prior_context, transcript, response_text
+        )
+        extraction_json, input_tokens, output_tokens = await _call_extraction_llm(
+            extraction_prompt
+        )
+
+        await story_extractor.process_extraction(
+            extraction_json, session_id, session_state.user_id, db, turn_id=turn_id
+        )
+
+        turn_result = await db.execute(select(Turn).where(Turn.id == turn_id))
+        turn = turn_result.scalar_one_or_none()
+        if turn is not None:
+            turn.extraction_json = extraction_json
+            turn.input_tokens = (turn.input_tokens or 0) + input_tokens
+            turn.output_tokens = (turn.output_tokens or 0) + output_tokens
+            db.add(turn)
+            await db.commit()
+
+        new_state = await session_manager.apply_extraction(
+            session_id, extraction_json, db
+        )
+    except Exception:
+        logger.exception(
+            "Extraction failed for turn %s (session %s)", turn_id, session_id
+        )
+        return
+
+    if session_manager.should_end_session(new_state):
+        await close_and_process_session(session_id, db)

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from adapters.retry import post_with_retry
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ async def transcribe(
 ) -> TranscriptResult:
     """Send audio to Sarvam Saaras V3 and return transcript."""
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
+        response = await post_with_retry(
+            client,
             _SARVAM_STT_URL,
             headers={"api-subscription-key": settings.SARVAM_API_KEY},
             files={"file": (filename, audio_bytes)},

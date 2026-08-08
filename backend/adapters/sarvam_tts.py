@@ -3,6 +3,7 @@ import logging
 
 import httpx
 
+from adapters.retry import post_with_retry
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,8 @@ async def synthesize(
         text = text[:_MAX_TEXT_CHARS]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
+        response = await post_with_retry(
+            client,
             _SARVAM_TTS_URL,
             headers={
                 "api-subscription-key": settings.SARVAM_API_KEY,
