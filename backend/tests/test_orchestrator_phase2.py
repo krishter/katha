@@ -1,7 +1,7 @@
 import base64
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -42,7 +42,9 @@ _WELL_FORMED_LLM = (
 
 
 def _make_db():
-    return AsyncMock()
+    db = AsyncMock()
+    db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    return db
 
 
 @pytest.fixture(autouse=True)

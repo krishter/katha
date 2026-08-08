@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
+from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from memory import fact_store, vector_store
@@ -37,15 +38,29 @@ async def process_extraction(
     session_id: str,
     user_id: str,
     db: AsyncSession,
+    turn_id: Optional[uuid.UUID] = None,
 ) -> ExtractionResult:
     """
-    1. Parse extraction_json['story_atoms'] → list[StoryAtom]
-    2. Compute completeness_score for each atom
-    3. Insert all story atoms to DB
-    4. Schedule embed_and_store fire-and-forget for each atom
-    5. Parse significant_people and upsert to fact store
-    6. Mark resolved if a story atom about this person scores >= 3
+    1. Skip entirely if atoms already exist for this turn_id (idempotency —
+       guards against the same turn being processed twice)
+    2. Parse extraction_json['story_atoms'] → list[StoryAtom]
+    3. Compute completeness_score for each atom
+    4. Insert all story atoms to DB
+    5. Embed each atom inline, within this same DB session
+    6. Parse significant_people and upsert to fact store
+    7. Mark resolved if a story atom about this person scores >= 3
     """
+    if turn_id is not None:
+        existing = await db.execute(
+            select(StoryAtom.id).where(StoryAtom.turn_id == turn_id).limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            logger.info(
+                "Story atoms already exist for turn %s — skipping re-extraction",
+                turn_id,
+            )
+            return ExtractionResult(story_atoms=[])
+
     raw_atoms = extraction_json.get("story_atoms", [])
     significant_people = extraction_json.get("significant_people", [])
 
@@ -56,6 +71,7 @@ async def process_extraction(
         score = compute_completeness(raw)
         atom = StoryAtom(
             session_id=session_uuid,
+            turn_id=turn_id,
             user_id=user_id,
             domain=raw.get("domain", "unknown"),
             title=raw.get("title"),
@@ -80,12 +96,11 @@ async def process_extraction(
         for atom in created_atoms:
             await db.refresh(atom)
 
-        # Fire-and-forget embedding for each atom
+        # Embed inline, in this same DB session — a fire-and-forget task here
+        # resumes after FastAPI tears down the request-scoped session and
+        # fails with a silent use-after-close error (see C3 in the review).
         for atom in created_atoms:
-            asyncio.create_task(
-                _embed_atom_safe(atom, db),
-                name=f"embed-{atom.id}",
-            )
+            await _embed_atom_safe(atom, db)
 
     # Process significant people
     resolved: list[str] = []
@@ -109,8 +124,15 @@ async def process_extraction(
 
 
 async def _embed_atom_safe(atom: StoryAtom, db: AsyncSession) -> None:
-    """Wrapper that logs but never raises — fire-and-forget safe."""
+    """
+    Embed the atom, awaited inline. Never raises — a failed embedding must
+    not lose the story atom that was already committed. Failures are flagged
+    on the row (embedding_failed) so they are queryable, not just logged.
+    """
     try:
         await vector_store.embed_and_store(atom, db)
     except Exception:
-        logger.exception("Failed to embed story atom %s", atom.id)
+        logger.error("Failed to embed story atom %s", atom.id, exc_info=True)
+        atom.embedding_failed = True
+        db.add(atom)
+        await db.commit()

@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import BackgroundTasks
 from sqlalchemy import select
 
 from adapters import llm, sarvam_stt, sarvam_tts
@@ -23,6 +22,7 @@ from memory import fact_store, vector_store
 from memory_cards import generator as memory_card_generator
 from memory_cards.generator import MemoryCardResult
 from models.memory_card import MemoryCard
+from models.turn import Turn
 from models.user_profile import UserProfileModel
 from prompts.system_prompt import PriorContext, UserProfile, build_system_prompt
 
@@ -101,28 +101,26 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
     )
 
 
-async def run_post_session(
-    extraction_json: dict,
-    transcript: str,
-    session_id: str,
-    user_id: str,
-    db,
-) -> None:
-    """
-    Background task triggered after session close.
-    Runs story extraction and entity extraction sequentially.
-    Logs exceptions — never raises (voice turn already delivered).
-    """
-    try:
-        await story_extractor.process_extraction(
-            extraction_json, session_id, user_id, db
-        )
-    except Exception:
-        logger.exception(
-            "Post-session story extraction failed for session %s", session_id
-        )
+async def _load_session_transcript(session_id: str, db) -> str:
+    """Concatenate every turn's transcript for this session, in order."""
+    result = await db.execute(
+        select(Turn.transcript)
+        .where(Turn.session_id == uuid.UUID(session_id))
+        .order_by(Turn.turn_number)
+    )
+    return "\n".join(result.scalars().all())
 
+
+async def run_post_session(session_id: str, user_id: str, db) -> None:
+    """
+    Background task triggered after session close. Story atoms were already
+    persisted per-turn as they happened (see process_voice_turn); this only
+    handles the work that genuinely needs the whole session: entity
+    extraction over the full concatenated transcript.
+    Logs exceptions — never raises (voice turns were already delivered).
+    """
     try:
+        transcript = await _load_session_transcript(session_id, db)
         await entity_extractor.extract_entities(transcript, user_id, db)
     except Exception:
         logger.exception(
@@ -246,20 +244,25 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
 
 async def close_and_process_session(
     session_id: str,
-    transcript: str,
-    extraction_json: dict,
     db,
 ) -> None:
     """
     Background task. Called when a session ends via the webhook or the
-    /conversation/close endpoint. Runs post-session processing (story +
-    entity extraction), then generates and delivers a memory card.
+    /conversation/close endpoint. This is the single entry point for session
+    close — marks the session completed, runs post-session entity
+    extraction, then generates and delivers a memory card.
     """
     try:
         state = await session_manager.get_session(session_id, db)
-        await run_post_session(
-            extraction_json, transcript, session_id, state.user_id, db
+        ended_reason = (
+            "goal_met"
+            if state.goal_met
+            else "llm_suggested"
+            if state.session_end_suggested
+            else "manual"
         )
+        await session_manager.close_session(session_id, ended_reason, db)
+        await run_post_session(session_id, state.user_id, db)
         logger.info("Session %s closed and processed", session_id)
     except Exception:
         logger.exception("close_and_process_session failed for session %s", session_id)
@@ -273,18 +276,56 @@ async def close_and_process_session(
         )
 
 
+async def _persist_turn(
+    session_id: str,
+    user_id: str,
+    turn_number: int,
+    inbound_message_sid: Optional[str],
+    transcript: str,
+    detected_language: str,
+    response_text: str,
+    extraction_json: dict,
+    input_tokens: int,
+    output_tokens: int,
+    db,
+) -> Turn:
+    """
+    Persist the turn's transcript, response, and extraction JSON. Called
+    after the LLM call and before TTS, so a TTS/audio-conversion failure
+    downstream can never lose what the user just told Katha.
+    """
+    turn = Turn(
+        session_id=uuid.UUID(session_id),
+        user_id=user_id,
+        turn_number=turn_number,
+        inbound_message_sid=inbound_message_sid,
+        transcript=transcript,
+        detected_language=detected_language,
+        response_text=response_text,
+        extraction_json=extraction_json,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
+    db.add(turn)
+    await db.commit()
+    await db.refresh(turn)
+    return turn
+
+
 async def process_voice_turn(
     audio_bytes: bytes,
     session_id: str,
     user_profile: UserProfile,
     db,
-    background_tasks: BackgroundTasks | None = None,
+    inbound_message_sid: Optional[str] = None,
 ) -> TurnResult:
     """
-    Full Phase 3 pipeline:
+    Full pipeline:
     session → STT → pre-policy → prior context → system prompt → LLM
-    → post-policy → parse → session update → TTS
-    → schedule post-session (if session end)
+    → post-policy → parse → persist turn → persist story atoms
+    → update session → TTS
+    Session close (when the session ends) is scheduled by the caller
+    (the webhook), not from here — see close_and_process_session.
     """
     # 1. Load session state
     state = await session_manager.get_session(session_id, db)
@@ -371,10 +412,34 @@ async def process_voice_turn(
         extraction_json.get("session_end_suggested"),
     )
 
-    # 9. Update session
+    # 9. Persist this turn — before TTS, so a TTS/ffmpeg failure downstream
+    # can never lose the story the user just told (see C1/H5 in the review).
+    turn_number = state.exchange_count + 1
+    turn = await _persist_turn(
+        session_id,
+        state.user_id,
+        turn_number,
+        inbound_message_sid,
+        stt_result.transcript,
+        stt_result.language_code,
+        response_text,
+        extraction_json,
+        llm_response.input_tokens,
+        llm_response.output_tokens,
+        db,
+    )
+
+    # 10. Persist this turn's story atoms now — not at session close, where
+    # only the final (wind-down) turn's atoms used to survive (C1).
+    await story_extractor.process_extraction(
+        extraction_json, session_id, state.user_id, db, turn_id=turn.id
+    )
+
+    # 11. Update session — goal_met is computed from the cumulative atom
+    # count just persisted above, so it must run after process_extraction.
     state = await session_manager.update_session(session_id, extraction_json, db)
 
-    # 10. Synthesize
+    # 12. Synthesize
     logger.info("TTS: synthesizing in %s", stt_result.language_code)
     audio_out = await sarvam_tts.synthesize(
         response_text, language_code=stt_result.language_code
@@ -383,22 +448,6 @@ async def process_voice_turn(
 
     # Convert WAV → OGG/Opus for WhatsApp delivery
     audio_out = await convert_wav_to_ogg(audio_out)
-
-    # 11. Schedule post-session processing if session ended
-    session_ended = extraction_json.get(
-        "session_end_suggested"
-    ) or session_manager.should_end_session(state)
-    if session_ended:
-        if background_tasks is not None:
-            background_tasks.add_task(
-                run_post_session,
-                extraction_json,
-                stt_result.transcript,
-                session_id,
-                state.user_id,
-                db,
-            )
-            logger.info("Scheduled post-session processing for %s", session_id)
 
     return TurnResult(
         response_audio=audio_out,

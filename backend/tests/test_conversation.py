@@ -114,18 +114,15 @@ def test_conversation_turn_returns_audio_bytes():
 
 def test_close_session_schedules_close_and_process_session():
     """The /close endpoint should trigger the full post-session pipeline
-    (extraction + memory card generation/delivery), not just extraction."""
+    (entity extraction + memory card generation/delivery). Story atoms are
+    already persisted per-turn by the time a session closes."""
     with patch(
         "api.routes.conversation.orchestrator.close_and_process_session",
         new=AsyncMock(),
     ) as mock_close:
         response = client.post(
             "/conversation/close",
-            data={
-                "session_id": "test-session-id",
-                "extraction_json_str": "{}",
-                "transcript": "some transcript",
-            },
+            data={"session_id": "test-session-id"},
         )
 
     assert response.status_code == 200
@@ -133,4 +130,3 @@ def test_close_session_schedules_close_and_process_session():
     mock_close.assert_called_once()
     call_args = mock_close.call_args.args
     assert call_args[0] == "test-session-id"
-    assert call_args[1] == "some transcript"

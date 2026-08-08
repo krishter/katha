@@ -27,6 +27,7 @@ import models.magic_link_token  # noqa: E402, F401
 import models.memory_card  # noqa: E402, F401
 import models.session  # noqa: E402, F401
 import models.story_atom  # noqa: E402, F401
+import models.turn  # noqa: E402, F401
 import models.user_profile  # noqa: E402, F401
 from models.db import Base  # noqa: E402
 

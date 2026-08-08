@@ -26,6 +26,11 @@ class Session(Base):
     session_end_suggested: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    ended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ended_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     whatsapp_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     scheduled_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     last_user_message_at: Mapped[Optional[datetime]] = mapped_column(

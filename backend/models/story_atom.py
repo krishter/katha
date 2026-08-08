@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,6 +25,11 @@ class StoryAtom(Base):
         ForeignKey("sessions.id", ondelete="CASCADE"),
         nullable=False,
     )
+    turn_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("turns.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     user_id: Mapped[str] = mapped_column(String, nullable=False)
     domain: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -43,6 +48,9 @@ class StoryAtom(Base):
     audio_timestamp_end: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     embedding: Mapped[Optional[List[float]]] = mapped_column(
         Vector(1536), nullable=True
+    )
+    embedding_failed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
