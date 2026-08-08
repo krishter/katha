@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from prompts.domains import get_domain
 
@@ -152,15 +152,58 @@ def _layer3_life_context(
             f"mentioned in past sessions and not yet fully explored:\n{lines}"
         )
 
+    # The entry question is only a suggested opener for the very first
+    # exchange of a domain — injecting it every turn kept pulling the
+    # model back to it as if it were the mandatory topic, crowding out
+    # Layer 4's instruction to work in already-known context instead
+    # (see REMEDIATION_PLAN WS5.4 eval finding on TC-03/TC-11).
+    entry_line = ""
+    if session_state.exchange_count == 0:
+        entry_line = f"\nDomain entry question: {domain.entry_prompt}"
+
     return f"""LAYER 3 — LIFE CONTEXT
 {context_block}{threads}{significant_block}
 
-Today's focus domain: {domain.name}
-Domain entry question: {domain.entry_prompt}"""
+Today's focus domain: {domain.name}{entry_line}"""
+
+
+def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
+    """
+    Pick one concrete, nameable thing from prior_context to anchor the
+    Layer 4 recall instruction to. A generic pointer back to "Layer 3
+    above" scored 0/3 on live proactive-recall eval runs — the model
+    treated it as a soft nudge satisfiable by any lexical match rather
+    than the "loose connection" leap it asked for. Naming the actual
+    person/fact/thread gives it something concrete to reach for.
+    """
+    if prior_context.significant_people:
+        person = prior_context.significant_people[0]
+        name = person.get("name", "")
+        if name:
+            relationship = person.get("relationship", "")
+            return f"{name}{f' ({relationship})' if relationship else ''}"
+
+    if prior_context.facts:
+        people = prior_context.facts.get("people")
+        if isinstance(people, list) and people and isinstance(people[0], dict):
+            name = people[0].get("name", "")
+            if name:
+                relationship = people[0].get("relationship", "")
+                return f"{name}{f' ({relationship})' if relationship else ''}"
+        for key, value in prior_context.facts.items():
+            if key == "people" or not value:
+                continue
+            shown = value[0] if isinstance(value, list) else value
+            return f"their {key.replace('_', ' ')} ({shown})"
+
+    if prior_context.open_threads:
+        return prior_context.open_threads[0]
+
+    return None
 
 
 def _layer4_session_state(
-    session_state: SessionState, has_recallable_context: bool = False
+    session_state: SessionState, prior_context: Optional[PriorContext] = None
 ) -> str:
     domain = get_domain(session_state.domain)
     closing_instruction = ""
@@ -171,13 +214,15 @@ def _layer4_session_state(
             "know what you'd love to hear about tomorrow."
         )
     recall_instruction = ""
-    if has_recallable_context and session_state.exchange_count >= 2:
+    anchor = _pick_recall_anchor(prior_context) if prior_context else None
+    if anchor and session_state.exchange_count >= 2:
         recall_instruction = (
-            "\nYou have known facts, people, or open threads from past sessions "
-            "listed in Layer 3 above. If you have not yet referenced at least "
-            "one of them so far in this conversation, do so now — find the "
-            "closest natural connection to what the user just said, even a "
-            "loose one, rather than letting this turn go by without using it."
+            f"\nYou know about {anchor} from a past session. If you haven't "
+            f"already brought them/it up so far in this conversation, pivot "
+            f"one sentence to ask about {anchor} now — even if the connection "
+            f"to what the user just said is only loose (family, feelings, "
+            f"people, and place all count as a bridge). Do this before the "
+            f"conversation moves further away from the opening."
         )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
@@ -220,16 +265,11 @@ def build_system_prompt(
     on the critical path. Returns <response> only; see build_extraction_prompt
     for the separate, latency-tolerant structured-extraction call.
     """
-    has_recallable_context = bool(
-        prior_context.facts
-        or prior_context.significant_people
-        or prior_context.open_threads
-    )
     layers = [
         _layer1_persona(user_profile),
         _layer2_therapeutic(),
         _layer3_life_context(user_profile, session_state, prior_context),
-        _layer4_session_state(session_state, has_recallable_context),
+        _layer4_session_state(session_state, prior_context),
         _layer5_output_format(),
     ]
     return "\n\n".join(layers)

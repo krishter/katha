@@ -249,22 +249,34 @@ def test_prompt_contains_eighth_principle_progress_not_repeat():
 # ── Layer 4 recall-forcing instruction ──────────────────────────────────────
 
 
-def test_prompt_forces_recall_when_context_known_and_exchange_count_high_enough():
+def test_prompt_forces_recall_names_the_significant_person():
     """
-    Regression guard (WS5.4 eval finding): a soft "use what you know"
-    principle in a 7-item list scored 0/3 on live proactive-recall runs.
-    Layer 4 now carries a concrete, state-driven instruction instead.
+    Regression guard (WS5.4 eval, pass 2): a generic "you have known facts
+    ... listed in Layer 3 above" pointer scored 0/3 on live proactive-recall
+    runs. Layer 4 now names the actual person/fact so the model has a
+    concrete anchor to reach for, not just a pointer to go re-read.
     """
+    prior = PriorContext(
+        significant_people=[{"name": "Mr. Iyer", "relationship": "school teacher"}]
+    )
+    late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
+    prompt = build_system_prompt(_PROFILE, late_session, prior)
+    assert "Mr. Iyer" in prompt
+    assert "you know about" in prompt.lower()
+
+
+def test_prompt_forces_recall_names_a_fact_when_no_significant_person():
     prior = PriorContext(facts={"sister_name": "Kamala"})
     late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
     prompt = build_system_prompt(_PROFILE, late_session, prior)
-    assert "have not yet referenced" in prompt.lower()
+    assert "Kamala" in prompt
+    assert "you know about" in prompt.lower()
 
 
 def test_prompt_omits_recall_forcing_when_nothing_known():
     late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
     prompt = build_system_prompt(_PROFILE, late_session, PriorContext())
-    assert "have not yet referenced" not in prompt.lower()
+    assert "you know about" not in prompt.lower()
 
 
 def test_prompt_omits_recall_forcing_before_exchange_count_threshold():
@@ -273,4 +285,24 @@ def test_prompt_omits_recall_forcing_before_exchange_count_threshold():
     prior = PriorContext(facts={"sister_name": "Kamala"})
     early_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 1})
     prompt = build_system_prompt(_PROFILE, early_session, prior)
-    assert "have not yet referenced" not in prompt.lower()
+    assert "you know about" not in prompt.lower()
+
+
+# ── Layer 3 entry question gating ────────────────────────────────────────────
+
+
+def test_prompt_includes_entry_question_on_first_exchange():
+    prompt = _build()  # _SESSION has exchange_count=0
+    assert "Domain entry question" in prompt
+
+
+def test_prompt_omits_entry_question_after_first_exchange():
+    """
+    Regression guard (WS5.4 eval, pass 2): the entry question was injected
+    every turn, unconditionally, and kept pulling the model back to it as
+    if it were the mandatory topic — crowding out Layer 4's recall
+    instruction. It should only appear on the domain's opening exchange.
+    """
+    later_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 1})
+    prompt = build_system_prompt(_PROFILE, later_session, _PRIOR)
+    assert "Domain entry question" not in prompt
