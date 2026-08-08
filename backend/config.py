@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     APP_BASE_URL: str = "http://localhost:3000"
     SES_MOCK: bool = True  # print the magic link instead of sending via SES
 
+    # This backend's own externally-reachable base URL — used to reconstruct
+    # the exact URL Twilio signed, since request.url reports the scheme the
+    # TLS-terminating load balancer used internally (http), not the public
+    # one Twilio actually POSTed to (https). Never derived from request
+    # headers (X-Forwarded-Proto is spoofable without a trusted-host list).
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
+
 
 settings = Settings()
 
@@ -76,6 +83,11 @@ def validate_production_config(s: Settings = settings) -> None:
             problems.append(f"{name} is empty")
     if not s.APP_BASE_URL.startswith("https://"):
         problems.append(f"APP_BASE_URL is not https:// (got: {s.APP_BASE_URL!r})")
+    if not s.PUBLIC_BASE_URL.startswith("https://"):
+        problems.append(
+            f"PUBLIC_BASE_URL is not https:// (got: {s.PUBLIC_BASE_URL!r}) — "
+            "every Twilio webhook signature check would fail"
+        )
 
     if problems:
         raise RuntimeError(

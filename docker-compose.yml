@@ -20,6 +20,11 @@ services:
       - db
     volumes:
       - ./backend:/app
+    # --reload is for local dev only — the Dockerfile's own CMD (used in
+    # production) deliberately omits it. --reload itself is single-process,
+    # so it isn't combined with --workers here (uvicorn doesn't support
+    # --reload with multiple workers regardless).
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
   frontend:
     build: ./frontend

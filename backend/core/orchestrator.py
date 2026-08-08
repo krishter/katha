@@ -178,6 +178,19 @@ async def _load_last_turn_messages(session_id: str, db) -> list[Message]:
     ]
 
 
+async def find_turn_by_message_sid(message_sid: str, db) -> Optional[Turn]:
+    """
+    Look up an already-processed turn by its inbound Twilio MessageSid —
+    the idempotency check for Twilio's at-least-once delivery: it retries
+    a webhook that didn't return a fast 200, and without this check that
+    retry would be reprocessed as a brand new turn (H3).
+    """
+    result = await db.execute(
+        select(Turn).where(Turn.inbound_message_sid == message_sid)
+    )
+    return result.scalar_one_or_none()
+
+
 async def run_post_session(session_id: str, user_id: str, db) -> None:
     """
     Background task triggered after session close. Story atoms were already

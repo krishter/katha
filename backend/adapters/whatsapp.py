@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -68,7 +69,8 @@ class TwilioWhatsAppAdapter:
         key = f"audio/katha-{uuid.uuid4().hex[:12]}.ogg"
         s3_key = await storage.upload_media(audio_bytes, key, mime_type)
         presigned_url = await storage.generate_presigned_url(s3_key)
-        msg = self._client.messages.create(
+        msg = await asyncio.to_thread(
+            self._client.messages.create,
             from_=self._from,
             to=f"whatsapp:{to_number}",
             media_url=[presigned_url],
@@ -84,7 +86,8 @@ class TwilioWhatsAppAdapter:
         key = f"cards/katha-{uuid.uuid4().hex[:12]}.png"
         s3_key = await storage.upload_media(image_bytes, key, "image/png")
         presigned_url = await storage.generate_presigned_url(s3_key)
-        msg = self._client.messages.create(
+        msg = await asyncio.to_thread(
+            self._client.messages.create,
             from_=self._from,
             to=f"whatsapp:{to_number}",
             media_url=[presigned_url],
@@ -111,7 +114,7 @@ class TwilioWhatsAppAdapter:
                 kwargs["content_variables"] = str(template_variables)
         else:
             kwargs["body"] = text
-        msg = self._client.messages.create(**kwargs)
+        msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
         logger.info("Sent text to %s: %s", to_number, msg.sid)
         return msg.sid
 

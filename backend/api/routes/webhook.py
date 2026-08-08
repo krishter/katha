@@ -135,9 +135,14 @@ async def whatsapp_incoming(
         form = await request.form()
         params = dict(form)
 
-        # 2. Validate Twilio signature
+        # 2. Validate Twilio signature. Built from PUBLIC_BASE_URL, not
+        # request.url — behind a TLS-terminating load balancer, request.url
+        # reports the internal http:// scheme, which never matches the
+        # https:// URL Twilio actually signed (H2).
         signature = request.headers.get("X-Twilio-Signature", "")
-        url = str(request.url)
+        url = f"{settings.PUBLIC_BASE_URL}{request.url.path}"
+        if request.url.query:
+            url = f"{url}?{request.url.query}"
         if not whatsapp.validate_signature(url, params, signature):
             logger.warning("Invalid Twilio signature from %s", request.client)
             return Response(status_code=403, content="Forbidden")
@@ -159,7 +164,20 @@ async def whatsapp_incoming(
             message_sid,
         )
 
-        # 4. Look up active session by WhatsApp number
+        # 4. Idempotency: Twilio retries a webhook that didn't return a
+        # fast 200. Without this, a retry would reprocess the same voice
+        # note as a brand new turn — duplicate LLM call, duplicate charge,
+        # two replies to one message (H3).
+        if message_sid:
+            existing_turn = await orchestrator.find_turn_by_message_sid(message_sid, db)
+            if existing_turn is not None:
+                logger.info(
+                    "Duplicate webhook for MessageSid %s — already processed, skipping",
+                    message_sid,
+                )
+                return Response(status_code=200, content="OK")
+
+        # 5. Look up active session by WhatsApp number
         state = await session_manager.get_active_session_by_number(from_number, db)
         if state is None:
             logger.info("No active session for %s", from_number)
@@ -168,7 +186,7 @@ async def whatsapp_incoming(
             )
             return Response(status_code=200, content="OK")
 
-        # 5. Handle voice note
+        # 6. Handle voice note
         if media_url and "audio" in media_type:
             audio_bytes = await whatsapp.download_voice_note(media_url)
             user_profile = await _load_user_profile_for_session(state, db)
@@ -196,7 +214,7 @@ async def whatsapp_incoming(
             # extraction learns session_end_suggested/goal_met — not here.
 
         else:
-            # 6. Text message — prompt for voice note
+            # 7. Text message — prompt for voice note
             await _safe_send_text(
                 whatsapp, from_number, _TEXT_ONLY_REPLY, stage="text_only"
             )

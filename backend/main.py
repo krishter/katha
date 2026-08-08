@@ -36,6 +36,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await preload_fallback_audio()
 
+    # SINGLE-WORKER CONSTRAINT: this scheduler is in-process (APScheduler),
+    # not a separate service. Running this app with more than one worker
+    # process (uvicorn --workers, gunicorn, multiple replicas, ...) means
+    # every worker starts its own scheduler, and every scheduled session
+    # gets initiated once per worker — a family would get duplicate opening
+    # voice notes. Keep this at exactly one process until the scheduler
+    # itself is made distributed-safe (out of scope pre-pilot).
     scheduler = create_scheduler(AsyncSessionLocal)
     scheduler.start()
     logger.info("Scheduler started")

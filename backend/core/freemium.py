@@ -87,6 +87,6 @@ async def send_upgrade_prompt(user_id: str, db: AsyncSession) -> None:
         'Reply to this email or visit <a href="https://katha.life/upgrade">'
         "katha.life/upgrade</a> to continue.</p>"
     )
-    send_email_ses(account.email, subject, body_text, body_html)
+    await send_email_ses(account.email, subject, body_text, body_html)
     _last_prompt_sent[user_id] = datetime.now(timezone.utc)
     logger.info("Sent upgrade prompt to %s for user %s", account.email, user_id)

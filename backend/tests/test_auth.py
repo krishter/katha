@@ -225,17 +225,17 @@ async def test_verify_magic_link_looks_up_by_hashed_token():
 # ── SES helper ───────────────────────────────────────────────────────────────
 
 
-def test_send_email_ses_mock_mode_does_not_call_boto3():
+async def test_send_email_ses_mock_mode_does_not_call_boto3():
     with (
         patch("core.auth.settings") as mock_settings,
         patch("core.auth.boto3.client") as mock_boto_client,
     ):
         mock_settings.SES_MOCK = True
-        send_email_ses(_EMAIL, "Subject", "text body", "<p>html body</p>")
+        await send_email_ses(_EMAIL, "Subject", "text body", "<p>html body</p>")
     mock_boto_client.assert_not_called()
 
 
-def test_send_email_ses_calls_boto3_when_not_mocked():
+async def test_send_email_ses_calls_boto3_when_not_mocked():
     mock_client = MagicMock()
     with (
         patch("core.auth.settings") as mock_settings,
@@ -244,7 +244,7 @@ def test_send_email_ses_calls_boto3_when_not_mocked():
         mock_settings.SES_MOCK = False
         mock_settings.SES_FROM_EMAIL = "noreply@katha.life"
         mock_settings.AWS_S3_REGION = "ap-south-1"
-        send_email_ses(_EMAIL, "Subject", "text body", "<p>html body</p>")
+        await send_email_ses(_EMAIL, "Subject", "text body", "<p>html body</p>")
 
     mock_boto_client.assert_called_once_with("ses", region_name="ap-south-1")
     mock_client.send_email.assert_called_once()

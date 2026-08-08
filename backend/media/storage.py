@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import boto3
@@ -34,7 +35,8 @@ async def upload_media(
     Files are stored in ap-south-1 (Mumbai) for DPDP Act compliance.
     """
     client = _s3_client()
-    client.put_object(
+    await asyncio.to_thread(
+        client.put_object,
         Bucket=settings.AWS_S3_BUCKET,
         Key=key,
         Body=data,
@@ -51,7 +53,8 @@ async def generate_presigned_url(key: str, expires_in: int = 900) -> str:
     Never store this URL; generate it fresh on each use.
     """
     client = _s3_client()
-    return client.generate_presigned_url(
+    return await asyncio.to_thread(
+        client.generate_presigned_url,
         "get_object",
         Params={"Bucket": settings.AWS_S3_BUCKET, "Key": key},
         ExpiresIn=expires_in,
@@ -61,5 +64,7 @@ async def generate_presigned_url(key: str, expires_in: int = 900) -> str:
 async def delete_media(key: str) -> None:
     """Delete a media file from S3 after delivery."""
     client = _s3_client()
-    client.delete_object(Bucket=settings.AWS_S3_BUCKET, Key=key)
+    await asyncio.to_thread(
+        client.delete_object, Bucket=settings.AWS_S3_BUCKET, Key=key
+    )
     logger.info("Deleted %s from S3", key)

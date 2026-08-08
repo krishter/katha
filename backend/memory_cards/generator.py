@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import uuid
@@ -308,7 +309,8 @@ async def generate_memory_card(
         return None
 
     domain_label = get_domain(best["domain"]).name
-    image_bytes = render_card(
+    image_bytes = await asyncio.to_thread(
+        render_card,
         quote=quote,
         user_name=user_name,
         domain_label=domain_label,
