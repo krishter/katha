@@ -10,16 +10,18 @@ _URL = "https://api.twilio.com/media/MSG123/0"
 # ── StubWhatsAppAdapter ────────────────────────────────────────────────────────
 
 
-async def test_stub_send_voice_note_returns_fake_sid():
+async def test_stub_send_voice_note_returns_fake_sid_and_key():
     adapter = StubWhatsAppAdapter()
-    sid = await adapter.send_voice_note(_TO, _AUDIO)
+    sid, s3_key = await adapter.send_voice_note(_TO, _AUDIO)
     assert sid.startswith("STUB_MSG_")
+    assert s3_key.startswith("audio/")
 
 
-async def test_stub_send_image_returns_fake_sid():
+async def test_stub_send_image_returns_fake_sid_and_key():
     adapter = StubWhatsAppAdapter()
-    sid = await adapter.send_image(_TO, b"fake-png-bytes", caption="A memory")
+    sid, s3_key = await adapter.send_image(_TO, b"fake-png-bytes", caption="A memory")
     assert sid.startswith("STUB_MSG_")
+    assert s3_key.startswith("cards/")
 
 
 async def test_stub_send_text_returns_fake_sid():
@@ -57,19 +59,24 @@ async def test_twilio_send_voice_note_uploads_then_sends():
         patch("adapters.whatsapp.TwilioClient", return_value=mock_twilio),
         patch(
             "adapters.whatsapp.storage.upload_media",
-            new=AsyncMock(
-                return_value="https://s3.amazonaws.com/katha-media/audio/test.ogg"
-            ),
+            new=AsyncMock(return_value="audio/test.ogg"),
         ) as mock_upload,
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value="https://signed.example/audio/test.ogg"),
+        ) as mock_presign,
     ):
         adapter = TwilioWhatsAppAdapter("ACtest", "authtest", "whatsapp:+14155238886")
-        sid = await adapter.send_voice_note(_TO, _AUDIO)
+        sid, s3_key = await adapter.send_voice_note(_TO, _AUDIO)
 
     mock_upload.assert_called_once()
+    mock_presign.assert_called_once_with("audio/test.ogg")
     mock_twilio.messages.create.assert_called_once()
     call_kwargs = mock_twilio.messages.create.call_args.kwargs
     assert call_kwargs["to"] == f"whatsapp:{_TO}"
+    assert call_kwargs["media_url"] == ["https://signed.example/audio/test.ogg"]
     assert sid == "SM_TEST_123"
+    assert s3_key == "audio/test.ogg"
 
 
 async def test_twilio_send_image_uploads_then_sends():
@@ -85,13 +92,17 @@ async def test_twilio_send_image_uploads_then_sends():
         patch("adapters.whatsapp.TwilioClient", return_value=mock_twilio),
         patch(
             "adapters.whatsapp.storage.upload_media",
-            new=AsyncMock(
-                return_value="https://s3.amazonaws.com/katha-media/cards/test.png"
-            ),
+            new=AsyncMock(return_value="cards/test.png"),
         ) as mock_upload,
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value="https://signed.example/cards/test.png"),
+        ),
     ):
         adapter = TwilioWhatsAppAdapter("ACtest", "authtest", "whatsapp:+14155238886")
-        sid = await adapter.send_image(_TO, b"fake-png-bytes", caption="A memory")
+        sid, s3_key = await adapter.send_image(
+            _TO, b"fake-png-bytes", caption="A memory"
+        )
 
     mock_upload.assert_called_once()
     upload_kwargs = mock_upload.call_args.args
@@ -100,6 +111,7 @@ async def test_twilio_send_image_uploads_then_sends():
     assert call_kwargs["to"] == f"whatsapp:{_TO}"
     assert call_kwargs["body"] == "A memory"
     assert sid == "SM_IMG_789"
+    assert s3_key == "cards/test.png"
 
 
 async def test_twilio_send_text_correct_format():

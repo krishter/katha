@@ -64,6 +64,27 @@ async def delete_user(
     except Exception:
         logger.exception("Failed to look up memory cards for user %s", user_id)
 
+    # 1b. Voice note audio on S3 — the upload happens inside send_voice_note,
+    # after the turn row is already committed, so the key is a separate
+    # follow-up write (see orchestrator.set_turn_audio_key) and must be
+    # swept explicitly here too.
+    try:
+        result = await db.execute(
+            select(Turn.response_audio_s3_key)
+            .where(Turn.user_id == user_id)
+            .where(Turn.response_audio_s3_key.is_not(None))
+        )
+        audio_keys = result.scalars().all()
+        for s3_key in audio_keys:
+            try:
+                await storage.delete_media(s3_key)
+            except Exception:
+                logger.exception(
+                    "Failed to delete S3 object %s for user %s", s3_key, user_id
+                )
+    except Exception:
+        logger.exception("Failed to look up turn audio keys for user %s", user_id)
+
     # 3-7. Delete rows that belong directly to this user_id
     for label, stmt in [
         ("memory_cards", delete(MemoryCard).where(MemoryCard.user_id == user_id)),

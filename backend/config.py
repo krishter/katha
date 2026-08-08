@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
@@ -33,7 +35,7 @@ class Settings(BaseSettings):
     AWS_S3_REGION: str = "ap-south-1"
 
     # Family dashboard auth (Phase 6)
-    JWT_SECRET: str = "dev-only-insecure-secret-change-me"
+    JWT_SECRET: str = _DEFAULT_JWT_SECRET
     JWT_EXPIRE_DAYS: int = 7
     MAGIC_LINK_EXPIRE_MINUTES: int = 15
     SES_FROM_EMAIL: str = "noreply@katha.life"
@@ -42,3 +44,41 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def validate_production_config(s: Settings = settings) -> None:
+    """
+    Refuse to boot in production with an unsafe configuration. A backend
+    running with the default JWT secret, a stub WhatsApp adapter, or a
+    mocked email sender is worse than a backend that is down (C8) — the
+    failure would be silent and total (forgeable session cookies, magic
+    links that never send, no real conversations).
+    """
+    if s.ENVIRONMENT != "production":
+        return
+
+    problems: list[str] = []
+
+    if s.JWT_SECRET == _DEFAULT_JWT_SECRET or len(s.JWT_SECRET) < 32:
+        problems.append("JWT_SECRET is the default value or shorter than 32 characters")
+    if s.SES_MOCK:
+        problems.append("SES_MOCK is True — magic link emails would never send")
+    if s.WHATSAPP_ADAPTER == "stub":
+        problems.append("WHATSAPP_ADAPTER is 'stub' — no real messages would send")
+    for name in (
+        "ANTHROPIC_API_KEY",
+        "SARVAM_API_KEY",
+        "OPENAI_API_KEY",
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+    ):
+        if not getattr(s, name):
+            problems.append(f"{name} is empty")
+    if not s.APP_BASE_URL.startswith("https://"):
+        problems.append(f"APP_BASE_URL is not https:// (got: {s.APP_BASE_URL!r})")
+
+    if problems:
+        raise RuntimeError(
+            "Refusing to start in production with unsafe configuration:\n"
+            + "\n".join(f"  - {p}" for p in problems)
+        )

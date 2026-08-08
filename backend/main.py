@@ -7,15 +7,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.admin import router as admin_router
 from api.routes.auth import router as auth_router
-from api.routes.conversation import router as conversation_router
 from api.routes.family import router as family_router
 from api.routes.health import router as health_router
 from api.routes.onboarding import router as onboarding_router
 from api.routes.webhook import router as webhook_router
-from config import settings
+from config import settings, validate_production_config
 
 logging.basicConfig(level=settings.LOG_LEVEL.upper())
 logger = logging.getLogger(__name__)
+
+# Refuses to raise past this point (and thus to boot) in production with an
+# unsafe configuration — checked at import time so a misconfigured deploy
+# never accepts a single request (C8).
+validate_production_config()
 
 
 @asynccontextmanager
@@ -58,7 +62,6 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
-app.include_router(conversation_router, prefix="/conversation")
 app.include_router(webhook_router)
 app.include_router(auth_router)
 app.include_router(family_router)

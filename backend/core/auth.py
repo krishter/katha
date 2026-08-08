@@ -19,11 +19,16 @@ logger = logging.getLogger(__name__)
 
 _ALGORITHM = "HS256"
 _COOKIE_NAME = "katha_token"
+_MAGIC_LINK_RATE_LIMIT_WINDOW = timedelta(minutes=20)  # ~3/hour, evenly spaced
 
 
 def hash_email(email: str) -> str:
     """SHA-256 of a lowercased email — used for consent-record audit trail."""
     return hashlib.sha256(email.lower().encode()).hexdigest()
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def create_jwt(email: str, user_id: str) -> str:
@@ -56,7 +61,10 @@ async def send_magic_link(email: str, db: AsyncSession) -> None:
     Generate and email a magic link for the given address.
     No-ops silently for unknown emails so callers can always report success —
     this is the enumeration-protection boundary; nothing above this function
-    should ever branch on "was this email found".
+    should ever branch on "was this email found". Also no-ops (same
+    silence) when the account requested a link within the rate-limit
+    window, so a burst of requests can't be used as an email-bombing relay
+    against arbitrary addresses.
     """
     result = await db.execute(select(FamilyAccount).where(FamilyAccount.email == email))
     account = result.scalar_one_or_none()
@@ -64,11 +72,24 @@ async def send_magic_link(email: str, db: AsyncSession) -> None:
         logger.info("Magic link requested for unknown email — no-op")
         return
 
+    now = datetime.now(timezone.utc)
+    last_requested = account.magic_link_last_requested_at
+    if (
+        last_requested is not None
+        and now - last_requested < _MAGIC_LINK_RATE_LIMIT_WINDOW
+    ):
+        logger.info("Magic link request rate-limited for %s", email)
+        return
+
     token = secrets.token_hex(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.MAGIC_LINK_EXPIRE_MINUTES
+    expires_at = now + timedelta(minutes=settings.MAGIC_LINK_EXPIRE_MINUTES)
+    db.add(
+        MagicLinkToken(
+            email=email, token_hash=_hash_token(token), expires_at=expires_at
+        )
     )
-    db.add(MagicLinkToken(email=email, token=token, expires_at=expires_at))
+    account.magic_link_last_requested_at = now
+    db.add(account)
     await db.commit()
 
     url = f"{settings.APP_BASE_URL}/family/auth/verify?token={token}"
@@ -93,7 +114,7 @@ async def verify_magic_link(token: str, db: AsyncSession) -> tuple[str, str]:
     """
     result = await db.execute(
         select(MagicLinkToken).where(
-            MagicLinkToken.token == token,
+            MagicLinkToken.token_hash == _hash_token(token),
             MagicLinkToken.used.is_(False),
             MagicLinkToken.expires_at > datetime.now(timezone.utc),
         )

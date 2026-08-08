@@ -28,6 +28,9 @@ class FamilyAccount(Base):
     onboarding_complete: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    magic_link_last_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

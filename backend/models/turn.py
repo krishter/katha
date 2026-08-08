@@ -35,6 +35,7 @@ class Turn(Base):
     extraction_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_audio_s3_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

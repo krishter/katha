@@ -157,6 +157,41 @@ async def test_run_post_session_does_not_raise_on_exception():
         await run_post_session(_SESSION_ID, _USER_ID, db)
 
 
+# ── set_turn_audio_key ─────────────────────────────────────────────────────────
+
+
+async def test_set_turn_audio_key_updates_the_row():
+    from core.orchestrator import set_turn_audio_key
+
+    turn_id = uuid.uuid4()
+    turn_row = SimpleNamespace(id=turn_id, response_audio_s3_key=None)
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = turn_row
+    db.execute = AsyncMock(return_value=result)
+
+    await set_turn_audio_key(turn_id, "audio/katha-abc123.ogg", db)
+
+    assert turn_row.response_audio_s3_key == "audio/katha-abc123.ogg"
+    db.commit.assert_called_once()
+
+
+async def test_set_turn_audio_key_no_op_when_turn_not_found():
+    from core.orchestrator import set_turn_audio_key
+
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=result)
+
+    # Should not raise even though the turn doesn't exist.
+    await set_turn_audio_key(uuid.uuid4(), "audio/x.ogg", db)
+    db.commit.assert_not_called()
+
+
 # ── process_voice_turn integration ────────────────────────────────────────────
 
 

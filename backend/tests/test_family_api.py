@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -94,9 +94,7 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
     domain_counts_result = MagicMock()
     domain_counts_result.all.return_value = [("childhood", 2), ("career", 1)]
     card_result = MagicMock()
-    card_result.scalars.return_value.first.return_value = (
-        "https://s3.amazonaws.com/katha-media/cards/x.png"
-    )
+    card_result.scalars.return_value.first.return_value = "cards/x.png"
 
     db.execute = AsyncMock(
         side_effect=[
@@ -108,7 +106,11 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
         ]
     )
 
-    response = client.get("/family/stats")
+    with patch(
+        "api.routes.family.storage.generate_presigned_url",
+        new=AsyncMock(return_value="https://signed.example/cards/x.png"),
+    ):
+        response = client.get("/family/stats")
 
     assert response.status_code == 200
     body = response.json()
@@ -121,7 +123,7 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
         d for d in body["domain_breakdown"] if d["domain_id"] == "childhood"
     )
     assert childhood_row["story_count"] == 2
-    assert body["latest_card_url"] == "https://s3.amazonaws.com/katha-media/cards/x.png"
+    assert body["latest_card_url"] == "https://signed.example/cards/x.png"
     assert body["plan"] == "free"
     assert body["session_count"] == 5
     assert body["session_limit"] == 10
@@ -199,7 +201,7 @@ def test_list_cards_returns_newest_first(db):
     card.id = uuid.uuid4()
     card.verbatim_quote = "It smelled of jasmine."
     card.domain = "childhood"
-    card.image_public_url = "https://s3.amazonaws.com/katha-media/cards/x.png"
+    card.image_s3_key = "cards/x.png"
     card.created_at = datetime.now(timezone.utc)
 
     total_result = _query_result(scalar_one=1)
@@ -208,12 +210,16 @@ def test_list_cards_returns_newest_first(db):
 
     db.execute = AsyncMock(side_effect=[total_result, rows_result])
 
-    response = client.get("/family/cards")
+    with patch(
+        "api.routes.family.storage.generate_presigned_url",
+        new=AsyncMock(return_value="https://signed.example/cards/x.png"),
+    ):
+        response = client.get("/family/cards")
 
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 1
-    assert body["cards"][0]["image_url"] == card.image_public_url
+    assert body["cards"][0]["image_url"] == "https://signed.example/cards/x.png"
 
 
 # ── auth enforcement ─────────────────────────────────────────────────────────

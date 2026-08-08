@@ -45,27 +45,31 @@ def db():
             app.dependency_overrides.pop(get_current_user, None)
 
 
-def _default_execute_results(s3_keys=None, email="dev@katha.life"):
+def _default_execute_results(s3_keys=None, audio_keys=None, email="dev@katha.life"):
     """
     Build the ordered list of db.execute() return values matching
     admin.delete_user's call sequence:
     1. select memory_cards.image_s3_key
-    2-7. delete memory_cards / story_atoms / turns / facts / sessions /
+    2. select turns.response_audio_s3_key
+    3-8. delete memory_cards / story_atoms / turns / facts / sessions /
          user_profiles
-    8. select family_accounts.email
-    9. delete magic_link_tokens (only if email found)
-    10. update consent_records
-    11. delete family_accounts
+    9. select family_accounts.email
+    10. delete magic_link_tokens (only if email found)
+    11. update consent_records
+    12. delete family_accounts
     """
     s3_key_result = MagicMock()
     s3_key_result.scalars.return_value.all.return_value = s3_keys or []
+
+    audio_key_result = MagicMock()
+    audio_key_result.scalars.return_value.all.return_value = audio_keys or []
 
     email_result = MagicMock()
     email_result.scalar_one_or_none.return_value = email
 
     generic = lambda: MagicMock()  # noqa: E731 — result of a DELETE/UPDATE, unused
 
-    results = [s3_key_result]
+    results = [s3_key_result, audio_key_result]
     results += [generic() for _ in range(6)]  # the 6 DELETE-by-user_id statements
     results.append(email_result)
     if email is not None:
@@ -107,9 +111,10 @@ def test_delete_removes_rows_for_each_table(db):
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
-    # 11 execute calls: memory_cards select, 6 deletes, email select,
-    # magic_link_tokens delete, consent update, family_accounts delete.
-    assert db.execute.await_count == 11
+    # 12 execute calls: memory_cards select, turn audio keys select, 6
+    # deletes, email select, magic_link_tokens delete, consent update,
+    # family_accounts delete.
+    assert db.execute.await_count == 12
     assert db.commit.await_count >= 6
 
 
@@ -119,8 +124,8 @@ def test_delete_anonymizes_consent_records_not_deletes_them(db):
     with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
-    # The 10th execute() call is the consent_records UPDATE (anonymize).
-    consent_stmt = db.execute.await_args_list[9].args[0]
+    # The 11th execute() call is the consent_records UPDATE (anonymize).
+    consent_stmt = db.execute.await_args_list[10].args[0]
     compiled = str(consent_stmt)
     assert "consent_records" in compiled.lower()
     assert "UPDATE" in compiled.upper()
@@ -132,12 +137,25 @@ def test_delete_removes_turns(db):
     with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
-    # 3rd execute() call is the turns DELETE (after memory_cards select+delete,
-    # story_atoms delete).
-    turns_stmt = db.execute.await_args_list[3].args[0]
+    # 5th execute() call is the turns DELETE (after memory_cards select,
+    # audio keys select, memory_cards delete, story_atoms delete).
+    turns_stmt = db.execute.await_args_list[4].args[0]
     compiled = str(turns_stmt)
     assert "turns" in compiled.lower()
     assert "DELETE" in compiled.upper()
+
+
+def test_delete_calls_s3_delete_for_turn_audio_keys(db):
+    db.execute = AsyncMock(
+        side_effect=_default_execute_results(audio_keys=["audio/a.ogg", "audio/b.ogg"])
+    )
+
+    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()) as mock_delete:
+        response = client.request("DELETE", f"/user/{_USER_ID}")
+
+    assert response.status_code == 200
+    called_keys = {c.args[0] for c in mock_delete.await_args_list}
+    assert {"audio/a.ogg", "audio/b.ogg"}.issubset(called_keys)
 
 
 def test_delete_removes_family_account(db):

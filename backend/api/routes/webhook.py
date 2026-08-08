@@ -72,20 +72,25 @@ async def _safe_send_text(whatsapp, to_number: str, text: str, *, stage: str) ->
 
 
 async def _deliver_turn_result(
-    whatsapp, to_number: str, result: orchestrator.TurnResult
+    whatsapp, to_number: str, result: orchestrator.TurnResult, db: AsyncSession
 ) -> None:
     """
     Deliver whatever process_voice_turn produced. If it already degraded to
     text (TTS/conversion failed), send text. If the send itself fails,
-    fall back to text with the same content as a last resort.
+    fall back to text with the same content as a last resort. On a real
+    voice-note send, records the S3 key used so it's enumerable for
+    deletion later (P4) — the upload happens inside send_voice_note, after
+    the turn is already committed, so this is a separate follow-up write.
     """
     try:
         if result.response_mime_type == "text/plain":
             await whatsapp.send_text(to_number, result.response_text)
         else:
-            await whatsapp.send_voice_note(
+            _message_sid, s3_key = await whatsapp.send_voice_note(
                 to_number, result.response_audio, mime_type=result.response_mime_type
             )
+            if result.turn_id is not None:
+                await orchestrator.set_turn_audio_key(result.turn_id, s3_key, db)
     except Exception:
         logger.error(
             "Failed to deliver turn result to %s — falling back to text",
@@ -177,7 +182,7 @@ async def whatsapp_incoming(
                 background_tasks=background_tasks,
             )
 
-            await _deliver_turn_result(whatsapp, from_number, result)
+            await _deliver_turn_result(whatsapp, from_number, result, db)
 
             # Update last_user_message_at
             await session_manager.touch_last_message(state.session_id, db)

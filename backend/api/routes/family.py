@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import get_current_user
 from core.freemium import FREE_SESSION_LIMIT
+from media import storage
 from models.db import get_db
 from models.family_account import FamilyAccount
 from models.memory_card import MemoryCard
@@ -111,12 +112,17 @@ async def get_stats(
         )
 
     card_result = await db.execute(
-        select(MemoryCard.image_public_url)
+        select(MemoryCard.image_s3_key)
         .where(MemoryCard.user_id == user_id)
         .order_by(MemoryCard.created_at.desc())
         .limit(1)
     )
-    latest_card_url = card_result.scalars().first()
+    latest_card_key = card_result.scalars().first()
+    latest_card_url = (
+        await storage.generate_presigned_url(latest_card_key)
+        if latest_card_key
+        else None
+    )
 
     return {
         "user_name": user_name,
@@ -217,7 +223,7 @@ async def list_cards(
                 "id": str(card.id),
                 "verbatim_quote": card.verbatim_quote,
                 "domain": card.domain,
-                "image_url": card.image_public_url,
+                "image_url": await storage.generate_presigned_url(card.image_s3_key),
                 "created_at": card.created_at.isoformat(),
             }
             for card in rows

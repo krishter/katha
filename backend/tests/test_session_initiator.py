@@ -77,7 +77,9 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
     factory, mock_db = _make_db_factory(profile=profile)
 
     stub_adapter = MagicMock()
-    stub_adapter.send_voice_note = AsyncMock(return_value="STUB_MSG_001")
+    stub_adapter.send_voice_note = AsyncMock(
+        return_value=("STUB_MSG_001", "audio/stub-test.ogg")
+    )
     stub_adapter.send_text = AsyncMock(return_value="STUB_MSG_002")
 
     with (
@@ -128,7 +130,9 @@ async def test_initiate_sessions_uses_session_domain_not_hardcoded_childhood():
     factory, mock_db = _make_db_factory(profile=profile)
 
     stub_adapter = MagicMock()
-    stub_adapter.send_voice_note = AsyncMock(return_value="STUB_MSG_001")
+    stub_adapter.send_voice_note = AsyncMock(
+        return_value=("STUB_MSG_001", "audio/stub-test.ogg")
+    )
     stub_adapter.send_text = AsyncMock(return_value="STUB_MSG_002")
 
     with (
