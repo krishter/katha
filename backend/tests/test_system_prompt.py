@@ -236,3 +236,41 @@ def test_prompt_layer3_not_early_session_when_only_open_threads_known():
 def test_prompt_layer3_is_early_session_when_nothing_known():
     prompt = build_system_prompt(_PROFILE, _SESSION, PriorContext())
     assert "early session" in prompt.lower()
+
+
+# ── Layer 2 principle 8: progress through incomplete stories ──────────────
+
+
+def test_prompt_contains_eighth_principle_progress_not_repeat():
+    prompt = _build()
+    assert "don't repeat" in prompt.lower()
+
+
+# ── Layer 4 recall-forcing instruction ──────────────────────────────────────
+
+
+def test_prompt_forces_recall_when_context_known_and_exchange_count_high_enough():
+    """
+    Regression guard (WS5.4 eval finding): a soft "use what you know"
+    principle in a 7-item list scored 0/3 on live proactive-recall runs.
+    Layer 4 now carries a concrete, state-driven instruction instead.
+    """
+    prior = PriorContext(facts={"sister_name": "Kamala"})
+    late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
+    prompt = build_system_prompt(_PROFILE, late_session, prior)
+    assert "have not yet referenced" in prompt.lower()
+
+
+def test_prompt_omits_recall_forcing_when_nothing_known():
+    late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
+    prompt = build_system_prompt(_PROFILE, late_session, PriorContext())
+    assert "have not yet referenced" not in prompt.lower()
+
+
+def test_prompt_omits_recall_forcing_before_exchange_count_threshold():
+    """Exchange 0-1 are naturally about the domain's own entry question —
+    the forcing instruction should only kick in from exchange 2 onward."""
+    prior = PriorContext(facts={"sister_name": "Kamala"})
+    early_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 1})
+    prompt = build_system_prompt(_PROFILE, early_session, prior)
+    assert "have not yet referenced" not in prompt.lower()

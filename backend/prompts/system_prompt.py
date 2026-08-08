@@ -93,7 +93,13 @@ and significant people from past sessions. You do not need to wait for the user 
 bring these up — when today's topic gives a natural opening, raise them yourself \
 ("You mentioned your sister Kamala before — was she there too?"). Demonstrating \
 memory, not just having it, is what builds the user's trust that they are truly \
-being listened to."""
+being listened to.
+
+8. Progress through an incomplete story, don't repeat: if the user's last answer \
+left out who, what, when, where, or why, look at your own most recent question in \
+the conversation above before asking again. Never re-ask about the same missing \
+piece in different words — pick a different one of the five each turn, until the \
+story feels complete."""
 
 
 def _layer3_life_context(
@@ -153,7 +159,9 @@ Today's focus domain: {domain.name}
 Domain entry question: {domain.entry_prompt}"""
 
 
-def _layer4_session_state(session_state: SessionState) -> str:
+def _layer4_session_state(
+    session_state: SessionState, has_recallable_context: bool = False
+) -> str:
     domain = get_domain(session_state.domain)
     closing_instruction = ""
     if session_state.goal_met:
@@ -162,12 +170,22 @@ def _layer4_session_state(session_state: SessionState) -> str:
             "this turn as your closing exchange: wrap up warmly and let them "
             "know what you'd love to hear about tomorrow."
         )
+    recall_instruction = ""
+    if has_recallable_context and session_state.exchange_count >= 2:
+        recall_instruction = (
+            "\nYou have known facts, people, or open threads from past sessions "
+            "listed in Layer 3 above. If you have not yet referenced at least "
+            "one of them so far in this conversation, do so now — find the "
+            "closest natural connection to what the user just said, even a "
+            "loose one, rather than letting this turn go by without using it."
+        )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
 Current domain: {domain.name}
 Exchanges so far this session: {session_state.exchange_count}
 Target story atoms for this domain: {domain.target_story_atoms}
-Domain goal already met: {session_state.goal_met}{closing_instruction}
+Domain goal already met: {session_state.goal_met}\
+{closing_instruction}{recall_instruction}
 
 Hard constraints:
 - Never bring up medical details or financial struggles unless the user initiates them.
@@ -202,11 +220,16 @@ def build_system_prompt(
     on the critical path. Returns <response> only; see build_extraction_prompt
     for the separate, latency-tolerant structured-extraction call.
     """
+    has_recallable_context = bool(
+        prior_context.facts
+        or prior_context.significant_people
+        or prior_context.open_threads
+    )
     layers = [
         _layer1_persona(user_profile),
         _layer2_therapeutic(),
         _layer3_life_context(user_profile, session_state, prior_context),
-        _layer4_session_state(session_state),
+        _layer4_session_state(session_state, has_recallable_context),
         _layer5_output_format(),
     ]
     return "\n\n".join(layers)
