@@ -15,10 +15,10 @@ export function DomainProgress({ domains }: DomainProgressProps) {
         return (
           <div key={domain.domain_id}>
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="font-medium text-[#2C2C2C]">
+              <span className="font-medium text-ink">
                 {domain.domain_label}
               </span>
-              <span className="text-[#6B5B4E]">
+              <span className="text-ink-mid">
                 {domain.story_count} / {domain.target}
               </span>
             </div>
@@ -28,10 +28,10 @@ export function DomainProgress({ domains }: DomainProgressProps) {
               aria-valuenow={domain.story_count}
               aria-valuemin={0}
               aria-valuemax={domain.target}
-              className="h-2 w-full overflow-hidden rounded-full bg-[#E8DDD4]"
+              className="h-2 w-full overflow-hidden rounded-full bg-border"
             >
               <div
-                className="h-full rounded-full bg-[#C8956C] transition-all"
+                className="h-full rounded-full bg-saffron transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>

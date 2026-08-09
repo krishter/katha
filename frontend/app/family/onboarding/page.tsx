@@ -19,12 +19,12 @@ const LANGUAGE_OPTIONS: Array<{ code: string; label: string }> = [
   { code: "en-IN", label: "English" },
 ];
 
-const CARD_CLASS = "w-full max-w-md rounded-xl bg-white p-8 shadow-sm";
-const LABEL_CLASS = "text-sm font-medium text-[#2C2C2C]";
+const CARD_CLASS = "w-full max-w-md rounded-xl bg-surface p-8 shadow-sm";
+const LABEL_CLASS = "text-sm font-medium text-ink";
 const INPUT_CLASS =
-  "mt-1 w-full rounded-lg border border-[#E8DDD4] px-4 py-2 text-[#2C2C2C] focus:border-[#C8956C] focus:outline-none";
+  "mt-1 w-full rounded-lg border border-border px-4 py-2 text-ink focus:border-saffron";
 const BUTTON_CLASS =
-  "w-full rounded-lg bg-[#C8956C] px-4 py-2 font-medium text-white transition hover:bg-[#b17f57] disabled:opacity-60";
+  "w-full rounded-lg bg-saffron px-4 py-2 font-medium text-indigo transition hover:bg-gold disabled:opacity-60";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -112,15 +112,15 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#FDF6EC] p-8">
-      {step === "checking" && <p className="text-[#6B5B4E]">Loading...</p>}
+    <main id="main" className="flex min-h-screen items-center justify-center bg-page p-8">
+      {step === "checking" && <p className="text-ink-mid">Loading...</p>}
 
       {step === "email" && (
         <div className={CARD_CLASS}>
-          <h1 className="text-2xl font-semibold text-[#2C2C2C]">
+          <h1 className="font-display text-2xl font-semibold text-ink">
             Welcome to Katha
           </h1>
-          <p className="mt-2 text-sm text-[#6B5B4E]">
+          <p className="mt-2 text-sm text-ink-mid">
             Let&apos;s set up daily conversations for your parent. Enter your
             email to get started.
           </p>
@@ -140,17 +140,17 @@ export default function OnboardingPage() {
             <button type="submit" disabled={submitting} className={BUTTON_CLASS}>
               {submitting ? "Sending..." : "Continue"}
             </button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
           </form>
         </div>
       )}
 
       {step === "verify" && (
         <div className={`${CARD_CLASS} text-center`}>
-          <h1 className="text-2xl font-semibold text-[#2C2C2C]">
+          <h1 className="font-display text-2xl font-semibold text-ink">
             Check your email
           </h1>
-          <p className="mt-3 text-sm text-[#6B5B4E]">
+          <p className="mt-3 text-sm text-ink-mid">
             We&apos;ve sent a login link to <strong>{email}</strong>. Click it
             to continue.
           </p>
@@ -159,7 +159,7 @@ export default function OnboardingPage() {
 
       {step === "profile" && (
         <div className={CARD_CLASS}>
-          <h1 className="text-2xl font-semibold text-[#2C2C2C]">
+          <h1 className="font-display text-2xl font-semibold text-ink">
             Tell us about your parent
           </h1>
           <form onSubmit={handleProfileSubmit} className="mt-6 flex flex-col gap-4">
@@ -250,20 +250,20 @@ export default function OnboardingPage() {
             <button type="submit" disabled={submitting} className={BUTTON_CLASS}>
               {submitting ? "Saving..." : "Continue"}
             </button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
           </form>
         </div>
       )}
 
       {step === "consent" && (
         <div className={CARD_CLASS}>
-          <h1 className="text-2xl font-semibold text-[#2C2C2C]">
+          <h1 className="font-display text-2xl font-semibold text-ink">
             Before we begin
           </h1>
-          <p className="mt-2 text-sm text-[#6B5B4E]">
+          <p className="mt-2 text-sm text-ink-mid">
             Please read and agree to the following:
           </p>
-          <ul className="mt-4 flex flex-col gap-2 text-sm text-[#2C2C2C]">
+          <ul className="mt-4 flex flex-col gap-2 text-sm text-ink">
             {[
               `Katha will record voice conversations with ${parentName || "your parent"} via WhatsApp`,
               "Conversations are transcribed and stored to preserve life stories",
@@ -274,7 +274,7 @@ export default function OnboardingPage() {
               "Katha is not a medical service. For emergencies, please call 112.",
             ].map((line) => (
               <li key={line} className="flex gap-2">
-                <span aria-hidden="true" className="text-[#C8956C]">
+                <span aria-hidden="true" className="text-saffron-ink">
                   ✓
                 </span>
                 <span>{line}</span>
@@ -282,7 +282,7 @@ export default function OnboardingPage() {
             ))}
           </ul>
 
-          <label className="mt-6 flex items-start gap-2 text-sm text-[#2C2C2C]">
+          <label className="mt-6 flex items-start gap-2 text-sm text-ink">
             <input
               type="checkbox"
               checked={consentChecked}
@@ -299,7 +299,7 @@ export default function OnboardingPage() {
             href="/privacy"
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-block text-sm text-[#C8956C] underline"
+            className="mt-2 inline-block text-sm text-saffron-ink underline"
           >
             Read Privacy Policy →
           </a>
@@ -312,14 +312,14 @@ export default function OnboardingPage() {
           >
             {submitting ? "Saving..." : "I Agree"}
           </button>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-2 text-sm text-danger">{error}</p>}
         </div>
       )}
 
       {step === "done" && doneInfo && (
         <div className={`${CARD_CLASS} text-center`}>
-          <h1 className="text-2xl font-semibold text-[#2C2C2C]">All set!</h1>
-          <p className="mt-3 text-sm text-[#6B5B4E]">
+          <h1 className="font-display text-2xl font-semibold text-ink">All set!</h1>
+          <p className="mt-3 text-sm text-ink-mid">
             Katha will message {doneInfo.parentName} tomorrow at{" "}
             {doneInfo.sessionTime} IST.
           </p>

@@ -11,10 +11,10 @@ export function StoryDetailClient({ id }: { id: string }) {
   );
 
   if (isLoading) {
-    return <main className="p-8 text-[#6B5B4E]">Loading...</main>;
+    return <main id="main" className="p-8 text-ink-mid">Loading...</main>;
   }
   if (error || !story) {
-    return <main className="p-8 text-red-600">Story not found.</main>;
+    return <main id="main" className="p-8 text-danger">Story not found.</main>;
   }
 
   const date = new Date(story.created_at).toLocaleDateString("en-IN", {
@@ -32,36 +32,36 @@ export function StoryDetailClient({ id }: { id: string }) {
   ].filter(([, value]) => value) as Array<[string, string]>;
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <Link href="/family/stories" className="text-sm text-[#C8956C] hover:underline">
+    <main id="main" className="mx-auto max-w-2xl px-6 py-10">
+      <Link href="/family/stories" className="text-sm text-saffron-ink hover:underline">
         ← Back to stories
       </Link>
 
       <article className="mt-4">
-        <span className="inline-block rounded-full bg-[#FDF6EC] px-3 py-1 text-xs font-medium text-[#6B5B4E]">
+        <span className="inline-block rounded-full bg-page px-3 py-1 text-xs font-medium text-ink-mid">
           {story.domain_label}
         </span>
-        <h1 className="mt-3 text-2xl font-semibold text-[#2C2C2C]">
+        <h1 className="font-display mt-3 text-2xl font-semibold text-ink">
           {story.title || "Untitled story"}
         </h1>
-        <time dateTime={story.created_at} className="mt-1 block text-sm text-[#6B5B4E]">
+        <time dateTime={story.created_at} className="mt-1 block text-sm text-ink-mid">
           {date}
         </time>
 
         {story.verbatim_quote && (
-          <blockquote className="mt-6 border-l-4 border-[#C8956C] pl-4 text-lg italic text-[#2C2C2C]">
+          <blockquote className="mt-6 font-display border-l-4 border-saffron pl-4 text-lg italic text-ink">
             &ldquo;{story.verbatim_quote}&rdquo;
           </blockquote>
         )}
 
-        <p className="mt-6 whitespace-pre-wrap text-[#2C2C2C]">{story.narrative}</p>
+        <p className="mt-6 whitespace-pre-wrap text-ink">{story.narrative}</p>
 
         {details.length > 0 && (
           <dl className="mt-8 grid grid-cols-2 gap-4 text-sm">
             {details.map(([label, value]) => (
               <div key={label} className={label === "Why it mattered" ? "col-span-2" : ""}>
-                <dt className="font-medium text-[#6B5B4E]">{label}</dt>
-                <dd className="text-[#2C2C2C]">{value}</dd>
+                <dt className="font-medium text-ink-mid">{label}</dt>
+                <dd className="text-ink">{value}</dd>
               </div>
             ))}
           </dl>

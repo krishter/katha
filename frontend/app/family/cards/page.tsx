@@ -16,13 +16,13 @@ export default function CardsPage() {
   const hasNextPage = data ? page * CARDS_PAGE_LIMIT < data.total : false;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="text-2xl font-semibold text-[#2C2C2C]">Memory Cards</h1>
+    <main id="main" className="mx-auto max-w-4xl px-6 py-10">
+      <h1 className="font-display text-2xl font-semibold text-ink">Memory Cards</h1>
 
-      {isLoading && <p className="mt-6 text-[#6B5B4E]">Loading...</p>}
-      {error && <p className="mt-6 text-red-600">Couldn&apos;t load memory cards.</p>}
+      {isLoading && <p className="mt-6 text-ink-mid">Loading...</p>}
+      {error && <p className="mt-6 text-danger">Couldn&apos;t load memory cards.</p>}
       {data && data.cards.length === 0 && (
-        <p className="mt-6 text-[#6B5B4E]">No memory cards yet.</p>
+        <p className="mt-6 text-ink-mid">No memory cards yet.</p>
       )}
 
       {data && data.cards.length > 0 && (
@@ -37,16 +37,16 @@ export default function CardsPage() {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="rounded-lg border border-[#E8DDD4] px-4 py-2 text-sm text-[#2C2C2C] disabled:opacity-40"
+            className="rounded-lg border border-border px-4 py-2 text-sm text-ink disabled:opacity-40"
           >
             Previous
           </button>
-          <span className="text-sm text-[#6B5B4E]">Page {page}</span>
+          <span className="text-sm text-ink-mid">Page {page}</span>
           <button
             type="button"
             onClick={() => setPage((p) => p + 1)}
             disabled={!hasNextPage}
-            className="rounded-lg border border-[#E8DDD4] px-4 py-2 text-sm text-[#2C2C2C] disabled:opacity-40"
+            className="rounded-lg border border-border px-4 py-2 text-sm text-ink disabled:opacity-40"
           >
             Next
           </button>
@@ -62,7 +62,7 @@ export default function CardsPage() {
           onClick={() => setSelected(null)}
         >
           <div
-            className="max-w-md rounded-xl bg-white p-4"
+            className="max-w-md rounded-xl bg-surface p-4"
             onClick={(e) => e.stopPropagation()}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- S3 host is env-configured, not a fixed domain to allowlist for next/image */}
@@ -75,14 +75,14 @@ export default function CardsPage() {
               <a
                 href={selected.image_url}
                 download
-                className="rounded-lg bg-[#C8956C] px-4 py-2 text-sm font-medium text-white hover:bg-[#b17f57]"
+                className="rounded-lg bg-saffron px-4 py-2 text-sm font-medium text-indigo hover:bg-gold"
               >
                 Download
               </a>
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="text-sm text-[#6B5B4E] hover:text-[#2C2C2C]"
+                className="text-sm text-ink-mid hover:text-ink"
               >
                 Close
               </button>

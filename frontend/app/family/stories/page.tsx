@@ -23,13 +23,13 @@ export default function StoriesPage() {
   const tabClass = (active: boolean) =>
     `rounded-full px-4 py-1.5 text-sm font-medium transition ${
       active
-        ? "bg-[#C8956C] text-white"
-        : "border border-[#E8DDD4] bg-white text-[#6B5B4E]"
+        ? "bg-saffron text-indigo"
+        : "border border-border bg-surface text-ink-mid"
     }`;
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="text-2xl font-semibold text-[#2C2C2C]">Stories</h1>
+    <main id="main" className="mx-auto max-w-3xl px-6 py-10">
+      <h1 className="font-display text-2xl font-semibold text-ink">Stories</h1>
 
       <nav aria-label="Filter by life chapter" className="mt-6 flex flex-wrap gap-2">
         <button
@@ -54,10 +54,10 @@ export default function StoriesPage() {
       </nav>
 
       <div className="mt-6 flex flex-col gap-4">
-        {isLoading && <p className="text-[#6B5B4E]">Loading...</p>}
-        {error && <p className="text-red-600">Couldn&apos;t load stories.</p>}
+        {isLoading && <p className="text-ink-mid">Loading...</p>}
+        {error && <p className="text-danger">Couldn&apos;t load stories.</p>}
         {data && data.stories.length === 0 && (
-          <p className="text-[#6B5B4E]">No stories yet in this chapter.</p>
+          <p className="text-ink-mid">No stories yet in this chapter.</p>
         )}
         {data?.stories.map((story) => <StoryCard key={story.id} story={story} />)}
       </div>
@@ -68,18 +68,18 @@ export default function StoriesPage() {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="rounded-lg border border-[#E8DDD4] px-4 py-2 text-sm text-[#2C2C2C] disabled:opacity-40"
+            className="rounded-lg border border-border px-4 py-2 text-sm text-ink disabled:opacity-40"
           >
             Previous
           </button>
-          <span className="text-sm text-[#6B5B4E]">
+          <span className="text-sm text-ink-mid">
             Page {data.page} of {data.pages}
           </span>
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
             disabled={page >= data.pages}
-            className="rounded-lg border border-[#E8DDD4] px-4 py-2 text-sm text-[#2C2C2C] disabled:opacity-40"
+            className="rounded-lg border border-border px-4 py-2 text-sm text-ink disabled:opacity-40"
           >
             Next
           </button>

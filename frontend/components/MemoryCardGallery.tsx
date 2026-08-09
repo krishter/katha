@@ -13,7 +13,7 @@ export function MemoryCardGallery({ cards, onSelect }: MemoryCardGalleryProps) {
           key={card.id}
           type="button"
           onClick={() => onSelect(card)}
-          className="group relative block overflow-hidden rounded-lg border border-[#E8DDD4] bg-white text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8956C]"
+          className="group relative block overflow-hidden rounded-lg border border-border bg-surface text-left"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- S3 host is env-configured, not a fixed domain to allowlist for next/image */}
           <img
