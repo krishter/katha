@@ -584,6 +584,11 @@ async def process_voice_turn(
 
     # 6. Post-turn policy check (malformed dialogue response)
     post_check = conversation_policy.check_post_turn(llm_response.content, state)
+    if post_check.salvaged_untagged:
+        logger.warning(
+            "Dialogue reply arrived without its <response> wrapper — salvaged "
+            "the bare text rather than discarding it"
+        )
     if not post_check.allowed:
         logger.warning("Post-turn policy blocked: malformed LLM response")
         return await _send_or_degrade(

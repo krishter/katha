@@ -80,6 +80,9 @@ class PolicyResult:
     override_response: str | None
     crisis_detected: bool
     matched_pattern: str | None = None
+    # True when the dialogue reply was accepted despite arriving without its
+    # <response> wrapper. Callers log this so the rate stays observable.
+    salvaged_untagged: bool = False
 
 
 def check_pre_turn(transcript: str, session_state: SessionState) -> PolicyResult:
@@ -117,27 +120,78 @@ def check_response_for_crisis(response_text: str) -> PolicyResult:
     return PolicyResult(allowed=True, override_response=None, crisis_detected=False)
 
 
+def salvage_untagged_response(llm_response: str) -> str | None:
+    """
+    Decide whether an untagged dialogue output is usable as-is.
+
+    The dialogue call is asked to wrap its reply in <response>, but on short,
+    low-engagement user turns the model routinely answers in bare prose and
+    drops the wrapper. Measured on a two-word "not much to say" turn, that
+    happens on roughly half of calls — and the replies themselves are fine.
+    Discarding them costs a good answer and hands the user
+    _MALFORMED_RESPONSE ("could you tell me that again?"), which is the worst
+    possible reply to someone who is already disengaging.
+
+    Returns the salvaged text, or None if the output is genuinely unusable.
+    """
+    text = llm_response.strip()
+
+    if not text:
+        return None
+
+    # An opening tag with no closing tag means the reply was cut off
+    # mid-sentence (max_tokens). Truncated prose is not safe to send.
+    if "<response>" in text and "</response>" not in text:
+        return None
+
+    # Machinery leaking into the dialogue channel: the extraction block
+    # belongs to a separate call, and a bare JSON object is not a reply.
+    if "<extraction>" in text:
+        return None
+    if text.startswith("{") or text.startswith("["):
+        return None
+
+    # Too short to be a real conversational turn.
+    if len(text) < 15:
+        return None
+
+    return text
+
+
 def check_post_turn(llm_response: str, session_state: SessionState) -> PolicyResult:
     """
     Checks after the dialogue LLM call responds:
-    1. Validate the <response> tag is present.
-    2. If malformed, return override_response with safe fallback.
+    1. Accept a well-formed <response> block.
+    2. Otherwise try to salvage a bare, untagged reply.
+    3. Only fall back to _MALFORMED_RESPONSE when nothing usable came back.
 
     The dialogue call returns <response> only — extraction is a separate
     call (see check_extraction_response) with its own guard.
+
+    Note the missing-tag path is not a silent pass: callers log it, and the
+    crisis safety net in check_response_for_crisis still runs over whatever
+    text is ultimately sent, salvaged or not.
     """
     has_response = bool(
         re.search(r"<response>\s*.+?\s*</response>", llm_response, re.DOTALL)
     )
 
-    if not has_response:
+    if has_response:
+        return PolicyResult(allowed=True, override_response=None, crisis_detected=False)
+
+    if salvage_untagged_response(llm_response) is not None:
         return PolicyResult(
-            allowed=False,
-            override_response=_MALFORMED_RESPONSE,
+            allowed=True,
+            override_response=None,
             crisis_detected=False,
+            salvaged_untagged=True,
         )
 
-    return PolicyResult(allowed=True, override_response=None, crisis_detected=False)
+    return PolicyResult(
+        allowed=False,
+        override_response=_MALFORMED_RESPONSE,
+        crisis_detected=False,
+    )
 
 
 def check_extraction_response(llm_response: str) -> bool:
