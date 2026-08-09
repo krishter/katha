@@ -429,3 +429,36 @@ WS1 must complete before WS2.1 (extraction split depends on per-turn persistence
   the bucket level, a future regression could re-expose objects silently.
   Needs a manual check before pilot launch — flagging rather than
   claiming it's done.
+- **(WS5.4) `named_entities` has no schema in `build_extraction_prompt` and
+  is dead code.** Live eval runs (TC-06) confirmed `story_extractor.process_extraction`
+  never reads `extraction_json["named_entities"]` at all — the real
+  fact-store-feeding path is the separate, once-per-session
+  `entity_extractor.extract_entities` call, which has its own schema
+  (`people`/`places`/`dates`/`institutions`) with no slot for
+  household-composition facts (e.g. "joint family, 15 people"). Fixing
+  this properly means deciding whether the per-turn `named_entities` field
+  should be wired into `process_extraction`/`fact_store` at all (risking a
+  second, possibly-conflicting write path into the same fact store), or
+  dropped entirely in favor of extending `entity_extractor`'s schema.
+  Deferred as a genuine design decision, not a schema typo like the
+  `story_atoms` fix this workstream did make.
+- **(WS5.4) TC-06's transcription-accuracy gap is not a prompt issue.**
+  With the code-mixed text fed directly into the extraction call
+  (bypassing STT), entity extraction correctly captures `joint`/`15` — so
+  the remaining TC-06 failure is Sarvam Saaras V3's transcription accuracy
+  on code-mixed Hindi-English audio, which `system_prompt.py` has no
+  influence over. Out of scope for this workstream; would need real
+  code-mixed audio samples and Sarvam-side evaluation to address.
+- **(WS5.4) TC-09 closing instruction loses to follow-up pull when the
+  user's last line still carries narrative momentum.** The Layer 4
+  closing/preview instruction (fires when `goal_met=True`) works reliably
+  when the user's own words signal they're done for now, but in 8/8 live
+  samples where the user's last utterance was a very ordinary
+  mid-story-sounding line (e.g. "...it took almost a year, but it worked
+  out"), Katha asked another follow-up question instead of closing. This
+  is a real gap for a product whose default state is "user is still
+  talking" — worth a dedicated regression case (TC-09b) and a stronger
+  instruction (e.g. "even if their last answer feels unfinished, do not
+  ask another question this turn — the domain goal is already met")
+  before pilot, but is additional prompt-tuning beyond this workstream's
+  chartered defects.

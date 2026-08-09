@@ -186,3 +186,123 @@ def test_extraction_prompt_notes_goal_already_met():
 def test_extraction_prompt_omits_goal_met_note_when_not_met():
     prompt = _build_extraction()
     assert "already met" not in prompt.lower()
+
+
+def test_extraction_prompt_gives_story_atoms_a_schema():
+    """
+    Regression guard (WS5.4 eval finding): significant_people had a full
+    example object but story_atoms was just `[]`, and live eval runs
+    showed the LLM returning atoms as plain strings — which crashes
+    process_extraction (compute_completeness calls atom.get(...)) and
+    silently drops the whole turn's extraction. story_atoms must show a
+    concrete per-item shape, not an empty list.
+    """
+    prompt = _build_extraction()
+    assert '"story_atoms": [\n' in prompt or '"story_atoms": [' in prompt
+    assert "narrative" in prompt
+    assert "not a plain string" in prompt.lower()
+
+
+# ── Layer 3 "early session" branch ────────────────────────────────────────
+
+
+def test_prompt_layer3_not_early_session_when_only_significant_people_known():
+    """
+    Regression guard (WS5.4 eval finding): the early-session claim only
+    checked prior_context.facts, so a session with significant_people or
+    open_threads but no structured facts yet got told "you don't yet know
+    much" right above a block naming a specific person it does know about
+    — an internally contradictory prompt.
+    """
+    prior = PriorContext(
+        significant_people=[
+            {
+                "name": "Mr. Iyer",
+                "relationship": "school teacher",
+                "why_significant": "Inspired teaching career",
+            }
+        ]
+    )
+    prompt = build_system_prompt(_PROFILE, _SESSION, prior)
+    assert "early session" not in prompt.lower()
+
+
+def test_prompt_layer3_not_early_session_when_only_open_threads_known():
+    prior = PriorContext(open_threads=["name of father's shop"])
+    prompt = build_system_prompt(_PROFILE, _SESSION, prior)
+    assert "early session" not in prompt.lower()
+
+
+def test_prompt_layer3_is_early_session_when_nothing_known():
+    prompt = build_system_prompt(_PROFILE, _SESSION, PriorContext())
+    assert "early session" in prompt.lower()
+
+
+# ── Layer 2 principle 8: progress through incomplete stories ──────────────
+
+
+def test_prompt_contains_eighth_principle_progress_not_repeat():
+    prompt = _build()
+    assert "don't repeat" in prompt.lower()
+
+
+# ── Layer 4 recall-forcing instruction ──────────────────────────────────────
+
+
+def test_prompt_forces_recall_names_the_significant_person():
+    """
+    Regression guard (WS5.4 eval, pass 2): a generic "you have known facts
+    ... listed in Layer 3 above" pointer scored 0/3 on live proactive-recall
+    runs. Layer 4 now names the actual person/fact so the model has a
+    concrete anchor to reach for, not just a pointer to go re-read.
+    """
+    prior = PriorContext(
+        significant_people=[{"name": "Mr. Iyer", "relationship": "school teacher"}]
+    )
+    late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
+    prompt = build_system_prompt(_PROFILE, late_session, prior)
+    assert "Mr. Iyer" in prompt
+    assert "you know about" in prompt.lower()
+
+
+def test_prompt_forces_recall_names_a_fact_when_no_significant_person():
+    prior = PriorContext(facts={"sister_name": "Kamala"})
+    late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
+    prompt = build_system_prompt(_PROFILE, late_session, prior)
+    assert "Kamala" in prompt
+    assert "you know about" in prompt.lower()
+
+
+def test_prompt_omits_recall_forcing_when_nothing_known():
+    late_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 2})
+    prompt = build_system_prompt(_PROFILE, late_session, PriorContext())
+    assert "you know about" not in prompt.lower()
+
+
+def test_prompt_omits_recall_forcing_before_exchange_count_threshold():
+    """Exchange 0-1 are naturally about the domain's own entry question —
+    the forcing instruction should only kick in from exchange 2 onward."""
+    prior = PriorContext(facts={"sister_name": "Kamala"})
+    early_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 1})
+    prompt = build_system_prompt(_PROFILE, early_session, prior)
+    assert "you know about" not in prompt.lower()
+
+
+# ── Layer 3 entry question gating ────────────────────────────────────────────
+
+
+def test_prompt_includes_entry_question_on_first_exchange():
+    prompt = _build()  # _SESSION has exchange_count=0
+    assert "Domain entry question" in prompt
+
+
+def test_prompt_omits_entry_question_after_first_exchange():
+    """
+    Regression guard (WS5.4 eval, pass 2): the entry question was injected
+    every turn, unconditionally, and kept pulling the model back to it as
+    if it were the mandatory topic — crowding out Layer 4's recall
+    instruction. It should only appear on the domain's opening exchange.
+    """
+    later_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 1})
+    prompt = build_system_prompt(_PROFILE, later_session, _PRIOR)
+    assert "Domain entry question" not in prompt

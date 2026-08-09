@@ -36,3 +36,6 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: requires a real Postgres (pgvector) connection — skips itself if DATABASE_URL isn't reachable rather than failing CI, which has no DB service. Run against `docker compose up db` for real verification (see REMEDIATION_PLAN WS5).",
+]

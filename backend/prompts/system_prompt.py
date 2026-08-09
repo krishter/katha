@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from prompts.domains import get_domain
 
@@ -86,7 +86,20 @@ The everyday things — the neighbourhood, the people, the small moments \
 a signal, not a detail. Gently go deeper in the moment \
 ("What was it about him that stayed with you?"), and if the conversation moves on \
 before it is fully explored, flag them in the extraction output so the next session \
-can return to them. People who shaped a life don't respect domain boundaries."""
+can return to them. People who shaped a life don't respect domain boundaries.
+
+7. Use what you already know, unprompted: Layer 3 below lists facts, open threads, \
+and significant people from past sessions. You do not need to wait for the user to \
+bring these up — when today's topic gives a natural opening, raise them yourself \
+("You mentioned your sister Kamala before — was she there too?"). Demonstrating \
+memory, not just having it, is what builds the user's trust that they are truly \
+being listened to.
+
+8. Progress through an incomplete story, don't repeat: if the user's last answer \
+left out who, what, when, where, or why, look at your own most recent question in \
+the conversation above before asking again. Never re-ask about the same missing \
+piece in different words — pick a different one of the five each turn, until the \
+story feels complete."""
 
 
 def _layer3_life_context(
@@ -95,11 +108,21 @@ def _layer3_life_context(
     prior_context: PriorContext,
 ) -> str:
     domain = get_domain(session_state.domain)
-    if not prior_context.facts:
+    has_prior_context = (
+        prior_context.facts
+        or prior_context.significant_people
+        or prior_context.open_threads
+    )
+    if not has_prior_context:
         context_block = (
             f"This is an early session. You don't yet know much about "
             f"{user_profile.name} beyond what their family shared: "
             f"{user_profile.onboarding_context or 'No context provided.'}"
+        )
+    elif not prior_context.facts:
+        context_block = (
+            f"You don't yet have structured facts about {user_profile.name}, "
+            f"but see below for people and threads from past sessions."
         )
     else:
         facts_formatted = "\n".join(
@@ -129,14 +152,59 @@ def _layer3_life_context(
             f"mentioned in past sessions and not yet fully explored:\n{lines}"
         )
 
+    # The entry question is only a suggested opener for the very first
+    # exchange of a domain — injecting it every turn kept pulling the
+    # model back to it as if it were the mandatory topic, crowding out
+    # Layer 4's instruction to work in already-known context instead
+    # (see REMEDIATION_PLAN WS5.4 eval finding on TC-03/TC-11).
+    entry_line = ""
+    if session_state.exchange_count == 0:
+        entry_line = f"\nDomain entry question: {domain.entry_prompt}"
+
     return f"""LAYER 3 — LIFE CONTEXT
 {context_block}{threads}{significant_block}
 
-Today's focus domain: {domain.name}
-Domain entry question: {domain.entry_prompt}"""
+Today's focus domain: {domain.name}{entry_line}"""
 
 
-def _layer4_session_state(session_state: SessionState) -> str:
+def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
+    """
+    Pick one concrete, nameable thing from prior_context to anchor the
+    Layer 4 recall instruction to. A generic pointer back to "Layer 3
+    above" scored 0/3 on live proactive-recall eval runs — the model
+    treated it as a soft nudge satisfiable by any lexical match rather
+    than the "loose connection" leap it asked for. Naming the actual
+    person/fact/thread gives it something concrete to reach for.
+    """
+    if prior_context.significant_people:
+        person = prior_context.significant_people[0]
+        name = person.get("name", "")
+        if name:
+            relationship = person.get("relationship", "")
+            return f"{name}{f' ({relationship})' if relationship else ''}"
+
+    if prior_context.facts:
+        people = prior_context.facts.get("people")
+        if isinstance(people, list) and people and isinstance(people[0], dict):
+            name = people[0].get("name", "")
+            if name:
+                relationship = people[0].get("relationship", "")
+                return f"{name}{f' ({relationship})' if relationship else ''}"
+        for key, value in prior_context.facts.items():
+            if key == "people" or not value:
+                continue
+            shown = value[0] if isinstance(value, list) else value
+            return f"their {key.replace('_', ' ')} ({shown})"
+
+    if prior_context.open_threads:
+        return prior_context.open_threads[0]
+
+    return None
+
+
+def _layer4_session_state(
+    session_state: SessionState, prior_context: Optional[PriorContext] = None
+) -> str:
     domain = get_domain(session_state.domain)
     closing_instruction = ""
     if session_state.goal_met:
@@ -145,12 +213,24 @@ def _layer4_session_state(session_state: SessionState) -> str:
             "this turn as your closing exchange: wrap up warmly and let them "
             "know what you'd love to hear about tomorrow."
         )
+    recall_instruction = ""
+    anchor = _pick_recall_anchor(prior_context) if prior_context else None
+    if anchor and session_state.exchange_count >= 2:
+        recall_instruction = (
+            f"\nYou know about {anchor} from a past session. If you haven't "
+            f"already brought them/it up so far in this conversation, pivot "
+            f"one sentence to ask about {anchor} now — even if the connection "
+            f"to what the user just said is only loose (family, feelings, "
+            f"people, and place all count as a bridge). Do this before the "
+            f"conversation moves further away from the opening."
+        )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
 Current domain: {domain.name}
 Exchanges so far this session: {session_state.exchange_count}
 Target story atoms for this domain: {domain.target_story_atoms}
-Domain goal already met: {session_state.goal_met}{closing_instruction}
+Domain goal already met: {session_state.goal_met}\
+{closing_instruction}{recall_instruction}
 
 Hard constraints:
 - Never bring up medical details or financial struggles unless the user initiates them.
@@ -189,7 +269,7 @@ def build_system_prompt(
         _layer1_persona(user_profile),
         _layer2_therapeutic(),
         _layer3_life_context(user_profile, session_state, prior_context),
-        _layer4_session_state(session_state),
+        _layer4_session_state(session_state, prior_context),
         _layer5_output_format(),
     ]
     return "\n\n".join(layers)
@@ -242,7 +322,20 @@ Respond in exactly this format and no other:
 
 <extraction>
 {{
-  "story_atoms": [],
+  "story_atoms": [
+    {{
+      "domain": "string — the life domain this belongs to, e.g. childhood",
+      "title": "string — a short label for this story",
+      "narrative": "string — a 1-3 sentence summary of what was said",
+      "who": ["string", "..."],
+      "what": "string or null",
+      "when_approx": "string or null — e.g. circa 1960, the 1970s",
+      "where_approx": "string or null",
+      "why": "string or null — why this mattered to them",
+      "verbatim_quote": "string or null — an exact quote worth preserving",
+      "open_threads": ["string — a detail worth following up next session", "..."]
+    }}
+  ],
   "named_entities": {{}},
   "significant_people": [
     {{
@@ -259,6 +352,12 @@ emotional language, explicit phrases like changed my life or I still think about
   "session_end_suggested": false
 }}
 </extraction>
+
+For story_atoms: only include an entry if the user's statement actually \
+contains a coherent piece of their story — do not fabricate one from a short \
+or contentless reply. Each entry must be a JSON object with exactly the \
+fields shown above, not a plain string. If nothing story-worthy was said, \
+return an empty list.
 
 For significant_people: only add entries when there is a genuine signal — \
 repetition, unprompted mention, unusual emotional detail, or explicit phrases \

@@ -68,6 +68,13 @@ async def process_extraction(
     created_atoms: list[StoryAtom] = []
 
     for raw in raw_atoms:
+        if not isinstance(raw, dict):
+            logger.warning(
+                "Skipping malformed story atom for turn %s (expected object, got %s)",
+                turn_id,
+                type(raw).__name__,
+            )
+            continue
         score = compute_completeness(raw)
         atom = StoryAtom(
             session_id=session_uuid,

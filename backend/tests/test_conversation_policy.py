@@ -140,8 +140,46 @@ def test_response_only_is_allowed():
     assert result.override_response is None
 
 
-def test_completely_malformed_response_is_blocked():
-    result = check_post_turn("Just some plain text with no tags.", _SESSION)
+def test_untagged_prose_is_salvaged_not_discarded():
+    """The model drops the <response> wrapper on roughly half of short,
+    low-engagement turns. The reply itself is fine, so sending it beats
+    answering a disengaging user with "could you tell me that again?"."""
+    bare = (
+        "That's completely fine, sir. Even just a small memory is enough.\n\n"
+        "Was there one student who has stayed in your mind all these years?"
+    )
+    result = check_post_turn(bare, _SESSION)
+    assert result.allowed is True
+    assert result.override_response is None
+    assert result.salvaged_untagged is True
+
+
+def test_well_formed_response_is_not_marked_salvaged():
+    result = check_post_turn(_WELL_FORMED, _SESSION)
+    assert result.salvaged_untagged is False
+
+
+def test_truncated_response_tag_is_blocked():
+    """An opening tag with no closing tag means max_tokens cut the reply
+    off mid-sentence — that is not safe to send."""
+    truncated = "<response>I remember you telling me about the shop, and the"
+    result = check_post_turn(truncated, _SESSION)
+    assert result.allowed is False
+    assert result.override_response is not None
+
+
+def test_bare_json_is_blocked():
+    result = check_post_turn('{"story_atoms": []}', _SESSION)
+    assert result.allowed is False
+
+
+def test_empty_response_is_blocked():
+    result = check_post_turn("   \n  ", _SESSION)
+    assert result.allowed is False
+
+
+def test_too_short_response_is_blocked():
+    result = check_post_turn("Okay.", _SESSION)
     assert result.allowed is False
 
 

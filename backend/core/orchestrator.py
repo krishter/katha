@@ -584,6 +584,11 @@ async def process_voice_turn(
 
     # 6. Post-turn policy check (malformed dialogue response)
     post_check = conversation_policy.check_post_turn(llm_response.content, state)
+    if post_check.salvaged_untagged:
+        logger.warning(
+            "Dialogue reply arrived without its <response> wrapper — salvaged "
+            "the bare text rather than discarding it"
+        )
     if not post_check.allowed:
         logger.warning("Post-turn policy blocked: malformed LLM response")
         return await _send_or_degrade(
@@ -749,5 +754,14 @@ async def run_extraction_for_turn(
         )
         return
 
-    if session_manager.should_end_session(new_state):
+    should_close = session_manager.should_end_session(
+        new_state, goal_met_before_this_turn=session_state.goal_met
+    )
+    if new_state.goal_met and not session_state.goal_met and not should_close:
+        logger.info(
+            "Session %s just reached its domain goal — deferring close to "
+            "the next turn's closing exchange",
+            session_id,
+        )
+    if should_close:
         await close_and_process_session(session_id, db)

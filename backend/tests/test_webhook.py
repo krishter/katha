@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from adapters.whatsapp_stub import get_whatsapp_adapter
@@ -397,11 +398,20 @@ def test_degraded_text_response_is_sent_as_text_not_voice_note():
     stub.send_text.assert_called_once_with(_FROM_NUMBER, text_result.response_text)
 
 
-def test_delivery_failure_falls_back_to_text():
-    """If send_voice_note itself fails, the handler must still get the
-    same content to the user as text — not swallow the failure silently."""
+@pytest.mark.parametrize(
+    "failure_label",
+    ["Twilio is down", "S3 upload failed: bucket unreachable"],
+)
+def test_delivery_failure_falls_back_to_text(caplog, failure_label):
+    """
+    If send_voice_note itself fails — whether the failure originates in
+    Twilio's API or in the S3 upload send_voice_note does internally
+    before calling Twilio — the handler must still get the same content
+    to the user as text (not swallow the failure silently), and must log
+    it at ERROR with enough context to investigate (WS5.2).
+    """
     stub = _make_stub()
-    stub.send_voice_note = AsyncMock(side_effect=RuntimeError("Twilio is down"))
+    stub.send_voice_note = AsyncMock(side_effect=RuntimeError(failure_label))
     turn = _make_turn_result()
     app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
     try:
@@ -430,6 +440,9 @@ def test_delivery_failure_falls_back_to_text():
 
     assert response.status_code == 200
     stub.send_text.assert_called_once_with(_FROM_NUMBER, turn.response_text)
+
+    error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert any(_FROM_NUMBER in r.getMessage() for r in error_records)
 
 
 def test_voice_note_passes_background_tasks_to_process_voice_turn():
