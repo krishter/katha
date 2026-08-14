@@ -1,40 +1,30 @@
 from __future__ import annotations
 
 import logging
+import uuid as _uuid
 
-from openai import AsyncOpenAI
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import settings
 from models.story_atom import StoryAtom
 
 logger = logging.getLogger(__name__)
 
-_EMBED_MODEL = "text-embedding-3-small"
-_EMBED_DIM = 1536
-
-# One client for the process, not one per call.
-_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, timeout=20.0, max_retries=2)
-
-
-async def _embed(text: str) -> list[float]:
-    response = await _client.embeddings.create(input=text, model=_EMBED_MODEL)
-    return response.data[0].embedding
-
-
-async def embed_and_store(story_atom: StoryAtom, db: AsyncSession) -> None:
-    """
-    Embed story_atom.narrative using text-embedding-3-small.
-    Store the resulting 1536-dim vector in story_atoms.embedding for the given row.
-    Idempotent — overwrites if embedding already exists.
-    """
-    vector = await _embed(story_atom.narrative)
-    await db.execute(
-        update(StoryAtom).where(StoryAtom.id == story_atom.id).values(embedding=vector)
-    )
-    await db.commit()
-    logger.info("Stored embedding for story atom %s", story_atom.id)
+# This module no longer embeds anything.
+#
+# It used to call OpenAI text-embedding-3-small to rank story atoms by
+# cosine similarity against the domain name. That was removed in Sprint 1
+# S1.5: the call was an unguarded hard dependency on every turn, it sent
+# verbatim life-history narratives across a border the DPDP constraint
+# exists to prevent, and the thing it approximated — "atoms belonging to
+# this domain" — is something SQL answers exactly.
+#
+# `story_atoms.embedding` and the pgvector extension are deliberately
+# retained. Nothing writes to them now, but at 100 sessions per user
+# rather than 5, recency stops being a good proxy for relevance and
+# semantic search starts earning its place again. The module keeps its
+# name and its function signature so reinstating it is a one-file change.
+# See docs/proposals/embedding-strategy.md.
 
 
 async def retrieve_relevant(
@@ -45,26 +35,31 @@ async def retrieve_relevant(
     current_session_id: str | None = None,
 ) -> list[StoryAtom]:
     """
-    Embed the domain name as the query.
-    Run cosine similarity search against story_atoms.embedding for this user.
-    Returns top_k results ordered by similarity.
-    Excludes story atoms from current_session_id (to avoid circular injection).
+    Most recent story atoms for this user, newest first, capped at top_k.
+    Atoms from the current session are excluded so today's own material is
+    not fed back into today's prompt.
+
+    Deliberately NOT filtered to `domain`, though S1.5 originally specified
+    that and it was measured before being rejected. Story atoms carry the
+    domain they are *about*, which is routinely not the domain of the
+    session that surfaced them: a childhood session yields three atoms all
+    tagged `childhood`, and session 2 opens on `family_ancestors`. Filtering
+    on equality returned zero of twelve available threads and emptied
+    Layer 3 — exactly the continuity failure gate WS5.3 exists to catch.
+
+    `domain` is kept in the signature because this function is the seam for
+    reinstating semantic retrieval, which would use it as the query text.
     """
     if db is None:
         return []
 
-    query_vector = await _embed(domain)
-
     stmt = (
         select(StoryAtom)
         .where(StoryAtom.user_id == user_id)
-        .where(StoryAtom.embedding.isnot(None))
-        .order_by(StoryAtom.embedding.op("<=>")(query_vector))
+        .order_by(StoryAtom.created_at.desc())
         .limit(top_k)
     )
     if current_session_id is not None:
-        import uuid as _uuid
-
         stmt = stmt.where(StoryAtom.session_id != _uuid.UUID(current_session_id))
 
     result = await db.execute(stmt)

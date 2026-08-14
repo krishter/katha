@@ -14,7 +14,6 @@ class Settings(BaseSettings):
 
     SARVAM_API_KEY: str
     ANTHROPIC_API_KEY: str
-    OPENAI_API_KEY: str
 
     # WhatsApp / Twilio
     WHATSAPP_ADAPTER: str = "twilio"  # "stub" in dev/test
@@ -75,7 +74,6 @@ def validate_production_config(s: Settings = settings) -> None:
     for name in (
         "ANTHROPIC_API_KEY",
         "SARVAM_API_KEY",
-        "OPENAI_API_KEY",
         "TWILIO_ACCOUNT_SID",
         "TWILIO_AUTH_TOKEN",
     ):

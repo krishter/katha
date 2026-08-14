@@ -24,7 +24,9 @@ Rules that apply throughout:
 
 ## Why this sprint, in one paragraph
 
-WS1–WS4 of the remediation plan are merged to `main`. WS5 — the workstream that *verifies* them — is not; it sits on `fix/ws5-verification` with six commits and roughly 1,075 lines of tests and prompt fixes. Meanwhile the onboarding consent checkbox tells every user, verbatim, that they can delete all their data from account settings, and no settings route exists anywhere in the application. Sprint 1 closes both: it lands the verification that proves the backend works, and it builds the two consent surfaces the product currently only promises.
+WS1–WS4 of the remediation plan were merged to `main`, but WS5 — the workstream that *verifies* them — had not been confirmed landed, and its two manual gates had never been run. Meanwhile the onboarding consent checkbox tells every user, verbatim, that they can delete all their data from account settings, and no settings route exists anywhere in the application. Sprint 1 closes both: it lands and exercises the verification that proves the backend works, and it builds the two consent surfaces the product currently only promises.
+
+**Updated 2026-08-14, after S1.** Running the manual gates was the right call — they found that the structured fact store had never once populated (a markdown-fence parse bug in `entity_extractor`) and that the core loop is currently non-functional because an unguarded OpenAI embedding call fails on every turn. Neither was visible to the automated suite. S1.5 was added in response; see the sequencing table at the bottom.
 
 ---
 
@@ -82,6 +84,111 @@ Open the PR, merge to `main`, tag `pre-pilot-verified`.
 **Acceptance:**
 - `main` contains all six WS5 commits.
 - `git branch --merged main` lists `fix/ws5-verification`.
+
+---
+
+## S1.5 — Remove the embedding dependency
+
+**Branch:** `fix/embedding-resilience`
+**Added:** 2026-08-14, after S1 completed. Not in the original plan.
+**Closes:** the second S1.2 finding (unguarded embedding call), plus the vendor-consolidation decision
+**Why now:** The core loop is currently non-functional — every turn raises and every user gets the fallback text. Nothing downstream in this sprint can be validated until that is fixed: S3.4's eval regression and S4's clean-database walkthrough both need turns that complete. This also touches `build_prior_context`, which S1.5's resilience fix would otherwise have to revisit twice.
+
+---
+
+### The finding this rests on
+
+`build_prior_context` (`core/orchestrator.py:107`) assembles four fields. Two come from `fact_store` (Postgres, no external call). Two come from `vector_store.retrieve_relevant`, which makes an OpenAI `text-embedding-3-small` call:
+
+| Field | Source | Rendered into Layer 3? |
+|---|---|---|
+| `facts` | `fact_store` | yes |
+| `significant_people` | `fact_store` | yes |
+| `open_threads` | `_extract_open_threads(recent_atoms)` — vector | yes |
+| `recent_stories` | `recent_atoms` — vector | **no** |
+
+`recent_stories` is assigned at `orchestrator.py:115` and declared at `system_prompt.py:41`. Those are the only two references in the backend. `_layer3_life_context` never renders it, it is absent from the `has_prior_context` check, and `_pick_recall_anchor` does not consider it. Half the retrieval work has never had any functional effect.
+
+The surviving half is thin. The embedding is not used to interpret threads — it only selects which 5 atoms get harvested, and the query it embeds is the **domain name string** (`retrieve_relevant(user_id, domain, ...)` → `_embed(domain)`). A SQL filter on `domain` is an exact match for what that embedding approximates.
+
+**Neither Anthropic nor Sarvam sells an embeddings API.** Anthropic has no embeddings endpoint and points to Voyage AI; Sarvam ships Saaras, Bulbul, Sarvam-M and the 30B/105B models but no vector service. Consolidating to two vendors therefore means removing the capability or self-hosting it — it cannot be done by swapping providers.
+
+---
+
+### 1.5.1 — Unblock the loop
+
+The OpenAI account returns HTTP 429 `insufficient_quota`. Either add credits, or complete 1.5.3 first — which removes the need for the account entirely. If 1.5.3 lands cleanly, do not re-fund the account.
+
+**Acceptance:** a full turn completes end to end against the stub adapter without hitting the `FailureStage.OTHER` fallback.
+
+---
+
+### 1.5.2 — Make retrieval failure degrade, not raise
+
+`build_prior_context` is called on every voice turn and is not wrapped, unlike the STT call above it. Wrap the retrieval half only. The fact store is Claude- and Postgres-backed and keeps working when embeddings do not, so a `PriorContext` carrying facts and significant people but no threads still produces a coherent session.
+
+Do this even if 1.5.3 removes the OpenAI call — the principle is that Layer 3 enrichment must never be able to take down a turn, and that should hold for whatever supplies it next.
+
+**Acceptance:**
+- A test injecting an exception into the retrieval path asserts the turn completes and the user receives a real reply, not fallback text.
+- A WARNING is logged with session context.
+- `facts` and `significant_people` are still populated in the degraded `PriorContext`.
+
+---
+
+### 1.5.3 — Re-source `open_threads` and retire the vector path
+
+Replace the embedding-ranked selection with a direct query: story atoms for this user, filtered to the current domain, most recent first, limit 5, excluding the current session — mirroring the existing exclusion in `retrieve_relevant`.
+
+Keep the `embedding` column on `story_atoms` and the pgvector extension in place. Nothing writes to them after this, but at 100 sessions per user rather than 5, recency-plus-domain stops being a good proxy and semantic search starts earning its place. Do not drop the column; this is a pilot-scale decision, not a permanent one.
+
+Remove `embed_and_store` from the extraction path, the `openai` dependency from `requirements.txt`, and `OPENAI_API_KEY` from `config.py` and `.env.example`.
+
+**Acceptance:**
+- Gate 5.3's two-session continuity check still passes: session 2's Layer 3 carries facts, significant people, and open threads from session 1. Paste the assembled prompt into the PR.
+- No import of `openai` remains outside `.venv`.
+- `story_atoms.embedding` and the pgvector extension still exist; no migration drops them.
+
+---
+
+### 1.5.4 — Decide `recent_stories`: implement or delete
+
+A product call, not an implementation detail. Somebody intended verbatim quotes to reach Layer 3 and the wiring was never finished.
+
+- **Delete** — remove the field from `PriorContext` and its assignment. Recommended for the pilot: evaluating a brand-new prompt feature mid-compliance-sprint adds eval risk for unclear gain.
+- **Implement** — render quotes into `_layer3_life_context` and measure. If they demonstrably improve conversation quality, that is the first real argument for reinstating semantic retrieval later, because selecting the most *evocative* quotes is a job cosine similarity does better than `ORDER BY created_at`.
+
+Whichever is chosen, record the reasoning in the PR body. If deleted, log the open question in `Found during Sprint 1` so Phase 2 does not rediscover it from scratch.
+
+**Acceptance:** no field on `PriorContext` is populated-but-unrendered after this item.
+
+---
+
+### 1.5.5 — Close the failure class
+
+Three instances in two weeks — the WS5.4 `story_atoms` schema gap, the `entity_extractor` fence parse, and now `recent_stories`. All the same shape: data assembled correctly and then silently not consumed, invisible to mocked tests because the mocks supply pre-parsed structures.
+
+Add a test that renders a fully-populated `PriorContext` through `build_system_prompt` and asserts every field appears in the output string. It is a cheap guard against the next one.
+
+**Acceptance:** the test fails if any `PriorContext` field is added without a corresponding render.
+
+---
+
+### 1.5.6 — Record the vendor decision
+
+Write a short decision record — `docs/proposals/embedding-strategy.md` — covering: why OpenAI was removed (DPDP cross-border transfer of verbatim life-history narratives, plus single-point-of-failure), why swapping vendors was not possible, what was kept in place for later, and the Phase 2 path.
+
+**Done 2026-08-14 (`dd9f3ff`).** The record documents two Phase 2 routes: Azure OpenAI in an India region (Route A, provisioning started) and self-hosted BGE-M3 (Route B, retained). Provisioning is deliberately decoupled from wiring — no code changes until the ~50-atom trigger.
+
+**Acceptance:** the decision record exists and is linked from `CLAUDE.md`'s Tech Stack section, which currently names `OpenAI text-embedding-3-small` and will otherwise be wrong.
+
+---
+
+### 1.5.7 — Eval regression
+
+Layer 3's thread selection changes in 1.5.3, and possibly its content in 1.5.4. Run TC-01–TC-10 via the `eval-runner` subagent.
+
+**Acceptance:** at or above target — 80%+ objective, 75%+ rubric. If threads regress, tune the SQL selection (ordering, limit, domain-scope) before considering reinstating embeddings.
 
 ---
 
@@ -237,6 +344,8 @@ Do not do these in Sprint 1. Several are P0 in the UX review and genuinely matte
 - **F-13 share sheet** (C5/C8), **F-09 silence handling** (E2), **F-10 entity surfacing** (C3/G3).
 - **TC-09b** and the closing-instruction strengthening logged under `Found during remediation`. Worth doing before pilot; not a blocker for onboarding.
 - The `named_entities` dead-code decision logged under WS5.4. It is a genuine design decision about whether a second write path into the fact store should exist at all, and it needs deciding deliberately rather than in a compliance sprint.
+- **Self-hosting an embedding model.** S1.5 removes the OpenAI dependency; it does not replace it. Standing up BGE-M3 or equivalent on India infrastructure is the Phase 2 path recorded in 1.5.6, not Sprint 1 work.
+- **Dropping `story_atoms.embedding` or the pgvector extension.** Deliberately retained. See 1.5.3.
 
 ---
 
@@ -244,12 +353,13 @@ Do not do these in Sprint 1. Several are P0 in the UX review and genuinely matte
 
 | Days | Workstream | Ship gate |
 |---|---|---|
-| 1 | S1 — land verification | WS5 on `main`; manual gates run and recorded |
+| 1 | S1 — land verification | ✅ done 2026-08-14; WS5 on `main`, tagged `pre-pilot-verified` |
+| 1–2 | S1.5 — remove embedding dependency | Turns complete without OpenAI; gate 5.3 still passes |
 | 2–3 | S2 — deletion is real | Consent audit passes with zero stranded objects |
 | 3–5 | S3 — parent consent | Parent is asked before session 1; evals at target |
 | 5–6 | S4 — sign-off | Clean-database walkthrough passes |
 
-S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. S2 and S3 are independent of each other and can be parallelised.
+S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5 must complete before S3 and S4**, both of which need turns that do not fail. S2 is independent of S1.5 and can be parallelised with it.
 
 **Start the WhatsApp template approval for S3.1 on day 1**, in parallel with S1. It is the only item here with an external dependency, and it will gate S3 if left until you need it.
 
@@ -258,6 +368,81 @@ S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. S2 and
 ## Found during Sprint 1
 
 <!-- Append anything discovered that is not covered above. Do not fix in-scope. -->
+
+- **(S1.5.3) Domain-filtered retrieval empties Layer 3 — measured, not
+  predicted.** 1.5.3 specified filtering the recency query to the session's
+  current domain. Implemented and run against gate 5.3: session 1 produced
+  three story atoms all tagged `childhood`, session 2 opened on
+  `family_ancestors`, and equality filtering returned **zero of twelve**
+  available open threads. Atoms carry the domain they are *about*, not the
+  domain of the session that surfaced them. Retrieval is therefore not
+  domain-scoped; the parameter is retained only as the seam for semantic
+  retrieval. Recorded because the same instinct will recur when embeddings
+  come back — the domain is a poor filter and was a poor query too.
+
+- **(S1.5.3) A stale `OPENAI_API_KEY` in `.env` is now a hard startup
+  failure.** `Settings` uses pydantic-settings with extra fields forbidden,
+  so removing the field from `config.py` means any operator whose `.env`
+  still carries the line gets a `ValidationError` at import, not a warning.
+  Removed from the local `.env` as part of this work; `.env.example` never
+  had it. Worth a line in deploy notes before anyone else pulls this branch.
+  **The live key that was in `.env` should be revoked** — it is now unused,
+  and an unused credential with no rotation story is pure liability.
+
+- **(S1.5.4) `recent_stories` deleted; the idea is not dead.** Logged here
+  per 1.5.4 so Phase 2 does not rediscover it. Verbatim quotes in Layer 3
+  are the strongest argument for reinstating semantic retrieval, because
+  choosing the most *evocative* quote is a judgement cosine similarity
+  makes better than `ORDER BY created_at DESC`. Reasoning in full in
+  `docs/proposals/embedding-strategy.md`.
+
+- **(S1.5.7) P1 — the anchor/significant-people subsystem is fragile, and
+  the eval harness had been hiding it.** The regression run scored 9/11:
+  objective 5/5 (100%, above the 80% gate), rubric 4/6 (66.7%, **below the
+  75% gate**). Both rubric failures are in one subsystem, and neither is
+  in S1.5's diff — verified by reading the code, not by taking the run's
+  word for it:
+
+  - **TC-11** (unchanged from baseline): `story_extractor.process_extraction`
+    checks `mark_resolved` against `created_atoms` — the atoms produced by
+    the *same* extraction pass that just flagged the person. So someone can
+    be marked resolved on the turn they are discovered, and the
+    "resurface them in a later session" design never gets a chance to run.
+  - **TC-03** (newly *exposed*, not newly broken): `_pick_recall_anchor`
+    takes `significant_people[0]` unconditionally before falling back to
+    facts. A family member first mentioned in the current session gets
+    flagged and immediately outranks an established cross-session person,
+    so Kamala stops being the anchor even though she is correctly rendered
+    in Layer 3's facts block. Contributing cause: the extraction prompt
+    lists bare "unprompted mention" as a sufficient trigger for flagging
+    someone significant, which nearly every first mention satisfies.
+
+  **The rubric drop is not comparable to the baseline.** The baseline used
+  a harness that hand-constructed `PriorContext` and passed it in; this run
+  used a rewritten harness that drives real multi-turn sessions and lets
+  the fact store populate through the real pipeline. TC-03 fails *because*
+  the new harness is more realistic. That is the same mocked-shape blind
+  spot that produced the last four P0s, one level up — this time in the
+  eval harness itself. Do not read 83.3% → 66.7% as a regression.
+
+  Deliberately not fixed here: both belong on one focused branch with its
+  own eval loop, not as a tail-end fix on a vendor-removal PR.
+
+- **(S1.5.3) Recency starves older domains sooner than the decision record
+  first claimed.** `top_k=5` ordered by recency means a user with more than
+  five atoms across domains loses the oldest domains from Layer 3 entirely.
+  At daily sessions across 8 domains that is roughly session 5–6, not
+  "session 100". No current eval case reaches enough domain breadth to fail
+  on it. Correction recorded in `docs/proposals/embedding-strategy.md`;
+  raising `top_k` is the cheap stopgap if threads visibly thin before
+  Phase 2.
+
+- **(S1.5) `significant_people` populates after all.** The S1.2 finding
+  that it came back empty did not reproduce: the same two-session scenario
+  now yields an entry (an unidentified person "two years older", flagged
+  with `why_significant`). The earlier empty result was model variance on a
+  three-turn session, not a defect. TC-11's failure is about *resurfacing*
+  a known person, which is a separate mechanism.
 
 - **(S1.1) S1's merge had already happened before this sprint started.**
   `fix/ws5-verification` was merged to `main` on 2026-08-09 as PR #16

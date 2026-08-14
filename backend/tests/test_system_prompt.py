@@ -306,3 +306,69 @@ def test_prompt_omits_entry_question_after_first_exchange():
     later_session = SimpleNamespace(**{**_SESSION.__dict__, "exchange_count": 1})
     prompt = build_system_prompt(_PROFILE, later_session, _PRIOR)
     assert "Domain entry question" not in prompt
+
+
+# ── PriorContext render coverage (S1.5.5) ─────────────────────────────────────
+#
+# Three defects in two weeks shared one shape: data assembled correctly and
+# then silently not consumed, invisible to mocked tests because the mocks
+# supply pre-parsed structures. `recent_stories` was the clearest case — it
+# was populated on every turn and rendered nowhere, for the life of the
+# project. This test fails if a field is added to PriorContext without a
+# corresponding render, so the next one is caught at authoring time.
+
+
+def test_every_prior_context_field_is_rendered():
+    import dataclasses
+
+    populated = PriorContext(
+        facts={"birth_year": "1948-SENTINEL"},
+        open_threads=["THREAD-SENTINEL: what did the shop sell?"],
+        significant_people=[
+            {
+                "name": "PERSON-SENTINEL",
+                "relationship": "sister",
+                "why_significant": "mentioned with unusual warmth",
+            }
+        ],
+    )
+
+    prompt = build_system_prompt(_PROFILE, _SESSION, populated)
+
+    # Every field must be non-empty in the fixture, or this proves nothing.
+    for f in dataclasses.fields(populated):
+        value = getattr(populated, f.name)
+        assert value, (
+            f"PriorContext.{f.name} is empty in this fixture — populate it, "
+            f"otherwise the render assertion below is vacuous for that field."
+        )
+
+    missing = []
+    if "1948-SENTINEL" not in prompt:
+        missing.append("facts")
+    if "THREAD-SENTINEL" not in prompt:
+        missing.append("open_threads")
+    if "PERSON-SENTINEL" not in prompt:
+        missing.append("significant_people")
+
+    assert not missing, (
+        f"PriorContext fields populated but never rendered into the prompt: "
+        f"{missing}. Either render them in _layer3_life_context or remove "
+        f"them from PriorContext — a field that is assembled and dropped is "
+        f"work the product pays for and never receives."
+    )
+
+
+def test_render_coverage_test_knows_about_every_field():
+    """Guards the guard: if someone adds a field to PriorContext, the
+    assertions above will not cover it, so fail loudly here instead of
+    passing a test that silently checks less than it claims."""
+    import dataclasses
+
+    covered = {"facts", "open_threads", "significant_people"}
+    actual = {f.name for f in dataclasses.fields(PriorContext)}
+    assert actual == covered, (
+        f"PriorContext fields changed: {actual ^ covered}. Update "
+        f"test_every_prior_context_field_is_rendered to assert the new "
+        f"field reaches the prompt."
+    )
