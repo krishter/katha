@@ -21,12 +21,12 @@ function VerifyContent() {
   if (hasError || !token) {
     return (
       <div className="text-center">
-        <p className="text-lg text-[#2C2C2C]">
+        <p className="text-lg text-ink">
           This link has expired. Request a new one.
         </p>
         <a
           href="/family/login"
-          className="mt-4 inline-block text-[#C8956C] underline"
+          className="mt-4 inline-block text-saffron-ink underline"
         >
           Back to login
         </a>
@@ -34,14 +34,14 @@ function VerifyContent() {
     );
   }
 
-  return <p className="text-lg text-[#2C2C2C]">Logging you in...</p>;
+  return <p className="text-lg text-ink">Logging you in...</p>;
 }
 
 export default function VerifyMagicLinkPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#FDF6EC] p-8">
+    <main id="main" className="flex min-h-screen items-center justify-center bg-page p-8">
       <Suspense
-        fallback={<p className="text-lg text-[#2C2C2C]">Logging you in...</p>}
+        fallback={<p className="text-lg text-ink">Logging you in...</p>}
       >
         <VerifyContent />
       </Suspense>

@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Katha — Wireframes for Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,600&display=swap" rel="stylesheet">
+<style>
+/* Palette matches the Katha brand established on coming-soon/index.html and
+   now tokenised in frontend/app/globals.css. Saffron is a FILL colour only —
+   text on saffron is indigo (5.77:1); accent text uses saffron-ink. */
+:root{
+  --bg:#EFE7DA; --panel:#FFF; --line:#E3D5C2; --line-2:#EFE6D9;
+  --ink:#17182D; --mut:#454B69; --mut-2:#646983;
+  --terra:#F77F00; --terra-d:#B84500; --parch:#F2EADD; --surface:#F9F4EE;
+  --indigo:#211A61; --indigo-mid:#30358B; --indigo-soft:#CDD6F9;
+  --gold:#D48500; --gold-ink:#A25700;
+  --ok:#007B40; --att:#A25700; --side:#211A61;
+  --wire:#E3D5C2; --wire-2:#F2EADD;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:15px/1.55 'DM Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+h1,h2,h3.wh,.hero h3,.disp{font-family:'Playfair Display',Georgia,serif}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* ---------- app chrome ---------- */
+.app{display:flex;min-height:100vh}
+.side{width:284px;flex:none;background:var(--side);color:#E4E7FA;padding:22px 0 60px;overflow-y:auto;height:100vh;position:sticky;top:0}
+.side h1{font-size:19px;font-weight:600;padding:0 20px;letter-spacing:.2px}
+.side .sub{padding:2px 20px 16px;font-size:12px;color:#A9B0E0;line-height:1.5}
+.grp{padding:16px 20px 5px;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:#9AA2D8;font-weight:600}
+.nav{display:block;width:100%;text-align:left;padding:7px 20px;font-size:13.5px;color:#C3C9EE;display:flex;gap:8px;align-items:center;line-height:1.35}
+.nav:hover{background:#30358B;color:#fff}
+.nav.on{background:var(--terra-d);color:#fff}
+.nav .id{font-size:10.5px;font-weight:700;opacity:.75;width:20px;flex:none}
+.nav .p{margin-left:auto;font-size:9px;font-weight:700;padding:1.5px 4px;border-radius:3px;flex:none}
+.p0{background:#8C2F1F;color:#FFDCD2}.p1{background:#6B4A12;color:#FAE3B8}.p2{background:#3A3F7A;color:#C3C9EE}
+.nav.on .p{background:rgba(0,0,0,.3);color:#fff}
+
+/* ---------- main ---------- */
+.main{flex:1;min-width:0;padding:30px 38px 90px;max-width:1500px}
+.hd{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:26px}
+.hd .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hd .kid{font-size:12px;font-weight:700;color:var(--mut-2);letter-spacing:.06em}
+.hd h2{font-size:26px;font-weight:600;letter-spacing:-.2px}
+.tag{font-size:10px;font-weight:700;padding:2.5px 7px;border-radius:4px;letter-spacing:.04em}
+.t0{background:#FADFD6;color:#8C2F1F}.t1{background:#FAEBCF;color:#6B4A12}.t2{background:#E4E6F2;color:#3A3F7A}
+.tn{background:#C3F2D7;color:#005E31}.tr{background:#CDD6F9;color:#211A61}
+.hd p{margin-top:9px;color:var(--mut);max-width:78ch;font-size:14.5px}
+
+.views{display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap}
+.view{}
+.vlab{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut-2);font-weight:700;margin-bottom:9px}
+
+/* device frames */
+.phone{width:340px;border:9px solid #211A61;border-radius:28px;background:var(--parch);overflow:hidden;box-shadow:0 8px 26px rgba(0,0,0,.13)}
+.phone .scr{height:660px;overflow-y:auto}
+.desk{width:820px;border:1px solid var(--line);border-top:22px solid #211A61;border-radius:9px;background:var(--parch);overflow:hidden;box-shadow:0 8px 26px rgba(0,0,0,.1)}
+.desk .scr{height:648px;overflow-y:auto}
+.na{width:340px;border:1px dashed var(--line);border-radius:10px;padding:26px 18px;color:var(--mut-2);font-size:13px;text-align:center;background:#F9F4EE}
+
+/* ---------- wireframe primitives ---------- */
+.w{padding:14px}
+.w.p0pad{padding:0}
+.nb{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#fff;border-bottom:1px solid var(--line-2)}
+.nb b{font-size:14px}
+.nb .lk{font-size:11.5px;color:var(--mut);display:flex;gap:11px}
+.tabs{display:flex;border-top:1px solid var(--line-2);background:#fff;position:sticky;bottom:0}
+.tabs div{flex:1;text-align:center;padding:9px 2px 10px;font-size:10px;color:var(--mut-2)}
+.tabs div.on{color:var(--terra-d);font-weight:700}
+.tabs .ic{display:block;width:17px;height:17px;border:1.5px solid currentColor;border-radius:4px;margin:0 auto 3px}
+
+h3.wh{font-size:17px;font-weight:600;margin:0 0 3px}
+h4.wh{font-size:13.5px;font-weight:600;margin:16px 0 7px}
+.sm{font-size:11.5px;color:var(--mut)}
+.xs{font-size:10.5px;color:var(--mut-2)}
+.ph{height:8px;background:var(--wire);border-radius:4px;margin:6px 0}
+.ph.s{width:55%}.ph.m{width:78%}.ph.l{width:96%}.ph.t{height:6px}
+.card{background:#fff;border:1px solid var(--line-2);border-radius:9px;padding:12px;margin-bottom:10px}
+.card.acc{border-left:3px solid var(--terra)}
+.card.ok{border-left:3px solid var(--ok)}
+.card.att{border-left:3px solid var(--att)}
+.btn{display:block;text-align:center;background:var(--terra);color:var(--indigo);border-radius:8px;padding:10px;font-size:13px;font-weight:600;margin:10px 0}
+.btn.g{background:#fff;color:var(--terra-d);border:1px solid var(--terra)}
+.btn.n{background:#fff;color:var(--mut);border:1px solid var(--line)}
+.btn.d{background:#fff;color:#BA3D5B;border:1px solid #EFC9D0}
+.btn.sm{padding:7px;font-size:11.5px;margin:7px 0}
+.inp{border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12px;color:var(--mut-2);background:#fff;margin:5px 0 11px}
+.lb{font-size:11.5px;font-weight:600;margin-top:9px;display:block}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+.chip{font-size:10.5px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:#fff;color:var(--mut)}
+.chip.on{background:var(--terra);color:var(--indigo);border-color:var(--terra)}
+.grid{display:grid;gap:9px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.tile{background:#fff;border:1px solid var(--line-2);border-radius:9px;padding:11px;text-align:center}
+.tile b{font-size:19px;display:block;font-weight:600}
+.tile span{font-size:10px;color:var(--mut)}
+.img{background:var(--wire-2);border:1px solid var(--line-2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--mut-2);font-size:10.5px;text-align:center;padding:8px}
+.bar{height:6px;background:var(--wire);border-radius:99px;overflow:hidden;margin:4px 0 9px}
+.bar i{display:block;height:100%;background:var(--terra);border-radius:99px}
+.q{border-left:3px solid var(--terra);padding-left:10px;font-style:italic;font-size:12.5px;color:#30358B;margin:9px 0;line-height:1.6}
+.aud{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line-2);border-radius:9px;padding:9px 11px;margin:9px 0}
+.aud .pl{width:27px;height:27px;border-radius:99px;background:var(--terra);color:var(--indigo);display:flex;align-items:center;justify-content:center;font-size:10px;flex:none}
+.aud .wv{flex:1;height:20px;background:repeating-linear-gradient(90deg,var(--wire) 0 2px,transparent 2px 5px)}
+.badge{display:inline-block;font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--parch);color:var(--mut);border:1px solid var(--line-2)}
+.badge.ok{background:#E4F0E7;color:#2E5438;border-color:#C4DDCB}
+.badge.att{background:#F8E7DF;color:#8C4A28;border-color:#EBCDBE}
+.tbl{width:100%;border-collapse:collapse;font-size:11px;background:#fff;border:1px solid var(--line-2);border-radius:8px;overflow:hidden}
+.tbl th{text-align:left;padding:8px 9px;background:#F2EADD;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-weight:700;border-bottom:1px solid var(--line-2)}
+.tbl td{padding:8px 9px;border-bottom:1px solid var(--line-2);color:var(--ink)}
+.tbl tr:last-child td{border-bottom:none}
+.hero{background:linear-gradient(160deg,#211A61,#30358B);color:#EDEFFB;padding:26px 18px;border-radius:0}
+.hero h3{color:#fff;font-size:21px;line-height:1.25;font-weight:600}
+.hero p{font-size:12px;color:#BFC6EE;margin-top:9px;line-height:1.6}
+
+/* whatsapp */
+.wa{background:#ECE4DB;padding:12px;min-height:100%}
+.wahd{background:#075E54;color:#fff;padding:9px 12px;font-size:12.5px;display:flex;gap:8px;align-items:center;margin:-12px -12px 12px}
+.wahd .av{width:26px;height:26px;border-radius:99px;background:linear-gradient(135deg,var(--terra),var(--gold));flex:none}
+.bub{background:#fff;border-radius:9px;padding:9px 11px;font-size:12px;margin-bottom:9px;max-width:84%;line-height:1.55;box-shadow:0 1px 1px rgba(0,0,0,.07)}
+.bub.me{background:#DCF8C6;margin-left:auto}
+.bub .t{font-size:9px;color:#95A0A5;text-align:right;margin-top:3px}
+.vn{display:flex;align-items:center;gap:8px}
+.vn .pl{width:24px;height:24px;border-radius:99px;background:#075E54;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;flex:none}
+.vn .wv{flex:1;height:16px;background:repeating-linear-gradient(90deg,#B9C4C9 0 2px,transparent 2px 5px)}
+
+/* annotations */
+.ann{margin-top:34px;border-top:1px solid var(--line);padding-top:22px}
+.ann h3{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);margin-bottom:14px;font-weight:700}
+.ann ol{list-style:none;counter-reset:a;display:grid;gap:11px;max-width:104ch}
+.ann li{counter-increment:a;position:relative;padding-left:34px;font-size:14px;color:#30358B;line-height:1.6}
+.ann li::before{content:counter(a);position:absolute;left:0;top:1px;width:23px;height:23px;border-radius:99px;background:var(--terra-d);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.ann li b{font-weight:600}
+.ann li code{background:#E8E0D2;padding:1px 5px;border-radius:4px;font-size:12.5px}
+.crit{background:#FCF1EC;border:1px solid #F0D3C2;border-radius:9px;padding:13px 15px;margin-top:20px;font-size:14px;color:#8C2F1F;max-width:104ch;line-height:1.6}
+.crit b{font-weight:700}
+.api{background:#EEF1FC;border:1px solid #CDD6F9;border-radius:9px;padding:13px 15px;margin-top:14px;font-size:13.5px;color:#211A61;max-width:104ch;line-height:1.6}
+.api code{background:#DCE3FA;padding:1px 5px;border-radius:4px;font-size:12.5px}
+@media(max-width:1100px){.side{display:none}.main{padding:20px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side">
+    <h1>Katha — Wireframes</h1>
+    <div class="sub">Pre-pilot UX review · 36 screens<br>Companion to <b>docs/UX_REVIEW.md</b></div>
+    <div id="nav"></div>
+  </nav>
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+const SCREENS = [];
+// ============ A · ACQUISITION ============
+SCREENS.push({
+id:"A1", group:"Acquisition", title:"Landing page", prio:"P0", status:"New",
+purpose:"The front door. Today <code>app/page.tsx</code> is a 5-line redirect to the login form — a first-time visitor sees an email field and nothing else. This page has four jobs: name the ache, show the artifact, prove it's safe, price it plainly.",
+m:`<div class="hero"><div class="xs" style="color:#A9B0E0;letter-spacing:.1em">KATHA</div>
+<h3 style="margin-top:14px">Your father has stories you've never heard.</h3>
+<p>Katha calls him on WhatsApp every morning, listens properly, and turns what he says into a family archive you'll keep forever.</p>
+<div class="btn" style="margin-top:16px">Start free — 10 conversations</div>
+<div class="xs" style="color:#A9B0E0;text-align:center">No app to install. He just uses WhatsApp.</div></div>
+<div class="w">
+<div class="img" style="height:130px">↑ REAL memory card from a pilot family<br>(quote + name + chapter)</div>
+<div class="xs" style="text-align:center;margin-top:6px">This is what arrives on your phone each day</div>
+
+<h4 class="wh">How it works</h4>
+<div class="card"><b class="sm">1 · You set it up (5 min)</b><div class="ph t l"></div><div class="ph t m"></div></div>
+<div class="card"><b class="sm">2 · Katha asks his permission</b><div class="ph t l"></div><div class="ph t s"></div></div>
+<div class="card"><b class="sm">3 · A voice note every morning</b><div class="ph t l"></div><div class="ph t m"></div></div>
+<div class="card"><b class="sm">4 · You get a memory, daily</b><div class="ph t l"></div><div class="ph t s"></div></div>
+
+<h4 class="wh">He speaks his language</h4>
+<div class="chips"><span class="chip on">Tamil</span><span class="chip">Hindi</span><span class="chip">Bengali</span><span class="chip">Telugu</span><span class="chip">Kannada</span><span class="chip">Malayalam</span><span class="chip">+16 more</span></div>
+
+<h4 class="wh">Listen to a real conversation</h4>
+<div class="aud"><span class="pl">▶</span><span class="wv"></span><span class="xs">1:12</span></div>
+<div class="xs">Shared with the family's permission</div>
+
+<h4 class="wh">Your family's data</h4>
+<div class="card"><div class="sm">✓ Stored in India (Mumbai)<br>✓ Never used to train AI<br>✓ Download everything, any time<br>✓ Delete everything, one tap</div>
+<div class="btn g sm">How we handle privacy →</div></div>
+
+<h4 class="wh">Pricing</h4>
+<div class="card acc"><b class="sm">Free trial</b><div class="xs">10 conversations. No card needed.</div></div>
+<div class="card"><b class="sm">Family — ₹5,000 / year</b><div class="xs">Unlimited conversations, full archive, audio, memory cards. Less than ₹14 a day.</div></div>
+<div class="btn">Start free</div>
+<div class="xs" style="text-align:center">Questions? hello@katha.life</div>
+</div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span>How it works</span><span>Privacy</span><span>Pricing</span><span style="color:var(--terra-d);font-weight:600">Start free</span><span>Log in</span></div></div>
+<div class="hero" style="padding:40px 34px"><div style="display:flex;gap:34px;align-items:center">
+<div style="flex:1.15"><h3 style="font-size:29px">Your father has stories you've never heard.</h3>
+<p style="font-size:13.5px">Katha calls him on WhatsApp every morning, listens properly, and turns what he says into a family archive you'll keep forever.</p>
+<div style="display:flex;gap:10px;margin-top:18px"><div class="btn" style="margin:0;padding:11px 20px">Start free — 10 conversations</div><div class="btn g" style="margin:0;padding:11px 20px;background:transparent;color:#EDEFFB;border-color:#6E645A">Hear a conversation</div></div>
+<div class="xs" style="color:#A9B0E0;margin-top:10px">No app to install. He just uses WhatsApp.</div></div>
+<div style="flex:.85"><div class="img" style="height:210px;background:#30358B;border-color:#4249A8;color:#C3C9EE">REAL memory card<br>from a pilot family</div></div>
+</div></div>
+<div class="w" style="padding:26px 34px">
+<h4 class="wh" style="margin-top:0">How it works</h4>
+<div class="grid g4">
+<div class="card"><b class="sm">1 · You set it up</b><div class="xs">5 minutes. His name, number, language, time.</div></div>
+<div class="card"><b class="sm">2 · Katha asks him</b><div class="xs">He gives his own permission, in his language.</div></div>
+<div class="card"><b class="sm">3 · A voice note daily</b><div class="xs">15–20 min. He talks, Katha listens.</div></div>
+<div class="card"><b class="sm">4 · A memory arrives</b><div class="xs">On your WhatsApp, every day.</div></div></div>
+
+<div style="display:flex;gap:26px;margin-top:26px">
+<div style="flex:1"><h4 class="wh" style="margin-top:0">He speaks his own language</h4>
+<div class="chips"><span class="chip on">Tamil</span><span class="chip">Hindi</span><span class="chip">Bengali</span><span class="chip">Telugu</span><span class="chip">Kannada</span><span class="chip">Malayalam</span><span class="chip">Marathi</span><span class="chip">Gujarati</span><span class="chip">+14 more</span></div>
+<div class="xs">Built on Sarvam.ai — trained on Indian speech, including code-mixing and elderly voices.</div>
+<h4 class="wh">Listen to a real conversation</h4>
+<div class="aud"><span class="pl">▶</span><span class="wv"></span><span class="xs">1:12</span></div></div>
+<div style="flex:1"><h4 class="wh" style="margin-top:0">Your family's data</h4>
+<div class="card"><div class="sm">✓ Stored in India (Mumbai)<br>✓ Never used to train AI models<br>✓ Download everything, any time<br>✓ Delete everything, one tap<br>✓ He can stop at any point, by just saying so</div>
+<div class="btn g sm">How we handle privacy →</div></div></div></div>
+
+<h4 class="wh">Pricing</h4>
+<div class="grid g3">
+<div class="card acc"><b class="sm">Free trial</b><div class="tile" style="border:none;padding:6px 0;text-align:left"><b>₹0</b></div><div class="xs">10 conversations. No card needed.</div><div class="btn sm">Start free</div></div>
+<div class="card"><b class="sm">Family</b><div class="tile" style="border:none;padding:6px 0;text-align:left"><b>₹5,000<span style="font-size:11px;color:var(--mut)">/year</span></b></div><div class="xs">Unlimited conversations, full archive, audio, memory cards.</div><div class="btn g sm">Choose</div></div>
+<div class="card"><b class="sm">Family Plus</b><div class="tile" style="border:none;padding:6px 0;text-align:left"><b>₹9,000<span style="font-size:11px;color:var(--mut)">/year</span></b></div><div class="xs">Everything, plus a printed memory book each year.</div><div class="btn g sm">Choose</div></div></div>
+<div class="xs" style="margin-top:14px">Founder's note · FAQ · hello@katha.life</div></div>`,
+notes:[
+"<b>Headline names the ache, not the technology.</b> PRD §3.5 flags category-creation burden — nobody is searching for an 'AI reminiscence agent'. Lead with the felt problem. Avoid 'AI' above the fold entirely; it triggers scepticism in exactly the segment we want.",
+"<b>Show a real memory card above the fold.</b> The card is the product's atomic unit of value and its most persuasive asset. A screenshot of a dashboard persuades nobody; a quote from someone's father does. Use a real pilot card with permission, not a mockup.",
+"<b>'No app to install' is the single most important line on the page.</b> The buyer's live objection is 'my father will never figure this out.' Answer it before anything else — PRD §5.3 puts WhatsApp activation at ~95% vs ~40% for a native app.",
+"<b>Audio sample is required, not optional.</b> This is a voice product. A visitor who hears 20 seconds of a warm, unhurried conversation in Tamil understands the whole proposition instantly. No amount of copy substitutes.",
+"<b>Privacy block sits above pricing, not in the footer.</b> PRD §4.1: the primary objection is 'not price but trust and proof of value.' Recording an elderly parent's voice is an intimate ask. Data residency, no-training, and export/delete need to be visible before the price is.",
+"<b>Lead the pricing with free.</b> ₹5,000 shown next to a free trial reads as reasonable; shown alone it reads as a decision. Also frame annually — 'less than ₹14 a day' — since this is bought as a gift.",
+"<b>Language chips do heavy lifting.</b> Seeing their parent's actual language listed is the proof-point that this was built for India. Keep them visible above the fold on desktop.",
+"<b>Acceptance:</b> page is fully static/SSG, LCP &lt; 2.0s on 4G, works with JS disabled down to the CTA, and has a single primary action repeated three times (hero, mid, pricing)."
+],
+crit:"<b>Fixes F-03.</b> Today <code>frontend/app/page.tsx</code> is <code>redirect(\"/family\")</code>. Every visitor who isn't already a customer hits a login wall. This is the largest single hole in the funnel and it blocks the entire acquisition journey (J1)."
+});
+
+SCREENS.push({
+id:"A2", group:"Acquisition", title:"How it works / FAQ", prio:"P1", status:"New",
+purpose:"The objection-handling page. The buyer's real questions are not about features — they're 'won't he find this strange?', 'is it a robot?', 'what if he hates it?'. Answer them in his terms.",
+m:`<div class="nb"><b>katha</b><span class="lk">Menu</span></div><div class="w">
+<h3 class="wh">What actually happens</h3>
+<div class="card"><b class="sm">Day 0 — you set up</b><div class="ph t l"></div><div class="ph t m"></div></div>
+<div class="card acc"><b class="sm">Day 0 — Katha writes to him</b>
+<div class="bub" style="max-width:100%;margin-top:8px">"Namaskaram Subramaniam ji. Your daughter Priya asked me to write to you…"</div>
+<div class="xs">He replies yes or no. Nothing starts until he says yes.</div></div>
+<div class="card"><b class="sm">Day 1 onward — one voice note each morning</b><div class="ph t l"></div><div class="ph t s"></div></div>
+
+<h4 class="wh">Questions families ask</h4>
+${["Will my father find this strange?","Does he know it's not a person?","What if he doesn't want to?","What if he can't use it properly?","What language will it speak?","Can I hear the actual recordings?","What happens to the stories if Katha shuts down?","Is this therapy?"].map(q=>`<div class="card"><b class="sm">${q}</b><div class="ph t l"></div><div class="ph t m"></div></div>`).join("")}
+<div class="btn">Start free</div></div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span>How it works</span><span>Privacy</span><span>Pricing</span><span>Log in</span></div></div>
+<div class="w" style="padding:26px 34px">
+<h3 class="wh" style="font-size:22px">What actually happens</h3>
+<div style="display:flex;gap:12px;margin:16px 0">
+<div class="card" style="flex:1"><b class="sm">Day 0 · You</b><div class="xs">5-minute setup. Name, number, language, time of day, a few things about him.</div></div>
+<div class="card acc" style="flex:1"><b class="sm">Day 0 · He is asked</b><div class="xs">Katha writes to him in his language and asks his permission. Nothing begins until he agrees.</div></div>
+<div class="card" style="flex:1"><b class="sm">Day 1+ · The conversation</b><div class="xs">A voice note each morning at the time you chose. He replies whenever he likes.</div></div>
+<div class="card" style="flex:1"><b class="sm">Every day · You</b><div class="xs">A memory card on WhatsApp and a growing archive in your account.</div></div></div>
+<h4 class="wh">Questions families ask</h4>
+<div class="grid g2">${["Will my father find this strange?","Does he know it's not a person?","What if he doesn't want to?","What if he can't use it properly?","What language will it speak?","Can I hear the actual recordings?","What if he says something private?","What happens to the stories if Katha shuts down?","Is this therapy or medical care?","Can my brother in Dubai see it too?"].map(q=>`<div class="card"><b class="sm">${q}</b><div class="ph t l"></div><div class="ph t m"></div></div>`).join("")}</div>
+<div class="btn" style="max-width:240px">Start free</div></div>`,
+notes:[
+"<b>Answer 'is it a robot?' honestly and early.</b> Katha must never pretend to be human to the elderly user, and the buyer needs to know we don't. Honesty here is a trust asset, not a liability — and it pre-empts the worst possible discovery moment.",
+"<b>Show the actual welcome message text.</b> Seeing the exact words their father will receive removes almost all anxiety. It is the highest-converting element on this page.",
+"<b>'What if he doesn't want to?' gets a real answer:</b> he says no, nothing starts, and you aren't charged. That answer sells more than any feature list, because it signals we treat him as the decision-maker.",
+"<b>'What happens if Katha shuts down?'</b> — answer with the export guarantee. A family archive from a seed-stage startup is a legitimate worry. Committing to full export in open formats turns the objection into a differentiator (persona P4).",
+"<b>'Is this therapy?'</b> must be answered with the PRD §13 disclaimer language and the iCall reference (9152987821). No medical claims anywhere on the marketing site.",
+"<b>Acceptance:</b> every FAQ answer under 80 words; page reachable from the landing hero and from onboarding step B5 (consent) where these questions resurface."
+]
+});
+
+SCREENS.push({
+id:"A3", group:"Acquisition", title:"Trust & privacy", prio:"P0", status:"Revise",
+purpose:"Rewrite of the existing <code>/privacy</code> page. Today it's a policy document. It needs to be a plain-language trust page that a 42-year-old can read in 90 seconds — with the legal text below the fold.",
+m:`<div class="nb"><b>katha</b><span class="lk">Menu</span></div><div class="w">
+<h3 class="wh">Your family's data</h3>
+<div class="sm">In plain language, before the legal version.</div>
+<div class="card ok" style="margin-top:12px"><b class="sm">Where it lives</b><div class="xs">India only — AWS Mumbai. Nothing leaves the country.</div></div>
+<div class="card ok"><b class="sm">Who can see it</b><div class="xs">You, and anyone you invite. Not advertisers. Not other families.</div></div>
+<div class="card ok"><b class="sm">AI training</b><div class="xs">Never. Your father's voice is not training data.</div></div>
+<div class="card ok"><b class="sm">His consent</b><div class="xs">He is asked directly, in his language, before the first conversation. He can withdraw by simply saying so.</div></div>
+<div class="card ok"><b class="sm">Getting it out</b><div class="xs">Download every recording, transcript and story at any time.</div></div>
+<div class="card ok"><b class="sm">Deleting it</b><div class="xs">One tap in Settings. Permanent, within 30 days, including backups.</div></div>
+<div class="card att"><b class="sm">What Katha is not</b><div class="xs">Not therapy, not medical care, not an emergency service. In a crisis call 112, or iCall on 9152987821.</div></div>
+<h4 class="wh">Who we share with</h4>
+<table class="tbl"><tr><th>Partner</th><th>What for</th></tr>
+<tr><td>Sarvam.ai</td><td>Speech to text, text to speech</td></tr>
+<tr><td>Anthropic</td><td>Conversation and story extraction</td></tr>
+<tr><td>Meta / WhatsApp</td><td>Message delivery</td></tr>
+<tr><td>AWS Mumbai</td><td>Storage</td></tr></table>
+<div class="xs" style="margin-top:8px">None of them may train on your data.</div>
+<div class="btn g">Read the full policy →</div>
+<div class="xs">Version 1.0 · Grievance officer: privacy@katha.life</div></div>`,
+d:null,
+notes:[
+"<b>Plain language above, legal below.</b> The current page is a policy. Policies are not read. Seven plain cards answering the seven questions a family actually has, with the DPDP-compliant text linked beneath.",
+"<b>Name the subprocessors explicitly.</b> Sarvam, Anthropic, Meta, AWS. Hiding them looks worse than naming them, and DPDP requires disclosure anyway. State clearly that none may train on the data.",
+"<b>Parent's right to withdraw is stated on the public page.</b> This is the ethical core of the product and it belongs where a family can see it before paying (relates to F-02).",
+"<b>State the deletion window.</b> 'Permanent, within 30 days, including backups' is specific and therefore believable. Must match the actual behaviour of <code>DELETE /user/{id}</code>, which currently anonymises rather than deletes consent records — say so.",
+"<b>Crisis card is visually distinct but not alarming.</b> Uses <code>--attention</code>, never red. PRD §13 requires the no-medical-claims disclaimer and iCall reference.",
+"<b>Acceptance:</b> readable in ≤90 seconds, linked from the landing footer, the consent step (B5), and Settings → Privacy (D5). Version number displayed and matching <code>_CONSENT_VERSION</code> in <code>backend/api/routes/onboarding.py</code>."
+],
+api:"Consent version must render from the same constant as <code>_CONSENT_VERSION</code>, so a policy update and a recorded consent version can never drift apart."
+});
+
+// ============ B · ONBOARDING ============
+SCREENS.push({
+id:"B1", group:"Onboarding", title:"Email entry / login", prio:"P0", status:"Revise",
+purpose:"Existing <code>/family/login</code>. Works correctly (it routes through <code>/onboarding/start</code> so new and returning emails both resolve) but gives an unexplained visitor nothing to hold on to.",
+m:`<div class="w" style="padding:34px 18px">
+<div style="text-align:center;margin-bottom:20px"><b>katha</b></div>
+<div class="card" style="padding:20px">
+<h3 class="wh">Let's begin</h3>
+<div class="sm">Enter your email and we'll send you a link. No password to remember.</div>
+<span class="lb">Your email</span><div class="inp">priya@example.com</div>
+<div class="btn">Send me a link</div>
+<div class="xs" style="text-align:center">New here? This creates your account.<br>Already set up? This logs you in.</div>
+</div>
+<div class="card" style="margin-top:16px;background:transparent;border-style:dashed">
+<div class="xs"><b>What happens next</b><br>1 · You tell us about your parent (3 min)<br>2 · We ask their permission on WhatsApp<br>3 · The first conversation is tomorrow morning</div></div>
+<div class="xs" style="text-align:center;margin-top:14px">Trouble? hello@katha.life</div></div>`,
+d:null,
+notes:[
+"<b>Add the three-step preview.</b> A bare email field with no context has the highest abandonment of any form pattern. Three lines telling them what they're signing up for costs nothing.",
+"<b>Explain the dual behaviour.</b> The endpoint handles new and returning users identically — good engineering, but the user needs to know that entering their email won't create a duplicate or wipe their account.",
+"<b>Mention 'no password' as a benefit.</b> Magic-link is genuinely the right choice for this audience; say so rather than leaving it to be discovered.",
+"<b>Step 2 in the preview does real work</b> — 'we ask their permission' sets the expectation that the parent is a participant, not a subject. It also front-loads the honest framing required by F-02.",
+"<b>Acceptance:</b> inline email validation before submit; error state offers retry; loading state announced via <code>aria-live</code>; the existing comment in <code>login/page.tsx</code> explaining the endpoint choice must be preserved."
+]
+});
+
+SCREENS.push({
+id:"B2", group:"Onboarding", title:"Check your email", prio:"P0", status:"Revise",
+purpose:"Existing dead-end confirmation screen. This is where a measurable share of signups quietly die — the mail lands in Promotions, the user gets distracted, and there is no recovery path.",
+m:`<div class="w" style="padding:34px 18px;text-align:center">
+<div class="img" style="height:60px;width:60px;margin:0 auto 16px;border-radius:99px">✉</div>
+<h3 class="wh">Check your email</h3>
+<div class="sm">We sent a link to<br><b>priya@example.com</b></div>
+<div class="card" style="margin-top:18px;text-align:left"><div class="xs"><b>Can't find it?</b><br>· Check Promotions or Spam<br>· It's from <b>hello@katha.life</b><br>· The link works for 30 minutes</div></div>
+<div class="btn g">Resend link</div>
+<div class="xs">Wrong address? <b>Change it</b></div>
+<div class="card att" style="margin-top:20px;text-align:left"><div class="xs">Still stuck after a few minutes? Write to hello@katha.life and we'll set you up by hand.</div></div></div>`,
+d:null,
+notes:[
+"<b>Add a resend button with a 60-second cooldown.</b> Currently absent. This is the cheapest possible recovery for the highest-drop-off step in onboarding.",
+"<b>Add 'change email'.</b> Typos in email addresses are common and currently unrecoverable without starting over.",
+"<b>Name the sender and the expiry explicitly.</b> 'From hello@katha.life' helps them search; '30 minutes' sets the right urgency and prevents a stale-link failure an hour later.",
+"<b>Human fallback is deliberate for the pilot.</b> With 30 families, an email to you is a perfectly good escape hatch — and worth far more than a lost signup.",
+"<b>Acceptance:</b> resend rate-limited server-side; cooldown visible as a countdown; state survives a page refresh (email held in URL or storage)."
+]
+});
+
+SCREENS.push({
+id:"B3", group:"Onboarding", title:"About your parent", prio:"P0", status:"Revise",
+purpose:"Existing profile step. Functionally complete but transactional — and phone-format errors are the most likely hard failure in the whole flow. It should also start framing the parent as a person, not a record.",
+m:`<div class="w" style="padding:22px 16px">
+<div class="xs">Step 1 of 3</div><div class="bar"><i style="width:33%"></i></div>
+<h3 class="wh">Tell us about your parent</h3>
+<div class="sm">This is how Katha will greet them.</div>
+
+<span class="lb">Their name</span><div class="inp">Subramaniam</div>
+<span class="lb">What do you call them?</span><div class="chips"><span class="chip on">Appa</span><span class="chip">Amma</span><span class="chip">Papa</span><span class="chip">Dad</span><span class="chip">Baba</span><span class="chip">+ other</span></div>
+<span class="lb">Their WhatsApp number</span>
+<div style="display:flex;gap:6px"><div class="inp" style="width:66px">🇮🇳 +91</div><div class="inp" style="flex:1">98765 43210</div></div>
+<div class="xs" style="margin-top:-6px;color:var(--ok)">✓ Valid · WhatsApp found on this number</div>
+
+<span class="lb">Which language should Katha speak?</span><div class="inp">Tamil ▾</div>
+<div class="xs" style="margin-top:-6px">Katha understands mixed speech too — Tamil with English words is fine.</div>
+
+<span class="lb">Best time to call</span>
+<div class="chips"><span class="chip">Early · 7:30</span><span class="chip on">Morning · 9:30</span><span class="chip">Midday · 11:30</span><span class="chip">Evening · 17:00</span></div>
+<div class="xs">Mornings work best. You can change this any time.</div>
+
+<span class="lb">Your WhatsApp number</span>
+<div style="display:flex;gap:6px"><div class="inp" style="width:66px">🇮🇳 +91</div><div class="inp" style="flex:1">99887 76655</div></div>
+<div class="xs" style="margin-top:-6px">Memory cards come here each day.</div>
+<div class="btn">Continue</div></div>`,
+d:`<div class="w" style="padding:30px 120px">
+<div class="xs">Step 1 of 3</div><div class="bar" style="max-width:420px"><i style="width:33%"></i></div>
+<h3 class="wh" style="font-size:22px">Tell us about your parent</h3>
+<div class="sm">This is how Katha will greet them.</div>
+<div style="display:flex;gap:26px;margin-top:16px">
+<div style="flex:1">
+<span class="lb">Their name</span><div class="inp">Subramaniam</div>
+<span class="lb">What do you call them?</span><div class="chips"><span class="chip on">Appa</span><span class="chip">Amma</span><span class="chip">Papa</span><span class="chip">Baba</span><span class="chip">+ other</span></div>
+<span class="lb">Their WhatsApp number</span><div style="display:flex;gap:6px"><div class="inp" style="width:70px">🇮🇳 +91</div><div class="inp" style="flex:1">98765 43210</div></div>
+<div class="xs" style="margin-top:-6px;color:var(--ok)">✓ Valid · WhatsApp found on this number</div>
+<span class="lb">Your WhatsApp number</span><div style="display:flex;gap:6px"><div class="inp" style="width:70px">🇮🇳 +91</div><div class="inp" style="flex:1">99887 76655</div></div>
+<div class="xs" style="margin-top:-6px">Memory cards come here each day.</div></div>
+<div style="flex:1">
+<span class="lb">Which language should Katha speak?</span><div class="inp">Tamil ▾</div>
+<div class="xs" style="margin-top:-6px">Katha understands mixed speech — Tamil with English words is fine.</div>
+<span class="lb">Best time to call</span><div class="chips"><span class="chip">Early · 7:30</span><span class="chip on">Morning · 9:30</span><span class="chip">Midday · 11:30</span><span class="chip">Evening · 17:00</span></div>
+<div class="xs">Mornings work best — energy is highest and recall is strongest. Changeable any time.</div>
+<div class="card" style="margin-top:22px;background:var(--parch)"><div class="xs"><b>Preview — what Appa will receive tomorrow at 9:30</b></div>
+<div class="bub" style="max-width:100%;margin-top:8px">"காலை வணக்கம், சுப்ரமணியம் அவர்களே…"<div class="t">9:30 am</div></div></div></div></div>
+<div class="btn" style="max-width:260px">Continue</div></div>`,
+notes:[
+"<b>Live phone validation, not submit-time errors.</b> Today a bad format produces a generic failure after submit. Split country code from number, validate as they type, and — if the WhatsApp API allows — confirm the number is actually on WhatsApp. This is the most likely hard failure in onboarding.",
+"<b>Ask what they call their parent.</b> 'Appa' vs 'Amma' vs 'Baba' is the difference between Katha sounding like a form letter and sounding like family. It costs one chip row and improves every downstream prompt.",
+"<b>Time as preset chips, not a raw time picker.</b> A <code>&lt;input type=time&gt;</code> asks the buyer to make an unfamiliar decision. Presets with a recommendation reduce it to a choice.",
+"<b>Show the message preview on desktop.</b> Rendering the greeting in the chosen language, addressed by name, is the moment the buyer believes this will work.",
+"<b>Say 'you can change this any time' next to the time field</b> — and then actually make it true (D1). Reduces decision anxiety now and sets up the settings surface later.",
+"<b>Acceptance:</b> E.164 normalisation client-side; the two numbers must not be identical; language default derives from the parent's phone region where possible; progress indicator reflects the true step count."
+],
+api:"<code>POST /onboarding/profile</code> exists. Needs two new fields: <code>relationship_term</code> (Appa/Amma/…) and <code>timezone</code>. <code>session_time</code> is currently a naive <code>Time</code> assumed IST — fine for India-only pilot, breaks for an NRI parent."
+});
+
+SCREENS.push({
+id:"B4", group:"Onboarding", title:"Seed context — guided", prio:"P0", status:"Revise",
+purpose:"Today this is one 1000-character textarea labelled 'A little about them'. It is simultaneously the highest-value input for conversation quality and the moment the buyer emotionally commits — and we're wasting both.",
+m:`<div class="w" style="padding:22px 16px">
+<div class="xs">Step 2 of 3</div><div class="bar"><i style="width:66%"></i></div>
+<h3 class="wh">Help Katha know him</h3>
+<div class="sm">A few details make the first conversation feel personal instead of generic. Answer what you like — you can add more later.</div>
+
+<div class="card acc"><b class="sm">Where did he grow up?</b><div class="inp" style="margin-bottom:0">Madurai, Tamil Nadu</div></div>
+<div class="card acc"><b class="sm">What did he do for a living?</b><div class="inp" style="margin-bottom:0">Schoolteacher — 35 years, government school</div></div>
+<div class="card acc"><b class="sm">Who matters most to him?</b><div class="inp" style="margin-bottom:0">Wife Lakshmi (passed 2023), 2 children, 3 grandchildren</div></div>
+<div class="card acc"><b class="sm">One thing most people don't know about him</b><div class="inp" style="margin-bottom:0">He played the mridangam until his forties</div></div>
+
+<h4 class="wh">Anything Katha should avoid?</h4>
+<div class="card att"><div class="xs">Some topics are painful. Katha will steer away from anything you list here.</div>
+<div class="inp" style="margin-bottom:0">e.g. the years after Amma passed</div></div>
+
+<h4 class="wh">Anything you'd love him to be asked?</h4>
+<div class="card"><div class="inp" style="margin-bottom:0">e.g. how he met Amma</div>
+<div class="xs">Katha will work this in naturally.</div></div>
+
+<div class="btn">Continue</div><div class="btn n sm">Skip — I'll add this later</div></div>`,
+d:null,
+notes:[
+"<b>Replace the single textarea with five guided prompts.</b> A blank box produces two lines of generic input; specific questions produce specific answers. Same field in the database, dramatically better content.",
+"<b>'One thing most people don't know about him' is the key field.</b> It gets the buyer thinking affectionately rather than administratively, and it hands Katha its best possible opening. This is the moment in J1 where Priya emotionally commits.",
+"<b>The avoid-list is a safety feature, not a nicety.</b> Recent bereavement, estrangement, illness, a lost child — an AI that stumbles into these on day 2 destroys trust irrecoverably. This must be honoured as a hard constraint in the system prompt, not a soft preference.",
+"<b>'Anything you'd love him to be asked' is a taste of the Phase 2 question-submission feature</b> and gives the buyer agency from day one.",
+"<b>Skippable, and say so.</b> A required emotional-labour step at signup is a drop-off risk. Let them skip and resurface it in the Day-0 dashboard (C1) where waiting time makes it welcome.",
+"<b>Acceptance:</b> each field optional; combined payload maps to existing <code>onboarding_context</code>; avoid-list stored separately and injected as a negative constraint in the system prompt; editable later from Settings (D1)."
+],
+api:"Reuses <code>onboarding_context</code>. Add a distinct <code>excluded_topics</code> field — it must reach <code>backend/prompts/system_prompt.py</code> as a hard constraint, not be concatenated into free-text context."
+});
+
+SCREENS.push({
+id:"B5", group:"Onboarding", title:"Consent — two-party", prio:"P0", status:"Rebuild",
+purpose:"The most important correction in this review. Today the adult child ticks a box consenting to record their parent's voice. Under the DPDP Act the parent is the data principal — consent is theirs to give, and nobody else's.",
+m:`<div class="w" style="padding:22px 16px">
+<div class="xs">Step 3 of 3</div><div class="bar"><i style="width:100%"></i></div>
+<h3 class="wh">Two permissions</h3>
+
+<div class="card acc"><b class="sm">1 · Yours — as the account holder</b>
+<div class="xs" style="margin-top:6px">✓ You're setting up Katha for Subramaniam<br>✓ Story summaries and quotes will be shared with you<br>✓ Data is stored securely in India (Mumbai)<br>✓ Never used to train AI models<br>✓ You can export or delete everything at any time from Settings<br>✓ Katha is not medical care. In an emergency call 112.</div>
+<label class="xs" style="display:flex;gap:7px;margin-top:11px"><input type="checkbox"> I've read and agree to the Privacy Policy and the above.</label></div>
+
+<div class="card att"><b class="sm">2 · His — and only he can give it</b>
+<div class="xs" style="margin-top:6px">Before the first conversation, Katha will write to Subramaniam in Tamil, explain who it is and that you set this up, and ask whether he's willing.</div>
+<div class="bub" style="max-width:100%;margin-top:9px">"…Priya asked me to write to you. If you'd like to, we can talk each morning about your life. Would that be alright? You can say no, or stop any time."<div class="t">Preview</div></div>
+<div class="xs" style="margin-top:8px"><b>If he says no, nothing starts and you are not charged.</b></div></div>
+
+<a class="xs" style="color:var(--terra-d)">Read the full Privacy Policy →</a>
+<div class="btn">Agree and continue</div></div>`,
+d:null,
+notes:[
+"<b>This is F-02, the most serious finding in the review.</b> A competent adult cannot have consent given on their behalf by their child. The current single-checkbox flow is legally exposed under DPDP and — more importantly — ethically wrong for a product whose entire premise is making an elderly person feel respected and heard.",
+"<b>Split the screen into two explicitly labelled permissions.</b> Making the buyer <i>see</i> that their father will be asked separately is not a compliance formality — it reframes him as a participant and materially raises the odds he says yes.",
+"<b>Show the exact wording he'll receive.</b> Same reasoning as B3: it converts, and it's honest.",
+"<b>'If he says no, nothing starts and you are not charged'</b> — removes the buyer's fear of committing on his behalf, and is the single most trust-building sentence in the onboarding flow.",
+"<b>Fix the false promise.</b> The current copy says 'You can delete all data at any time from your account settings' and no such page exists (F-01). Either ship D5 first or don't make the claim. Shipping D5 is the right answer.",
+"<b>Acceptance:</b> two <code>consent_records</code> rows per family — one <code>principal=family</code> at this step, one <code>principal=parent</code> after F1 — each with its own timestamp, policy version and channel. No session may initiate until the parent's row exists."
+],
+crit:"<b>Fixes F-01 and F-02 — both blocking.</b> Do not onboard a real pilot family until the parent-consent path (F1) exists and the settings-deletion path (D5) is reachable. Everything else in this document can wait; these two cannot.",
+api:"<code>models/consent_record.py</code> needs a <code>principal</code> discriminator and a <code>channel</code> field (web / whatsapp). <code>backend/scheduler/session_initiator.py</code> must refuse to initiate session 1 until parent consent is recorded."
+});
+
+SCREENS.push({
+id:"B6", group:"Onboarding", title:"Confirmation", prio:"P0", status:"Revise",
+purpose:"Today: 'All set! Katha will message Subramaniam tomorrow at 9:30' then a button to an empty dashboard. It should instead close the loop on what happens next, and set expectations for the 24-hour wait.",
+m:`<div class="w" style="padding:30px 18px;text-align:center">
+<div class="img" style="height:56px;width:56px;margin:0 auto 14px;border-radius:99px;border-color:var(--ok);color:var(--ok)">✓</div>
+<h3 class="wh">You're set up</h3>
+<div class="sm">Here's exactly what happens next.</div>
+<div class="card acc" style="text-align:left;margin-top:18px"><b class="sm">Today, within the hour</b><div class="xs">Katha writes to Appa on WhatsApp and asks his permission. We'll let you know as soon as he replies.</div></div>
+<div class="card" style="text-align:left"><b class="sm">Tomorrow, 9:30 am</b><div class="xs">If he's said yes, the first conversation begins. About 15 minutes.</div></div>
+<div class="card" style="text-align:left"><b class="sm">Tomorrow, around 10:00 am</b><div class="xs">Your first memory card arrives on WhatsApp — and in your archive.</div></div>
+<div class="card" style="text-align:left;background:var(--parch)"><b class="sm">Worth doing now</b>
+<div class="xs">Give Appa a call and mention it. Families whose parent hears about Katha from them first are far more likely to say yes.</div></div>
+<div class="btn">Go to my dashboard →</div>
+<div class="btn n sm">Send a test message to my own WhatsApp</div></div>`,
+d:null,
+notes:[
+"<b>Three timestamped beats replace a single sentence.</b> The buyer is about to wait ~24 hours with nothing happening. Telling them precisely what occurs and when is what carries them across that gap (J2).",
+"<b>'Give Appa a call and mention it' is the highest-leverage line in onboarding.</b> A parent who has been told by their daughter that 'something nice is coming' converts far better than one receiving a cold message. It costs one sentence and materially moves activation.",
+"<b>Test-message-to-self is a reassurance device.</b> Letting the buyer feel exactly what their father will receive resolves the residual 'will this be weird?' anxiety at the moment it peaks.",
+"<b>Set the expectation that consent may not be instant.</b> He may not check WhatsApp for hours. Saying so pre-empts a support email at 6pm.",
+"<b>Acceptance:</b> beats render actual configured times, not placeholders; routes to C1 (Day-0 dashboard), never to the current empty-zeros view; the WhatsApp test message uses the real template so it is a faithful preview."
+]
+});
+// ============ C · FAMILY PORTAL ============
+SCREENS.push({
+id:"C1", group:"Family portal", title:"Dashboard — Day 0", prio:"P0", status:"New",
+purpose:"The 24–48 hours between finishing setup and the first memory card. Today the buyer lands on zeros: 0 sessions, 0 stories, 0 of 8 chapters, eight empty bars. That is the product's first impression at the exact moment they're wondering whether this was a good idea.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<div class="card acc" style="padding:16px"><span class="badge">WAITING ON APPA</span>
+<h3 class="wh" style="margin-top:9px">Katha has written to Appa</h3>
+<div class="sm">Sent at 4:12 pm today. He hasn't opened it yet — that's normal, most parents reply within a few hours.</div>
+<div class="btn g sm">See what we sent him</div></div>
+
+<div class="card" style="padding:16px"><b class="sm">Then — tomorrow at 9:30 am</b>
+<div class="xs">The first conversation. Katha will open with something from what you told us:</div>
+<div class="q" style="font-size:12px">"I hear you grew up in Madurai. Tell me about the house you grew up in — what did it look like?"</div></div>
+
+<h4 class="wh">While you wait</h4>
+<div class="card"><b class="sm">Add a little more about Appa</b><div class="xs">Two more details, two minutes. It makes the early conversations noticeably better.</div><div class="btn g sm">Add details</div></div>
+<div class="card"><b class="sm">Tell Appa it's coming</b><div class="xs">A quick call from you makes it far more likely he says yes.</div></div>
+<div class="card"><b class="sm">Invite your sister</b><div class="xs">She'll see the stories too, at no extra cost.</div><div class="btn g sm">Send invite</div></div>
+
+<h4 class="wh">The 8 chapters of his life</h4>
+<div class="sm">Katha works through these, one at a time, over roughly three months.</div>
+<div class="card" style="margin-top:8px"><div class="xs" style="line-height:2">Childhood &amp; Home · Family &amp; Ancestors · Education &amp; Coming of Age · Career &amp; Work Life · Love, Marriage &amp; Family · Historical Events Witnessed · Hobbies &amp; Talents · Wisdom &amp; Life Lessons</div></div>
+</div>
+<div class="tabs"><div class="on"><i class="ic"></i>Today</div><div><i class="ic"></i>Stories</div><div><i class="ic"></i>Cards</div><div><i class="ic"></i>Settings</div></div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span style="color:var(--terra-d);font-weight:600">Today</span><span>Stories</span><span>Memory cards</span><span>Settings</span></div></div>
+<div class="w" style="padding:26px 34px">
+<div style="display:flex;gap:20px">
+<div style="flex:1.5">
+<div class="card acc" style="padding:20px"><span class="badge">WAITING ON APPA</span>
+<h3 class="wh" style="margin-top:9px;font-size:20px">Katha has written to Appa</h3>
+<div class="sm">Sent at 4:12 pm today. He hasn't opened it yet — that's normal, most parents reply within a few hours.</div>
+<div style="display:flex;gap:9px"><div class="btn g sm" style="flex:0 0 auto;padding:7px 14px">See what we sent him</div><div class="btn n sm" style="flex:0 0 auto;padding:7px 14px">Resend</div></div></div>
+<div class="card" style="padding:18px"><b class="sm">Then — tomorrow at 9:30 am</b>
+<div class="xs">The first conversation opens with something from what you told us:</div>
+<div class="q">"I hear you grew up in Madurai. Tell me about the house you grew up in — what did it look like?"</div></div>
+<h4 class="wh">The 8 chapters of his life</h4>
+<div class="grid g2">${["Childhood & Home","Family & Ancestors","Education & Coming of Age","Career & Work Life","Love, Marriage & Family","Historical Events Witnessed","Hobbies & Talents","Wisdom & Life Lessons"].map(d=>`<div class="card" style="margin:0"><b class="sm">${d}</b><div class="bar" style="margin-bottom:0"><i style="width:0"></i></div></div>`).join("")}</div>
+<div class="xs" style="margin-top:9px">Katha works through these one at a time, over roughly three months.</div></div>
+<div style="flex:1">
+<h4 class="wh" style="margin-top:0">While you wait</h4>
+<div class="card"><b class="sm">Add more about Appa</b><div class="xs">Two minutes. Makes the early conversations noticeably better.</div><div class="btn g sm">Add details</div></div>
+<div class="card"><b class="sm">Tell Appa it's coming</b><div class="xs">A quick call from you makes it far more likely he says yes.</div></div>
+<div class="card"><b class="sm">Invite your sister</b><div class="xs">She'll see the stories too, at no extra cost.</div><div class="btn g sm">Send invite</div></div>
+<div class="card" style="background:var(--parch)"><b class="sm">Free trial</b><div class="xs">10 conversations included. Nothing charged until you choose to continue.</div></div></div>
+</div></div>`,
+notes:[
+"<b>Replace zeros with a state machine.</b> Day 0 has three distinct states — <i>consent sent</i>, <i>consent given, first session pending</i>, <i>consent declined</i> — and each needs its own screen. Rendering '0 sessions' during any of them is a design failure, not an edge case.",
+"<b>Lead with the parent's consent status.</b> It is the only thing actually happening, and after F-02 it becomes the most meaningful signal on the screen. 'He hasn't opened it yet — that's normal' pre-empts the anxious support email.",
+"<b>Show the opening question Katha will ask.</b> Generated from their seed context, it proves the setup worked and gives them something concrete to look forward to.",
+"<b>'While you wait' converts dead time into onboarding depth.</b> Adding context, inviting a sibling, and prompting the heads-up call are all things that measurably improve outcomes — and they're welcome here precisely because the user has nothing else to do.",
+"<b>Show the 8 chapters as a roadmap, not as 0% progress bars.</b> Empty bars read as failure. A list of what's coming reads as anticipation. Same data, opposite emotion.",
+"<b>Acceptance:</b> this view renders whenever <code>total_sessions === 0</code>; must never show the standard stat tiles; includes a real <code>consent_status</code> from the backend rather than inferring from session count."
+],
+crit:"<b>Fixes F-14.</b> Currently <code>app/family/page.tsx</code> has no empty state — a brand-new user sees the full analytics layout populated entirely with zeros.",
+api:"Needs <code>parent_consent_status</code> and <code>consent_sent_at</code> on <code>GET /family/stats</code>, plus <code>next_session_at</code> and the generated opening prompt."
+});
+
+SCREENS.push({
+id:"C2", group:"Family portal", title:"Dashboard — active", prio:"P0", status:"Rebuild",
+purpose:"The most-visited screen in the product, and currently the one that answers the wrong question. Three lifetime counters and eight progress bars tell Priya how much has accumulated. What she opens the app to find out is whether her father talked today and sounded alright.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<div class="card ok" style="padding:15px"><span class="badge ok">TODAY · 9:34 AM</span>
+<h3 class="wh" style="margin-top:8px">Appa talked for 18 minutes</h3>
+<div class="sm">He sounded engaged throughout. Today's chapter: <b>Career &amp; Work Life</b>.</div>
+<div class="q">"The first day I stood in front of a class, my hands were shaking. Forty boys. I was twenty-two."</div>
+<div class="aud"><span class="pl">▶</span><span class="wv"></span><span class="xs">18:04</span></div>
+<div class="btn g sm">Read today's story →</div></div>
+
+<div class="card" style="padding:12px"><b class="sm">Today's memory card</b>
+<div class="img" style="height:150px;margin-top:8px">MEMORY CARD<br>quote · name · chapter · date</div>
+<div style="display:flex;gap:7px"><div class="btn sm" style="flex:1">Share</div><div class="btn n sm" style="flex:1">Save</div></div></div>
+
+<h4 class="wh">The last 30 days</h4>
+<div class="card"><div style="display:flex;gap:2.5px;flex-wrap:wrap">${Array.from({length:30}).map((_,i)=>`<div style="width:100%;max-width:8px;height:22px;border-radius:2px;background:${i===9||i===17?'var(--wire)':i===24?'#FAD9A2':'var(--ok)'};flex:1"></div>`).join("")}</div>
+<div class="xs" style="margin-top:7px">26 conversations · 2 days he was quiet · 1 short day</div></div>
+
+<h4 class="wh">His life so far</h4>
+<div class="grid g3"><div class="tile"><b>26</b><span>conversations</span></div><div class="tile"><b>71</b><span>stories</span></div><div class="tile"><b>4/8</b><span>chapters</span></div></div>
+<div class="card" style="margin-top:9px"><b class="sm">Career &amp; Work Life</b><div class="bar"><i style="width:62%"></i></div>
+<div class="xs">Chapter 4 of 8 · about 6 weeks in</div>
+<div class="btn g sm">See all chapters</div></div>
+</div>
+<div class="tabs"><div class="on"><i class="ic"></i>Today</div><div><i class="ic"></i>Stories</div><div><i class="ic"></i>Cards</div><div><i class="ic"></i>Settings</div></div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span style="color:var(--terra-d);font-weight:600">Today</span><span>Stories</span><span>Memory cards</span><span>Settings</span></div></div>
+<div class="w" style="padding:24px 32px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+<h3 class="wh" style="font-size:21px">Appa's stories</h3><span class="xs">Free trial · 4 conversations left</span></div>
+<div style="display:flex;gap:20px">
+<div style="flex:1.6">
+<div class="card ok" style="padding:18px"><span class="badge ok">TODAY · 9:34 AM</span>
+<h3 class="wh" style="margin-top:8px;font-size:19px">Appa talked for 18 minutes</h3>
+<div class="sm">He sounded engaged throughout. Today's chapter: <b>Career &amp; Work Life</b>.</div>
+<div class="q" style="font-size:14px">"The first day I stood in front of a class, my hands were shaking. Forty boys. I was twenty-two."</div>
+<div class="aud"><span class="pl">▶</span><span class="wv"></span><span class="xs">18:04</span></div>
+<div style="display:flex;gap:9px"><div class="btn g sm" style="padding:7px 14px">Read today's story</div><div class="btn n sm" style="padding:7px 14px">Download audio</div></div></div>
+
+<h4 class="wh">The last 30 days</h4>
+<div class="card"><div style="display:flex;gap:3px">${Array.from({length:30}).map((_,i)=>`<div style="flex:1;height:34px;border-radius:3px;background:${i===9||i===17?'var(--wire)':i===24?'#FAD9A2':'var(--ok)'}"></div>`).join("")}</div>
+<div class="xs" style="margin-top:8px">26 conversations · 2 quiet days · 1 short day · longest run 11 days</div></div>
+
+<h4 class="wh">Chapters of his life</h4>
+<div class="grid g2">${[["Childhood & Home","100"],["Family & Ancestors","100"],["Education & Coming of Age","85"],["Career & Work Life","62"],["Love, Marriage & Family","0"],["Historical Events Witnessed","0"],["Hobbies & Talents","0"],["Wisdom & Life Lessons","0"]].map(([d,p])=>`<div class="card" style="margin:0"><div style="display:flex;justify-content:space-between"><b class="sm">${d}</b><span class="xs">${p==="0"?"not yet":p+"%"}</span></div><div class="bar" style="margin-bottom:0"><i style="width:${p}%"></i></div></div>`).join("")}</div>
+</div>
+<div style="flex:1">
+<div class="card" style="padding:12px"><b class="sm">Today's memory card</b>
+<div class="img" style="height:190px;margin-top:8px">MEMORY CARD</div>
+<div style="display:flex;gap:7px"><div class="btn sm" style="flex:1">Share</div><div class="btn n sm" style="flex:1">Save</div></div></div>
+<div class="grid g3" style="margin-bottom:10px"><div class="tile"><b>26</b><span>talks</span></div><div class="tile"><b>71</b><span>stories</span></div><div class="tile"><b>4/8</b><span>chapters</span></div></div>
+<div class="card"><b class="sm">People Appa mentions most</b>
+<div class="chips"><span class="chip">Lakshmi 14</span><span class="chip">Thatha 9</span><span class="chip">Madurai 22</span><span class="chip">Loyola 6</span></div>
+<div class="btn g sm">Explore people &amp; places</div></div>
+<div class="card" style="background:var(--parch)"><b class="sm">Tomorrow, 9:30 am</b><div class="xs">Katha will continue with his years at the government school.</div></div>
+</div></div></div>`,
+notes:[
+"<b>Invert the hierarchy: today first, totals last.</b> The current screen leads with cumulative counters that barely move. Priya's question is 'did he talk today and is he okay' (persona P1) — answer it in the first 100 pixels.",
+"<b>Surface <code>energy_signal</code> as human language.</b> It is already computed and stored on every session, then discarded. 'He sounded engaged throughout' / 'He tired early today' is the closest thing we have to the wellbeing signal that PRD §5.2 promises as the core value proposition.",
+"<b>Duration is the single best proxy for a good session.</b> '18 minutes' tells her more than any counter. Pair it with the quote and the audio and the whole screen becomes answerable in five seconds.",
+"<b>The 30-day strip is presence, not performance.</b> Green for talked, grey for quiet, amber for short. Deliberately <i>not</i> a streak — never gamify an 80-year-old's participation (design rule 4). Grey days must read as neutral, never as failure.",
+"<b>Audio at the top level.</b> Currently absent everywhere (F-05). Hearing 20 seconds of his voice is worth more than the entire rest of the dashboard.",
+"<b>Trial runway lives in the header from session 7.</b> Not a banner that appears only after the wall is hit (F-07). Quiet, persistent, never alarming.",
+"<b>People &amp; places teaser exposes the fact store.</b> The entity extraction pipeline is Katha's most defensible asset and is currently invisible (F-10). Even a read-only chip row hints at the depth underneath.",
+"<b>Acceptance:</b> loads in &lt;1.5s on 4G; today-module renders from a single new endpoint; degrades gracefully when there is no session today (shows 'last talked Tuesday'); all counters have a text alternative for screen readers."
+],
+crit:"<b>Fixes F-04 and F-05.</b> This is the highest-traffic screen in the product and the one most responsible for retention. Rebuilding it is the second-highest-value item after the compliance work.",
+api:"Needs <code>GET /family/today</code> returning last session's <code>started_at</code>, duration, <code>energy_signal</code>, <code>domain</code>, top quote, audio URL and card URL. Plus <code>GET /family/activity?days=30</code>. <code>sessions</code> already stores everything required except a computed duration."
+});
+
+SCREENS.push({
+id:"C3", group:"Family portal", title:"Stories browser", prio:"P0", status:"Revise",
+purpose:"Existing <code>/family/stories</code>. Works, but offers exactly one filter — eight domain chips — plus pagination. By session 40 there are several hundred story atoms and no way to find a specific one.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<h3 class="wh">Appa's stories</h3>
+<div class="inp" style="margin-top:9px">🔍 Search his stories, people, places…</div>
+<div class="chips"><span class="chip on">All 71</span><span class="chip">Childhood 12</span><span class="chip">Family 15</span><span class="chip">School 11</span><span class="chip">Work 18</span><span class="chip">Marriage 8</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="xs">71 stories</span><span class="xs">Newest first ▾</span></div>
+
+<div class="card" style="margin-top:9px"><span class="badge">CAREER</span>
+<h4 class="wh" style="margin-top:7px">The first day he taught</h4>
+<div class="q" style="font-size:12px">"Forty boys. I was twenty-two. My hands were shaking."</div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="xs">♪ 2:14 · Madurai · 1971</span><span class="xs">28 Jul</span></div></div>
+
+<div class="card"><span class="badge">FAMILY</span>
+<h4 class="wh" style="margin-top:7px">His grandmother's kitchen</h4>
+<div class="q" style="font-size:12px">"There was always something on the stove. Always."</div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="xs">♪ 3:40 · Madurai · 1950s</span><span class="xs">27 Jul</span></div></div>
+
+<div class="card"><span class="badge">CHILDHOOD</span>
+<h4 class="wh" style="margin-top:7px">The shop on West Masi Street</h4>
+<div class="q" style="font-size:12px">"My father sold cloth. I knew every bolt by its smell."</div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span class="xs">♪ 1:52 · Madurai · 1958</span><span class="xs">26 Jul</span></div></div>
+<div class="card"><span class="badge">WORK</span><h4 class="wh" style="margin-top:7px">The headmaster who never smiled</h4><div class="ph t l"></div><div class="ph t m"></div></div>
+<div class="btn n sm">Load more</div>
+</div>
+<div class="tabs"><div><i class="ic"></i>Today</div><div class="on"><i class="ic"></i>Stories</div><div><i class="ic"></i>Cards</div><div><i class="ic"></i>Settings</div></div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span>Today</span><span style="color:var(--terra-d);font-weight:600">Stories</span><span>Memory cards</span><span>Settings</span></div></div>
+<div class="w" style="padding:24px 32px"><div style="display:flex;gap:22px">
+<div style="width:190px;flex:none">
+<div class="inp" style="font-size:11px">🔍 Search…</div>
+<b class="sm">Chapters</b>
+<div style="margin-top:7px">${[["All stories","71",1],["Childhood & Home","12",0],["Family & Ancestors","15",0],["Education","11",0],["Career & Work","18",0],["Love & Marriage","8",0],["Historical Events","4",0],["Hobbies & Talents","3",0],["Wisdom","0",0]].map(([l,c,on])=>`<div class="xs" style="display:flex;justify-content:space-between;padding:5px 7px;border-radius:6px;${on?'background:var(--terra);color:#fff;font-weight:600':''}"><span>${l}</span><span>${c}</span></div>`).join("")}</div>
+<b class="sm" style="display:block;margin-top:14px">People</b>
+<div class="chips"><span class="chip">Lakshmi 14</span><span class="chip">Thatha 9</span><span class="chip">Ravi 5</span></div>
+<b class="sm" style="display:block;margin-top:10px">Places</b>
+<div class="chips"><span class="chip">Madurai 22</span><span class="chip">Chennai 7</span></div>
+<b class="sm" style="display:block;margin-top:10px">Decades</b>
+<div class="chips"><span class="chip">1950s</span><span class="chip">1960s</span><span class="chip">1970s</span></div>
+</div>
+<div style="flex:1">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:11px"><h3 class="wh">All stories · 71</h3>
+<div style="display:flex;gap:9px"><span class="xs">Newest first ▾</span><span class="xs">▦ Cards</span><span class="xs">☰ List</span></div></div>
+<div class="grid g2">
+${[["CAREER","The first day he taught","&quot;Forty boys. I was twenty-two. My hands were shaking.&quot;","♪ 2:14 · Madurai · 1971"],
+["FAMILY","His grandmother's kitchen","&quot;There was always something on the stove. Always.&quot;","♪ 3:40 · Madurai · 1950s"],
+["CHILDHOOD","The shop on West Masi Street","&quot;My father sold cloth. I knew every bolt by its smell.&quot;","♪ 1:52 · Madurai · 1958"],
+["MARRIAGE","How he met Lakshmi","&quot;Her brother introduced us. I could not look at her.&quot;","♪ 4:06 · Madurai · 1974"],
+["CAREER","The headmaster who never smiled","&quot;He was feared. And he taught me everything.&quot;","♪ 2:31 · Madurai · 1973"],
+["HISTORY","The night of the emergency","&quot;The radio went quiet. Everyone understood.&quot;","♪ 3:12 · Madurai · 1975"]].map(([d,t,q,m])=>`<div class="card" style="margin:0"><span class="badge">${d}</span><h4 class="wh" style="margin-top:7px">${t}</h4><div class="q" style="font-size:12px">${q}</div><div class="xs">${m}</div></div>`).join("")}
+</div>
+<div class="btn n sm" style="max-width:180px;margin:14px auto">Load more</div></div></div></div>`,
+notes:[
+"<b>Add full-text search — the highest value-per-hour item on this screen.</b> pgvector is already in the stack for RAG; reusing it for family-facing semantic search is close to free and turns the archive from a list into something you can ask questions of.",
+"<b>Promote entities to filters.</b> People, places and decades are already extracted into <code>models/fact.py</code> and never shown (F-10). A sidebar of 'Lakshmi 14 · Madurai 22 · 1970s' is the moment the family realises how much has actually been captured.",
+"<b>Show duration and place on each card.</b> Concrete metadata ('2:14 · Madurai · 1971') helps scanning far more than a domain badge alone.",
+"<b>Remove the completeness dots.</b> The current card renders a five-dot extraction-quality score. Nobody outside the ops console should see a score out of five on their father's memory (F-11, design rule 1).",
+"<b>Chips must be ≥44px on mobile.</b> Currently ~30px, below the touch-target minimum (F-15).",
+"<b>Two-column card grid on desktop.</b> Single-column <code>max-w-3xl</code> wastes half the viewport on the Sunday-laptop reading mode (J3, Mode B).",
+"<b>Acceptance:</b> search returns in &lt;400ms; filters compose (chapter + person + decade); filter state lives in the URL so a filtered view is shareable and survives refresh; empty results offer a reset action rather than a dead end."
+],
+api:"<code>GET /family/stories</code> needs <code>q</code>, <code>person</code>, <code>place</code> and <code>decade</code> parameters. Entities exist in <code>models/fact.py</code> via <code>extraction/entity_extractor.py</code> — needs an aggregation endpoint (<code>GET /family/entities</code>) to populate the sidebar counts."
+});
+
+SCREENS.push({
+id:"C4", group:"Family portal", title:"Story detail", prio:"P0", status:"Rebuild",
+purpose:"Where a family reads their parent's life. Today it renders the 5W extraction as a two-column definition list with a completeness score — a database record of Amma's wedding day. It should read like a page from a book.",
+m:`<div class="nb"><span class="lk">← Stories</span><span class="lk">Share</span></div>
+<div class="w" style="padding:18px 16px">
+<span class="badge">CAREER &amp; WORK LIFE</span>
+<h3 class="wh" style="font-size:21px;margin-top:9px;line-height:1.3">The first day he taught</h3>
+<div class="xs">Told on 28 July 2026 · about 1971, Madurai</div>
+<div class="aud" style="margin-top:14px"><span class="pl">▶</span><span class="wv"></span><span class="xs">2:14</span></div>
+<div class="xs" style="margin-top:-4px">Appa's voice, in Tamil</div>
+<div class="q" style="font-size:15px;margin:16px 0">"The first day I stood in front of a class, my hands were shaking. Forty boys. I was twenty-two — barely older than the eldest of them."</div>
+<div style="font-size:15px;line-height:1.75;color:#30358B">
+<div class="ph l"></div><div class="ph l"></div><div class="ph m"></div><div class="ph l"></div><div class="ph l"></div><div class="ph s"></div>
+<div style="height:10px"></div><div class="ph l"></div><div class="ph m"></div><div class="ph l"></div><div class="ph s"></div></div>
+
+<div class="card" style="margin-top:20px;background:var(--parch)"><b class="sm">In this story</b>
+<div class="chips"><span class="chip">Madurai</span><span class="chip">1971</span><span class="chip">Govt. Boys School</span><span class="chip">Headmaster Iyer</span></div></div>
+
+<div style="display:flex;gap:7px;margin-top:12px"><div class="btn sm" style="flex:1">Share this</div><div class="btn n sm" style="flex:1">Save audio</div></div>
+
+<h4 class="wh">Read the full transcript</h4>
+<div class="card"><div class="xs">Tamil original with English translation</div><div class="btn g sm">Open transcript</div></div>
+
+<h4 class="wh">More from this chapter</h4>
+<div class="card"><b class="sm">The headmaster who never smiled</b><div class="xs">♪ 2:31 · 29 Jul</div></div>
+<div class="card"><b class="sm">Teaching during the monsoon</b><div class="xs">♪ 1:47 · 30 Jul</div></div>
+</div>`,
+d:`<div class="nb"><span class="lk">← All stories</span><div class="lk"><span>Share</span><span>Save audio</span><span>Transcript</span></div></div>
+<div class="w" style="padding:30px 34px"><div style="display:flex;gap:30px">
+<div style="flex:1;max-width:560px">
+<span class="badge">CAREER &amp; WORK LIFE</span>
+<h3 class="wh" style="font-size:27px;margin-top:10px;line-height:1.25">The first day he taught</h3>
+<div class="xs">Told on 28 July 2026 · about 1971, Madurai</div>
+<div class="aud" style="margin-top:16px"><span class="pl">▶</span><span class="wv"></span><span class="xs">2:14</span></div>
+<div class="xs" style="margin-top:-4px">Appa's voice, in Tamil · <span style="color:var(--terra-d)">show transcript</span></div>
+<div class="q" style="font-size:17px;margin:20px 0">"The first day I stood in front of a class, my hands were shaking. Forty boys. I was twenty-two — barely older than the eldest of them."</div>
+<div style="font-size:16px;line-height:1.8">
+<div class="ph l"></div><div class="ph l"></div><div class="ph m"></div><div class="ph l"></div><div class="ph l"></div><div class="ph s"></div>
+<div style="height:12px"></div><div class="ph l"></div><div class="ph m"></div><div class="ph l"></div><div class="ph l"></div><div class="ph s"></div>
+<div style="height:12px"></div><div class="ph l"></div><div class="ph m"></div><div class="ph s"></div></div>
+</div>
+<div style="width:210px;flex:none">
+<div class="card"><b class="sm">In this story</b>
+<div class="xs" style="margin-top:8px"><b>Who</b><br>Headmaster Iyer, forty students</div>
+<div class="xs" style="margin-top:7px"><b>When</b><br>1971, aged 22</div>
+<div class="xs" style="margin-top:7px"><b>Where</b><br>Government Boys School, Madurai</div>
+<div class="xs" style="margin-top:7px"><b>Why it mattered</b><br>The beginning of 35 years of teaching</div></div>
+<div class="card"><b class="sm">More from Career</b>
+<div class="xs" style="margin-top:7px">The headmaster who never smiled<br><span style="color:var(--mut-2)">♪ 2:31</span></div>
+<div class="xs" style="margin-top:7px">Teaching during the monsoon<br><span style="color:var(--mut-2)">♪ 1:47</span></div>
+<div class="xs" style="margin-top:7px">The year he became senior master<br><span style="color:var(--mut-2)">♪ 3:02</span></div></div>
+<div class="card" style="background:var(--parch)"><b class="sm">Ask Katha to go deeper</b>
+<div class="xs">Suggest a follow-up question for tomorrow's conversation.</div><div class="btn g sm">Suggest</div></div>
+</div></div></div>`,
+notes:[
+"<b>Narrative first, structure second.</b> The 5W becomes a quiet sidebar on desktop and a chip row on mobile. What the family came for is the story, in his words.",
+"<b>Audio directly under the title.</b> This is the artifact that cannot be recreated (F-05, persona P4). In 2045 the transcript is useful; the recording is priceless.",
+"<b>Strip <code>completeness_score</code> from the family-facing serializer entirely.</b> It's an internal extraction metric. It doesn't render on this page today, but it is served to the client and painted as a five-dot meter on the list cards in C3 — including an <code>aria-label</code> reading 'Completeness: 3 of 5' aloud. Remove it at the API boundary so it can't leak back in (F-11).",
+"<b>Serif face for the narrative and the quote.</b> Signals <i>book</i>, not <i>app</i>. Worth the extra font request — this is the screen that has to feel like a keepsake.",
+"<b>Measure caps at 65ch.</b> The current <code>max-w-2xl</code> full-bleed paragraph is too wide for comfortable reading at 18px.",
+"<b>Entity chips link into the archive.</b> Tapping 'Madurai' should show every story set there. This is where the fact store finally earns its keep (F-10).",
+"<b>Bilingual transcript, collapsed by default.</b> Original language plus English. Family members with weaker Tamil need the translation; the original is what proves authenticity.",
+"<b>'Ask Katha to go deeper' previews the Phase 2 question-submission feature</b> and is a natural place to capture intent early.",
+"<b>Acceptance:</b> keyboard-accessible audio player with visible focus; transcript in a proper disclosure element; sidebar collapses below the narrative on mobile; no completeness score anywhere in the DOM."
+],
+api:"<code>GET /family/stories/{id}</code> already returns the 5W. Add <code>audio_url</code>, <code>transcript</code> (original + translated) and linked <code>entities</code>. Remove <code>completeness_score</code> from the family-facing serializer and expose it only on the ops endpoint."
+});
+
+SCREENS.push({
+id:"C5", group:"Family portal", title:"Memory cards + share", prio:"P0", status:"Revise",
+purpose:"Existing gallery. The modal offers <code>&lt;a download&gt;</code> — on mobile that drops a file in a folder and the journey ends. The card is the product's natural viral object and we built the object without the loop.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<h3 class="wh">Memory cards</h3><div class="sm">One from every conversation. Made to be shared.</div>
+<div class="grid g2" style="margin-top:12px">${Array.from({length:6}).map((_,i)=>`<div class="img" style="height:104px">CARD ${i+1}</div>`).join("")}</div>
+<div class="btn n sm">Load more</div>
+
+<h4 class="wh">Card opened</h4>
+<div class="card" style="background:#211A61;padding:12px">
+<div class="img" style="height:190px;background:#30358B;border-color:#4249A8;color:#C3C9EE">MEMORY CARD<br>quote · Appa · Career · 28 Jul</div>
+<div class="btn sm" style="margin-top:10px">Share</div>
+<div style="display:flex;gap:7px"><div class="btn n sm" style="flex:1;background:transparent;color:#C3C9EE;border-color:#4249A8">Save</div><div class="btn n sm" style="flex:1;background:transparent;color:#C3C9EE;border-color:#4249A8">Read story</div></div></div>
+
+<h4 class="wh">Share sheet</h4>
+<div class="card"><div class="chips"><span class="chip on">WhatsApp</span><span class="chip">Family group</span><span class="chip">Copy link</span><span class="chip">Save image</span><span class="chip">More…</span></div>
+<div class="xs">A shared link opens a page anyone can read — no account needed.</div></div>
+</div>
+<div class="tabs"><div><i class="ic"></i>Today</div><div><i class="ic"></i>Stories</div><div class="on"><i class="ic"></i>Cards</div><div><i class="ic"></i>Settings</div></div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span>Today</span><span>Stories</span><span style="color:var(--terra-d);font-weight:600">Memory cards</span><span>Settings</span></div></div>
+<div class="w" style="padding:24px 32px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><div><h3 class="wh">Memory cards · 26</h3><div class="sm">One from every conversation. Made to be shared.</div></div>
+<div style="display:flex;gap:9px"><span class="xs">All chapters ▾</span><span class="xs">Newest ▾</span><span class="xs">Download all</span></div></div>
+<div class="grid g4" style="margin-top:16px">${Array.from({length:12}).map((_,i)=>`<div class="img" style="height:130px">CARD ${i+1}</div>`).join("")}</div>
+<div class="btn n sm" style="max-width:170px;margin:16px auto">Load more</div>
+<div class="card" style="margin-top:16px;background:var(--parch)"><b class="sm">Card opened — actions</b>
+<div class="chips" style="margin-top:8px"><span class="chip on">Share to WhatsApp</span><span class="chip">Send to family group</span><span class="chip">Copy public link</span><span class="chip">Save image</span><span class="chip">Read the full story</span><span class="chip">Order as a print</span></div></div></div>`,
+notes:[
+"<b>Replace the download link with <code>navigator.share()</code>.</b> On mobile this opens the native sheet with WhatsApp first — one tap from card to family group. This is the entire growth loop (J5, F-13) and it is a handful of lines of code.",
+"<b>Every card needs a public URL.</b> Sharing a JPEG loses all context and all attribution. A link that opens C8 gives the recipient a story, a name, and a way in. Desktop fallback is 'copy link'.",
+"<b>Fix the modal's accessibility.</b> Current implementation has <code>role=\"dialog\"</code> and <code>aria-modal</code> but no focus trap, no Escape handler and no focus restore (F-15).",
+"<b>Add 'read the full story' from the card.</b> <code>MemoryCard.story_atom_id</code> already exists and is unused in the UI — the card is a teaser and the story is the payoff.",
+"<b>Bulk download for the archive-anxious buyer,</b> and it doubles as partial proof of the export guarantee that persona P4 depends on.",
+"<b>'Order as a print' is a P2 revenue hook</b> (PRD §9.2, ₹2,000 memory book) — worth stubbing here as an interest signal during the pilot.",
+"<b>Acceptance:</b> share works on iOS Safari and Android Chrome; public link is unguessable (UUID or signed); Escape closes the modal and returns focus to the originating thumbnail; grid is virtualised past 60 cards."
+]
+});
+
+SCREENS.push({
+id:"C8", group:"Family portal", title:"Public shared card", prio:"P0", status:"New",
+purpose:"Where a forwarded memory card lands. Today Ravi taps his sister's forward and gets a JPEG or a login wall. This is the cheapest acquisition surface Katha will ever have and it doesn't exist.",
+m:`<div class="w" style="padding:0">
+<div class="hero" style="padding:20px 16px 16px"><div class="xs" style="color:#A9B0E0;letter-spacing:.1em">SHARED BY PRIYA</div>
+<h3 style="font-size:17px;margin-top:8px">A memory from Subramaniam</h3></div>
+<div class="w">
+<div class="img" style="height:200px">MEMORY CARD</div>
+<div class="q" style="font-size:14px;margin-top:14px">"The first day I stood in front of a class, my hands were shaking. Forty boys. I was twenty-two."</div>
+<div class="xs">Subramaniam · Career &amp; Work Life · told 28 July 2026</div>
+<div class="aud" style="margin-top:12px"><span class="pl">▶</span><span class="wv"></span><span class="xs">2:14</span></div>
+<div class="xs">Hear him tell it</div>
+<div style="font-size:14px;line-height:1.7;margin-top:14px"><div class="ph l"></div><div class="ph l"></div><div class="ph m"></div><div class="ph s"></div></div>
+
+<div class="card" style="margin-top:20px;background:var(--parch)">
+<b class="sm">This is part of Subramaniam's life archive</b>
+<div class="xs">71 stories, recorded in his own voice over 26 morning conversations.</div>
+<div class="btn g sm">Ask Priya for access</div></div>
+
+<div class="card" style="border-style:dashed;background:transparent">
+<b class="sm">Your parents have stories too</b>
+<div class="xs">Katha talks with them on WhatsApp each morning and keeps what they say.</div>
+<div class="btn sm">See how it works</div></div>
+<div class="xs" style="text-align:center;margin-top:10px">Shared with the family's permission · katha.life</div>
+</div></div>`,
+d:null,
+notes:[
+"<b>Public, unauthenticated, indexable-only-if-the-family-allows.</b> Default to <code>noindex</code>; sharing within a family group should never make a parent's memory searchable on Google.",
+"<b>Lead with the memory, not the marketing.</b> Ravi opened this because his sister sent it, not because he wanted a product pitch. Give him the story and the voice first; the soft CTA sits below the fold.",
+"<b>Include the audio.</b> For a sibling, hearing their father's voice is the entire emotional payload — and the single most effective conversion asset Katha will ever deploy (J5).",
+"<b>Two distinct CTAs for two distinct visitors.</b> 'Ask Priya for access' for family (routes to the invite request in D3); 'See how it works' for strangers (routes to A1). Conflating them serves neither.",
+"<b>Owner controls sharing.</b> Every card needs a per-card or global share toggle in Settings, off by default for anything the family marks private. Some stories are not for the internet.",
+"<b>Acceptance:</b> OG tags render the card image so the WhatsApp preview is the card itself — this is what makes a forward look like a memory rather than a link; page is SSG/cached; revocable — the owner can kill a public link and it 404s immediately."
+],
+crit:"<b>Closes half of F-12 and all of F-13.</b> One elderly parent has 2–4 adult children and 3–8 grandchildren — every archive is a small, warm, pre-qualified audience. This loop is worth more than any paid channel in the pilot."
+});
+
+SCREENS.push({
+id:"C7", group:"Family portal", title:"People & places", prio:"P1", status:"New",
+purpose:"Surfaces the fact store. <code>extraction/entity_extractor.py</code> builds a structured graph of every person, place and institution in the parent's life — and the portal shows none of it.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div><div class="w">
+<h3 class="wh">Appa's world</h3><div class="sm">Everyone and everywhere he has mentioned.</div>
+<h4 class="wh">People</h4>
+<div class="card"><b class="sm">Lakshmi</b> <span class="badge">WIFE</span><div class="xs">Mentioned in 14 stories · married 1974 · passed 2023</div><div class="bar" style="margin-bottom:0"><i style="width:78%"></i></div></div>
+<div class="card"><b class="sm">Thatha (Ramaswamy)</b> <span class="badge">FATHER</span><div class="xs">9 stories · cloth merchant, West Masi Street</div></div>
+<div class="card"><b class="sm">Headmaster Iyer</b> <span class="badge">MENTOR</span><div class="xs">4 stories · Government Boys School</div></div>
+<h4 class="wh">Places</h4>
+<div class="chips"><span class="chip">Madurai 22</span><span class="chip">Chennai 7</span><span class="chip">West Masi St 6</span><span class="chip">Loyola College 5</span><span class="chip">Kodaikanal 3</span></div>
+<h4 class="wh">Times</h4>
+<div class="chips"><span class="chip">1950s 8</span><span class="chip">1960s 14</span><span class="chip">1970s 21</span><span class="chip">1980s 11</span></div>
+<div class="card" style="margin-top:12px;background:var(--parch)"><b class="sm">Someone missing?</b><div class="xs">Tell Katha about a person and it will ask Appa about them.</div><div class="btn g sm">Add a person</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>This is Katha's most defensible asset made visible.</b> Anyone can record voice notes; almost nobody assembles a structured model of a person's life. Hiding it makes the product look like a voice-note folder (F-10).",
+"<b>Relationship labels come from the extractor, not the user.</b> 'Wife', 'father', 'mentor' are already inferred. Showing them proves the AI genuinely understood, which is the moment the family stops thinking of this as transcription.",
+"<b>Every entity is a filter into C3.</b> 'Lakshmi · 14 stories' should open all fourteen. This is how the archive becomes navigable rather than chronological.",
+"<b>'Add a person' feeds the interview protocol.</b> If the family knows there's an uncle who mattered and he hasn't come up, that's a high-value prompt for the next session — and a natural Phase 2 on-ramp.",
+"<b>Handle the dead sensitively.</b> 'Passed 2023' is factual and appropriate; anything cheerful next to it is not. Never apply engagement styling to a deceased spouse's card.",
+"<b>Acceptance:</b> entity deduplication (Lakshmi / Lakshmi amma / Amma must merge); the family can correct a wrong relationship, and the correction propagates back into the fact store so future prompts improve."
+],
+api:"Needs <code>GET /family/entities</code> aggregating <code>models/fact.py</code> by type with story counts and links. Deduplication logic belongs in <code>extraction/entity_extractor.py</code>, not the frontend."
+});
+
+SCREENS.push({
+id:"C6", group:"Family portal", title:"Life timeline", prio:"P2", status:"New",
+purpose:"PRD §8 Phase 2. A chronological view of the life, assembled from <code>when_approx</code> on each story atom. Wireframed now so the data model isn't designed in a way that precludes it.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div><div class="w">
+<h3 class="wh">Appa's life</h3><div class="sm">1949 — today</div>
+<div class="chips"><span class="chip on">All</span><span class="chip">Childhood</span><span class="chip">Work</span><span class="chip">Family</span></div>
+${[["1949","Born in Madurai","1 story"],["1958","His father's shop on West Masi Street","4 stories"],["1966","Loyola College, Chennai","3 stories"],["1971","First day teaching · aged 22","6 stories"],["1974","Married Lakshmi","5 stories"],["1975","The Emergency","2 stories"],["1978","Priya born","3 stories"],["2006","Retired after 35 years","4 stories"],["2023","Lakshmi passed","1 story"]].map(([y,t,c])=>`<div style="display:flex;gap:11px;margin-top:11px"><div style="width:40px;flex:none;text-align:right"><b class="sm">${y}</b></div><div style="width:2px;background:var(--wire);position:relative;flex:none"><div style="position:absolute;left:-3px;top:4px;width:8px;height:8px;border-radius:99px;background:var(--terra)"></div></div><div style="flex:1"><b class="sm">${t}</b><div class="xs">${c}</div></div></div>`).join("")}
+<div class="card" style="margin-top:16px;background:var(--parch)"><b class="sm">Gaps Katha hasn't reached</b><div class="xs">1985–2005 · his middle working years. Katha will get there.</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>P2, but the data dependency is P0.</b> This view only works if <code>when_approx</code> is normalised to a sortable value at extraction time. If we store 'sometime in the seventies' as free text now, this screen becomes a rewrite later — so fix the extractor even though the screen ships later.",
+"<b>Gaps are a feature, not an omission.</b> Showing that 1985–2005 is thin tells the family what's still to come and makes the archive feel like a work in progress rather than a finished, incomplete thing.",
+"<b>Life events anchor the timeline; stories hang off them.</b> Birth, marriage, children, retirement, bereavement. These come from the fact store, not from story atoms directly.",
+"<b>This is the screen that becomes a printed book (PRD §8 Phase 3).</b> Design it as a chronological narrative spine, because that is what a memoir is.",
+"<b>Acceptance (when built):</b> uncertain dates render honestly ('mid-1970s'), never as false precision; timeline degrades gracefully when fewer than 10 dated stories exist."
+],
+api:"Requires normalising <code>when_approx</code> in <code>extraction/story_extractor.py</code> into a sortable year or year-range alongside the human-readable string. Do this now even though the screen is P2."
+});
+// ============ D · ACCOUNT & CONTROL ============
+SCREENS.push({
+id:"D1", group:"Account & control", title:"Settings — conversation", prio:"P0", status:"New",
+purpose:"The single biggest structural gap. Onboarding collects six settings and none of them can ever be changed. There is no settings route in the application at all — the nav offers Stories, Memory Cards, Logout.",
+m:`<div class="nb"><span class="lk">← Settings</span><b>Conversation</b><span class="lk"></span></div>
+<div class="w">
+<div class="card acc"><b class="sm">Appa is talking to Katha</b><div class="xs">Next conversation tomorrow, 9:30 am</div>
+<div class="btn n sm">Pause conversations</div></div>
+
+<h4 class="wh">When Katha calls</h4>
+<div class="card"><span class="lb">Time of day</span><div class="inp" style="margin-bottom:4px">9:30 am ▾</div>
+<div class="xs">Changes take effect from tomorrow.</div>
+<span class="lb">How often</span><div class="chips"><span class="chip on">Every day</span><span class="chip">Weekdays</span><span class="chip">3 × a week</span></div>
+<div class="xs">Appa has been talking most days — daily seems to suit him.</div></div>
+
+<h4 class="wh">Language</h4>
+<div class="card"><div class="inp" style="margin-bottom:4px">Tamil ▾</div>
+<div class="xs">Katha handles mixed speech automatically — Tamil with English words is fine.</div></div>
+
+<h4 class="wh">What Katha talks about</h4>
+<div class="card"><span class="lb">Current chapter</span><div class="inp" style="margin-bottom:4px">Career &amp; Work Life ▾</div>
+<div class="xs">Katha moves on by itself, but you can steer it.</div>
+<span class="lb">Please avoid</span><div class="chips"><span class="chip on">The year Amma passed ✕</span><span class="chip">+ add</span></div>
+<span class="lb">Please ask about</span><div class="chips"><span class="chip on">How he met Amma ✕</span><span class="chip">+ add</span></div></div>
+
+<h4 class="wh">About Appa</h4>
+<div class="card"><div class="xs">Name · number · what you call him · the context you gave at setup</div><div class="btn g sm">Edit</div></div>
+
+<h4 class="wh">Where memory cards go</h4>
+<div class="card"><div class="xs">+91 99887 76655 (you)</div><div class="btn g sm">Change or add a number</div></div>
+</div>
+<div class="tabs"><div><i class="ic"></i>Today</div><div><i class="ic"></i>Stories</div><div><i class="ic"></i>Cards</div><div class="on"><i class="ic"></i>Settings</div></div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span>Today</span><span>Stories</span><span>Memory cards</span><span style="color:var(--terra-d);font-weight:600">Settings</span></div></div>
+<div class="w" style="padding:24px 32px"><div style="display:flex;gap:26px">
+<div style="width:170px;flex:none">${[["Conversation",1],["Pause",0],["Family members",0],["Plan & billing",0],["Privacy & data",0],["Notifications",0]].map(([l,on])=>`<div class="xs" style="padding:7px 9px;border-radius:6px;${on?'background:var(--terra);color:#fff;font-weight:600':''}">${l}</div>`).join("")}</div>
+<div style="flex:1;max-width:520px">
+<h3 class="wh">Conversation</h3>
+<div class="card acc" style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+<div><b class="sm">Appa is talking to Katha</b><div class="xs">Next conversation tomorrow, 9:30 am</div></div>
+<div class="btn n sm" style="margin:0;padding:7px 14px">Pause</div></div>
+<h4 class="wh">When Katha calls</h4>
+<div class="card"><div style="display:flex;gap:14px"><div style="flex:1"><span class="lb">Time of day</span><div class="inp">9:30 am ▾</div></div>
+<div style="flex:1"><span class="lb">How often</span><div class="inp">Every day ▾</div></div></div>
+<div class="xs" style="margin-top:-4px">Changes take effect from tomorrow. Appa has been talking most days — daily seems to suit him.</div></div>
+<h4 class="wh">Language</h4>
+<div class="card"><div class="inp" style="max-width:220px;margin-bottom:4px">Tamil ▾</div><div class="xs">Katha handles mixed speech automatically.</div></div>
+<h4 class="wh">What Katha talks about</h4>
+<div class="card"><span class="lb">Current chapter</span><div class="inp" style="max-width:280px">Career &amp; Work Life ▾</div>
+<span class="lb">Please avoid</span><div class="chips"><span class="chip on">The year Amma passed ✕</span><span class="chip">+ add a topic</span></div>
+<span class="lb">Please ask about</span><div class="chips"><span class="chip on">How he met Amma ✕</span><span class="chip">+ add a question</span></div></div>
+<h4 class="wh">About Appa</h4>
+<div class="card"><div class="xs">Subramaniam · +91 98765 43210 · called "Appa" · Madurai, schoolteacher…</div><div class="btn g sm" style="max-width:120px">Edit</div></div>
+<h4 class="wh">Where memory cards go</h4>
+<div class="card"><div class="xs">+91 99887 76655 (you)</div><div class="btn g sm" style="max-width:190px">Change or add a number</div></div>
+</div></div></div>`,
+notes:[
+"<b>Fixes F-06.</b> Every one of these is a real support request that will arrive in the first six weeks of a 30-family pilot: 'can it be later', 'she's answering in Tamil not English', 'that's my old number', 'she's tired of childhood questions'. Without this screen every one is an email to you and a manual DB edit.",
+"<b>Pause is the most important control on the page</b> and gets top billing (detail in D2). A family that can't pause during a hospital stay cancels instead.",
+"<b>Frame every setting in the parent's terms.</b> 'When Katha calls Appa', not 'Session schedule'. The buyer is acting as their parent's advocate (persona P2) — the language should reflect that.",
+"<b>The avoid-list is a safety control, not a preference.</b> It must reach <code>backend/prompts/system_prompt.py</code> as a hard constraint. Bereavement, estrangement, illness — an AI that stumbles into these destroys trust irrecoverably.",
+"<b>Topic steering gives the buyer agency</b> and is a natural early form of the Phase 2 question-submission feature.",
+"<b>Show data-informed guidance.</b> 'Appa has been talking most days — daily seems to suit him' turns a settings page into something that feels attentive.",
+"<b>Acceptance:</b> every change is optimistic with an undo toast; time and frequency changes take effect at the next scheduled run, never retroactively; changing language is announced to the parent in WhatsApp so it isn't jarring; all changes written to an audit log for support."
+],
+crit:"<b>Fixes F-06 — blocking for pilot.</b> There is currently no settings route of any kind. This screen and D5 are the two that must exist before the first family is onboarded.",
+api:"Needs <code>PATCH /family/settings</code> covering <code>session_time</code>, <code>frequency</code>, <code>preferred_language</code>, <code>whatsapp_number</code>, <code>family_whatsapp_number</code>, <code>current_domain</code>, <code>excluded_topics</code>, <code>requested_topics</code>. <code>backend/scheduler/session_initiator.py</code> must read schedule at run time rather than caching it."
+});
+
+SCREENS.push({
+id:"D2", group:"Account & control", title:"Settings — pause", prio:"P0", status:"New",
+purpose:"Illness, travel, a hospital stay, a death in the family, or simply 'he's had enough for a while'. All ordinary. Today the only way to stop the messages is to cancel the account.",
+m:`<div class="nb"><span class="lk">← Settings</span><b>Pause</b><span class="lk"></span></div>
+<div class="w">
+<h3 class="wh">Pause conversations</h3>
+<div class="sm">Katha will stop messaging Appa. His stories stay exactly where they are, and nothing is lost.</div>
+<h4 class="wh">For how long?</h4>
+<div class="card acc"><b class="sm">A few days</b><div class="xs">Resumes automatically on Monday 5 August</div></div>
+<div class="card"><b class="sm">Two weeks</b><div class="xs">Resumes 15 August</div></div>
+<div class="card"><b class="sm">Until I turn it back on</b><div class="xs">Nothing happens until you say so</div></div>
+<h4 class="wh">Anything we should know?</h4>
+<div class="chips"><span class="chip">Travelling</span><span class="chip on">Unwell</span><span class="chip">In hospital</span><span class="chip">Family reasons</span><span class="chip">He'd like a break</span><span class="chip">Rather not say</span></div>
+<div class="xs">This helps Katha greet him properly when he comes back.</div>
+<div class="card" style="margin-top:12px;background:var(--parch)"><b class="sm">What Appa will hear</b>
+<div class="bub" style="max-width:100%;margin-top:7px">"I'll leave you in peace for a few days, Subramaniam ji. I'll write again on Monday. Take care of yourself."</div></div>
+<div class="btn">Pause until Monday</div>
+<div class="btn n sm">Never mind</div>
+<div class="xs" style="text-align:center">Your free trial is paused too — no conversations are used up.</div>
+</div>`,
+d:null,
+notes:[
+"<b>Pause is a retention feature disguised as a settings toggle.</b> The alternative to pausing is cancelling. Making it one tap and guilt-free is straightforwardly cheaper than winning the customer back.",
+"<b>Auto-resume by default.</b> An open-ended pause quietly becomes churn. Offer a return date and default to it.",
+"<b>Ask why — gently and skippably.</b> 'In hospital' vs 'he'd like a break' are completely different situations and should produce completely different return greetings. 'Rather not say' must be a real option.",
+"<b>Show the parent-facing message.</b> The buyer needs to know their father won't simply be dropped. Silence from a daily companion reads as abandonment to a lonely person — this is the same failure mode as the freemium wall (F-07).",
+"<b>Pause the trial counter too, and say so.</b> Removes the 'am I wasting my free sessions' hesitation that would otherwise stop someone pausing when they should.",
+"<b>A pause initiated by the parent in WhatsApp (F5) surfaces here identically,</b> with a note that he asked for it. The buyer must never be able to override the parent's own request.",
+"<b>Acceptance:</b> resume is scheduled server-side, not client-side; dashboard shows a persistent paused state with the return date; a pause requested by the parent is flagged as such and is not silently reversible."
+]
+});
+
+SCREENS.push({
+id:"D5", group:"Account & control", title:"Settings — privacy & data", prio:"P0", status:"New",
+purpose:"The compliance-blocking screen. The consent step already makes users tick a box saying 'You can delete all data at any time from your account settings'. That page does not exist. The endpoint does.",
+m:`<div class="nb"><span class="lk">← Settings</span><b>Privacy &amp; data</b><span class="lk"></span></div>
+<div class="w">
+<h4 class="wh" style="margin-top:0">Consent on record</h4>
+<div class="card ok"><b class="sm">Yours</b><div class="xs">Given 12 June 2026 · policy v1.0</div></div>
+<div class="card ok"><b class="sm">Appa's</b><div class="xs">Given by voice on WhatsApp, 12 June 2026, in Tamil</div><div class="btn g sm">Listen to his consent</div></div>
+
+<h4 class="wh">Recordings</h4>
+<div class="card"><b class="sm">Keep his voice recordings</b> <span class="badge ok">ON</span>
+<div class="xs">Turning this off deletes all existing audio permanently. Transcripts and stories are kept.</div></div>
+
+<h4 class="wh">Take everything with you</h4>
+<div class="card"><div class="xs">A single download — all audio, transcripts, stories and memory cards, in open formats you can open without Katha.</div>
+<div class="btn g sm">Download everything</div>
+<div class="xs">Prepared within a few hours. We'll email a link.</div></div>
+
+<h4 class="wh">Who can see this archive</h4>
+<div class="card"><div class="xs">You · Ravi (view only)</div>
+<span class="lb">Public card links</span><div class="chips"><span class="chip on">Allowed</span><span class="chip">Off</span></div>
+<div class="xs">3 cards currently have public links. <span style="color:var(--terra-d)">Review</span></div></div>
+
+<h4 class="wh">Delete everything</h4>
+<div class="card att"><div class="xs">Permanently removes every recording, transcript, story and memory card. This cannot be undone. Consent records are kept in anonymised form, as the law requires.</div>
+<div class="btn d sm">Delete all of Appa's data</div>
+<div class="xs">We'll ask you to confirm, and we'll offer you a download first.</div></div>
+<div class="xs" style="margin-top:14px">Questions: privacy@katha.life · Grievance officer per DPDP Act</div>
+</div>`,
+d:`<div class="nb"><b>katha</b><div class="lk"><span>Today</span><span>Stories</span><span>Memory cards</span><span style="color:var(--terra-d);font-weight:600">Settings</span></div></div>
+<div class="w" style="padding:24px 32px"><div style="display:flex;gap:26px">
+<div style="width:170px;flex:none">${[["Conversation",0],["Pause",0],["Family members",0],["Plan & billing",0],["Privacy & data",1],["Notifications",0]].map(([l,on])=>`<div class="xs" style="padding:7px 9px;border-radius:6px;${on?'background:var(--terra);color:#fff;font-weight:600':''}">${l}</div>`).join("")}</div>
+<div style="flex:1;max-width:520px">
+<h3 class="wh">Privacy &amp; data</h3>
+<h4 class="wh">Consent on record</h4>
+<div style="display:flex;gap:10px"><div class="card ok" style="flex:1"><b class="sm">Yours</b><div class="xs">12 June 2026 · policy v1.0</div></div>
+<div class="card ok" style="flex:1"><b class="sm">Appa's</b><div class="xs">By voice, 12 June 2026, in Tamil</div><div class="btn g sm">Listen</div></div></div>
+<h4 class="wh">Recordings</h4>
+<div class="card"><b class="sm">Keep his voice recordings</b> <span class="badge ok">ON</span><div class="xs">Turning this off deletes all existing audio permanently. Transcripts and stories are kept.</div></div>
+<h4 class="wh">Take everything with you</h4>
+<div class="card"><div class="xs">A single download — all audio, transcripts, stories and memory cards, in open formats you can open without Katha.</div><div class="btn g sm" style="max-width:200px">Download everything</div></div>
+<h4 class="wh">Who can see this archive</h4>
+<div class="card"><div class="xs">You (owner) · Ravi (view only)</div><span class="lb">Public card links</span><div class="chips"><span class="chip on">Allowed</span><span class="chip">Off</span></div><div class="xs">3 cards currently have public links. <span style="color:var(--terra-d)">Review</span></div></div>
+<h4 class="wh">Delete everything</h4>
+<div class="card att"><div class="xs">Permanently removes every recording, transcript, story and memory card. This cannot be undone. Consent records are kept in anonymised form, as the law requires.</div>
+<div class="btn d sm" style="max-width:250px">Delete all of Appa's data</div></div>
+<div class="xs" style="margin-top:14px">privacy@katha.life · Grievance officer per DPDP Act</div>
+</div></div></div>`,
+notes:[
+"<b>Fixes F-01 — the shipped compliance problem.</b> We are collecting legally-operative consent on the basis of a control we do not provide. Under DPDP the right to erasure must be exercisable, not merely honoured on request.",
+"<b>Offer export before deletion, every time.</b> Most people who click delete want control, not destruction. An export offer converts a large share of deletions into a downloaded archive and a retained customer.",
+"<b>Show both consent records, with the parent's audio playable.</b> This is proof to the family that their father genuinely agreed — and it is the artifact you would produce in a regulatory inquiry.",
+"<b>Audio retention as a separate toggle.</b> Some families will want stories preserved and recordings removed. Granularity here is a trust signal and costs little.",
+"<b>Deletion needs a two-step confirm — type the parent's name.</b> This is irreversible destruction of an irreplaceable family archive. Friction is correct here.",
+"<b>Be honest about consent-record retention.</b> <code>admin.py</code> anonymises rather than deletes them, for good audit reasons. Say so plainly rather than overclaiming 'everything is deleted'.",
+"<b>Acceptance:</b> deletion calls the existing <code>DELETE /user/{id}</code>; a confirmation email is sent after completion; deletion is reachable in ≤3 taps from anywhere in the app; the export bundle contains original-format audio, JSON stories and an HTML index that opens without Katha."
+],
+crit:"<b>Blocking. Ship before the first pilot family onboards.</b> The backend work is already done — <code>backend/api/routes/admin.py</code> implements deletion carefully, with per-step isolation and audit logging. Only the interface is missing.",
+api:"<code>DELETE /user/{user_id}</code> exists and is well-implemented. Needs a new <code>POST /family/export</code> (async bundle job → emailed link) and <code>GET /family/consent-records</code>."
+});
+
+SCREENS.push({
+id:"D4", group:"Account & control", title:"Settings — plan & billing", prio:"P0", status:"New",
+purpose:"Where the business model lives. Today the entire monetisation path is a banner linking to <code>mailto:hello@katha.life?subject=Upgrade</code>.",
+m:`<div class="nb"><span class="lk">← Settings</span><b>Plan</b><span class="lk"></span></div>
+<div class="w">
+<div class="card acc"><span class="badge">FREE TRIAL</span>
+<h4 class="wh" style="margin-top:7px">4 conversations left</h4>
+<div class="bar"><i style="width:60%"></i></div>
+<div class="xs">6 of 10 used · at this rate, until 5 August</div></div>
+
+<div class="card" style="background:var(--parch)"><b class="sm">What Appa has shared so far</b>
+<div class="grid g3" style="margin-top:8px"><div class="tile"><b>6</b><span>talks</span></div><div class="tile"><b>17</b><span>stories</span></div><div class="tile"><b>2/8</b><span>chapters</span></div></div>
+<div class="xs" style="margin-top:8px">He's part-way through his school years. Six chapters of his life are still ahead.</div></div>
+
+<h4 class="wh">Keep going</h4>
+<div class="card acc"><b class="sm">Family — ₹5,000 / year</b>
+<div class="xs">Unlimited conversations · full archive with audio · memory cards · up to 5 family members · download everything any time</div>
+<div class="btn sm">Continue Appa's stories</div>
+<div class="xs" style="text-align:center">₹417 a month · cancel any time</div></div>
+<div class="card"><b class="sm">Family Plus — ₹9,000 / year</b><div class="xs">Everything above, plus a printed memory book each year.</div><div class="btn g sm">Choose Plus</div></div>
+
+<div class="card" style="border-style:dashed;background:transparent"><b class="sm">Not ready?</b>
+<div class="xs">Pause instead. Appa's stories stay safe and you can pick up whenever you like.</div><div class="btn n sm">Pause instead</div></div>
+<div class="xs" style="text-align:center;margin-top:10px">Payments by Razorpay · GST invoice emailed</div>
+</div>`,
+d:null,
+notes:[
+"<b>Fixes the revenue half of F-07.</b> The moment of peak purchase intent currently routes to an email client.",
+"<b>Lead with what he has already shared, not with features.</b> The pitch is loss aversion and it happens to be true: 'He's part-way through his school years. Six chapters are still ahead.' Feature bullets convert far worse than an unfinished story.",
+"<b>Show runway from session 7, not at session 10.</b> A cold stop at the wall is the worst possible moment to ask for money — the habit breaks and the parent is left confused (J4).",
+"<b>Offer pause as the alternative to churn.</b> Someone who won't pay today may pay in two months. Pausing keeps the archive and the relationship intact; cancelling ends both.",
+"<b>'₹417 a month' alongside '₹5,000 a year'.</b> PRD §9.1 positions this as a gift comparable to a nice dinner — the monthly framing makes the annual number feel proportionate.",
+"<b>Razorpay for India; UPI must be the default method.</b> Card-first checkout is a meaningful drop-off for Indian buyers.",
+"<b>Acceptance:</b> upgrade completes without leaving the app; sessions resume within a minute of payment and the parent is told Katha is back (F6); GST invoice emailed; the ops console (G1) shows plan state immediately."
+],
+api:"<code>FamilyAccount.plan</code> and <code>upgraded_at</code> already exist. Needs Razorpay webhook → plan update → immediate unblock in <code>core/freemium.py</code> → a resume message to the parent."
+});
+
+SCREENS.push({
+id:"D3", group:"Account & control", title:"Settings — family members", prio:"P1", status:"New",
+purpose:"It is called a family dashboard and it holds one person. <code>models/family_account.py</code> maps one email to one <code>user_id</code>. Siblings — the highest-intent audience Katha has — cannot get in.",
+m:`<div class="nb"><span class="lk">← Settings</span><b>Family</b><span class="lk"></span></div>
+<div class="w">
+<h3 class="wh">Who can see Appa's stories</h3>
+<div class="card"><b class="sm">Priya (you)</b> <span class="badge">OWNER</span><div class="xs">priya@example.com · can change settings, billing and delete data</div></div>
+<div class="card"><b class="sm">Ravi</b> <span class="badge">CAN VIEW</span><div class="xs">ravi@example.com · joined 3 July · can read and share, cannot change anything</div></div>
+<div class="card" style="border-style:dashed;background:transparent"><b class="sm">Meera</b> <span class="badge">INVITED</span><div class="xs">Invited 28 July · not yet accepted</div><div class="btn n sm">Resend · Cancel</div></div>
+
+<h4 class="wh">Invite someone</h4>
+<div class="card"><span class="lb">Email or WhatsApp number</span><div class="inp">meera@example.com</div>
+<span class="lb">They can</span><div class="chips"><span class="chip on">View stories</span><span class="chip">Also suggest questions</span></div>
+<div class="xs">Only you can change settings, billing or delete data.</div>
+<div class="btn sm">Send invite</div></div>
+
+<div class="card" style="background:var(--parch)"><b class="sm">Up to 5 people on the Family plan</b>
+<div class="xs">Grandchildren too — there's no minimum age, and no extra cost.</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Three clear roles: owner, viewer, contributor.</b> Only the owner touches settings, billing and deletion. Viewers read and share. Contributors can also suggest questions (Phase 2). Keeps deletion and billing unambiguous.",
+"<b>This is the cheapest acquisition channel Katha has.</b> Same parent, same guilt, already holding proof of value. Every sibling is a warm lead who costs nothing to reach (persona P3, J5).",
+"<b>Invite by WhatsApp number, not just email.</b> The family already coordinates on WhatsApp; making them switch to email adds friction for no reason.",
+"<b>Mention grandchildren explicitly.</b> It plants the Phase 3 intergenerational idea and reframes the archive as something for the whole family rather than a service the buyer purchased.",
+"<b>A viewer cannot see billing or settings, and cannot see the parent's phone number.</b> Least-privilege by default, particularly across a family where relationships may be complicated.",
+"<b>Acceptance:</b> invites expire after 14 days; the owner can revoke access instantly; a revoked member's public card links also die; role is enforced server-side on every endpoint, never in the UI alone."
+],
+api:"Requires a new <code>family_members</code> table (<code>family_account_id</code>, <code>email</code>, <code>role</code>, <code>invited_at</code>, <code>accepted_at</code>). <code>core/auth.py</code> JWT must carry role, and <code>routes/family.py</code> must authorise per-role rather than assuming one account = one user."
+});
+
+// ============ E · LIFECYCLE STATES ============
+SCREENS.push({
+id:"E2", group:"Lifecycle states", title:"Parent has gone quiet", prio:"P0", status:"New",
+purpose:"The highest-signal event in the product. If the parent stops replying, nothing currently happens — no dashboard change, no alert, no adaptation. It is simultaneously the leading churn indicator and a possible welfare signal.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<div class="card att" style="padding:16px"><span class="badge att">QUIET SINCE TUESDAY</span>
+<h3 class="wh" style="margin-top:9px">Appa hasn't replied in 3 days</h3>
+<div class="sm">Katha wrote on Wednesday and again this morning, gently. The messages were delivered but not opened.</div>
+<div class="xs" style="margin-top:9px">Usually this just means travel, a busy week, or a phone left charging. Sometimes it's worth a call.</div>
+<div class="btn g sm">Call Appa</div>
+<div style="display:flex;gap:7px"><div class="btn n sm" style="flex:1">Pause for now</div><div class="btn n sm" style="flex:1">He's fine, carry on</div></div></div>
+
+<div class="card"><b class="sm">What Katha has done</b>
+<div class="xs" style="line-height:1.9">Tue 9:30 · Conversation invitation sent<br>Tue 10:00 · Gentle follow-up, no reply<br>Wed 9:30 · Lighter message, no reply<br>Thu 9:30 · Shorter note, no reply<br>Fri · Katha will wait, then try once on Monday</div>
+<div class="xs" style="margin-top:8px">Katha won't keep messaging him daily. It eases off on its own.</div></div>
+
+<h4 class="wh">Last conversation · Monday</h4>
+<div class="card"><span class="badge">FAMILY</span><h4 class="wh" style="margin-top:7px">His grandmother's kitchen</h4>
+<div class="q" style="font-size:12px">"There was always something on the stove. Always."</div>
+<div class="aud"><span class="pl">▶</span><span class="wv"></span><span class="xs">3:40</span></div></div>
+</div>
+<div class="tabs"><div class="on"><i class="ic"></i>Today</div><div><i class="ic"></i>Stories</div><div><i class="ic"></i>Cards</div><div><i class="ic"></i>Settings</div></div>`,
+d:null,
+notes:[
+"<b>Escalation ladder:</b> day 1 nothing (normal), day 2 lighter re-ask to the parent, day 3 dashboard state changes, day 4 WhatsApp notice to the family, day 7 Katha backs off to weekly. Never daily nagging of an elderly person who has chosen not to reply.",
+"<b>Amber, never red (design rule 2).</b> An alarm-red alert about your 74-year-old father reads as an emergency. Calibrate the visual weight to the actual likelihood — which is usually a phone on a charger.",
+"<b>Normalise before worrying.</b> 'Usually this just means travel or a busy week' is honest and prevents panic, while 'sometimes it's worth a call' leaves the door open. Getting this tone right is the difference between a valued alert and an anxiety generator.",
+"<b>Show delivery vs. read status.</b> Delivered-but-unread and not-delivered are completely different situations — the second may mean a dead phone or a blocked number, which is actionable.",
+"<b>Give three actions: call him, pause, or dismiss.</b> An alert with no action is just worry. 'He's fine, carry on' also gives us a signal that suppresses further escalation.",
+"<b>Handled well, this is the moment Priya tells her friends about Katha</b> — 'they noticed before I did'. Handled as it is now, it's the moment she quietly cancels (J6).",
+"<b>Acceptance:</b> triggers on <code>Session.last_user_message_at</code> exceeding thresholds; the family WhatsApp notice fires once, not daily; dismissal suppresses re-alerting for 7 days; a parent-initiated stop (F5) shows a different, respectful state — never framed as a problem to fix."
+],
+api:"Needs a scheduled check in <code>backend/scheduler/</code> against <code>sessions.last_user_message_at</code>, an <code>engagement_state</code> field on the stats response, and a WhatsApp template for the family notice (templates require pre-approval — submit early)."
+});
+
+SCREENS.push({
+id:"E1", group:"Lifecycle states", title:"Free trial runway & wall", prio:"P0", status:"New",
+purpose:"The conversion moment. Today: no warning, a hard stop at session 10, a banner linking to <code>mailto:</code>, and — worst — the parent is told nothing at all.",
+m:`<div class="w" style="padding:14px">
+<div class="xs" style="letter-spacing:.08em">STATE 1 · SESSION 7 — QUIET RUNWAY</div>
+<div class="card" style="margin-top:7px"><div style="display:flex;justify-content:space-between"><b class="sm">Free trial</b><span class="xs">3 conversations left</span></div>
+<div class="bar" style="margin-bottom:0"><i style="width:70%"></i></div></div>
+<div class="xs">Sits in the dashboard header. Informational, not urgent.</div>
+
+<div class="xs" style="letter-spacing:.08em;margin-top:20px">STATE 2 · SESSION 9 — GENTLE</div>
+<div class="card acc" style="margin-top:7px"><b class="sm">One conversation left</b>
+<div class="xs">Appa has shared 24 stories across 3 chapters. Five chapters of his life are still ahead of him.</div>
+<div class="btn sm">Keep his stories going</div>
+<div class="btn n sm">Remind me tomorrow</div></div>
+
+<div class="xs" style="letter-spacing:.08em;margin-top:20px">STATE 3 · SESSION 10 — THE WALL</div>
+<div class="card att" style="margin-top:7px"><b class="sm">Appa's trial has finished</b>
+<div class="xs">He's mid-way through his school years. We've told him there'll be a short pause, so he isn't left wondering.</div>
+<div class="card" style="background:var(--parch);margin-top:9px"><div class="xs"><b>What Appa heard this morning</b></div>
+<div class="bub" style="max-width:100%;margin-top:6px">"Subramaniam ji, I'll be away for a few days. Thank you for everything you've shared — I've kept all of it safely. I hope we'll talk again soon."</div></div>
+<div class="btn sm">Continue — ₹5,000 / year</div>
+<div class="btn n sm">Not now</div>
+<div class="xs" style="text-align:center">Everything he's shared stays safe either way.</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Three states, not one banner.</b> Runway from session 7, a gentle prompt at 9, the wall at 10. The current implementation only fires once the wall is already hit (<code>session_count >= session_limit</code> in <code>layout.tsx</code>).",
+"<b>The parent-facing pause message is the most important element on this screen and it does not exist.</b> Right now Katha simply stops calling. From Subramaniam's side, the friend who called every morning for ten days has silently vanished. For a product whose purpose is reducing loneliness among people who have experienced abandonment, this is the most harmful interaction in the system.",
+"<b>Ship the parent message even if payment isn't ready.</b> If the pilot families are free, this state never fires — but the code path must exist before anyone hits it.",
+"<b>Showing the buyer what her father heard is the strongest possible conversion argument.</b> It is honest, it demonstrates care, and it makes the cost of not continuing concrete.",
+"<b>'Everything he's shared stays safe either way'</b> — never hold the archive hostage. Trust is the whole business (PRD §4.1), and a family that trusts you when they don't pay may pay later.",
+"<b>Frame the wall around his unfinished story, not our feature gate.</b> 'He's mid-way through his school years' does more work than any feature comparison.",
+"<b>Acceptance:</b> runway derives from <code>FREE_SESSION_LIMIT</code> in <code>core/freemium.py</code>, never hard-coded in the frontend; the parent message sends exactly once and only on the day the wall is reached; upgrading resumes sessions within a minute and greets him back warmly."
+],
+crit:"<b>Fixes F-07.</b> The parent-facing half of this is a duty-of-care issue, not a conversion optimisation. An elderly man who has talked to a friend every morning for ten days deserves to be told there is a pause and that it is not his fault.",
+api:"<code>core/freemium.py</code> already gates sessions and emails the family. It must also trigger a parent-facing WhatsApp message, and the runway state must be exposed on <code>GET /family/stats</code>."
+});
+
+SCREENS.push({
+id:"E4", group:"Lifecycle states", title:"Distress escalation", prio:"P0", status:"New",
+purpose:"Reminiscence surfaces grief, regret and loss by design. PRD §13 mandates a crisis protocol referencing iCall (9152987821). The prompt layer handles it in-conversation; there is no family-facing or operator-facing surface at all.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<div class="card att" style="padding:16px"><span class="badge att">WORTH A CALL</span>
+<h3 class="wh" style="margin-top:9px">Appa seemed low this morning</h3>
+<div class="sm">During today's conversation he spoke about missing Amma and sounded more subdued than usual. Katha stayed with him, didn't push, and ended the conversation gently.</div>
+<div class="card" style="background:var(--parch);margin-top:11px"><div class="xs"><b>How Katha responded</b></div>
+<div class="bub" style="max-width:100%;margin-top:6px">"That sounds very heavy to carry. There's no need to talk about anything more today. I'm glad you told me."</div></div>
+<div class="btn g sm">Call Appa</div>
+<div class="card" style="margin-top:9px"><div class="xs"><b>If you're concerned about him</b><br>iCall (Tata Institute of Social Sciences)<br><b>9152987821</b> · Mon–Sat, 10am–8pm<br>Counselling in several Indian languages, free.</div></div>
+<div class="xs" style="margin-top:9px">Katha is not medical care and cannot assess risk. In an emergency, call 112.</div>
+<div class="btn n sm">Thanks — I've spoken to him</div></div>
+
+<h4 class="wh">Steering</h4>
+<div class="card"><div class="xs">Would you like Katha to stay away from this for a while?</div>
+<div class="chips"><span class="chip">Avoid Amma for now</span><span class="chip on">Carry on as normal</span><span class="chip">Lighter topics this week</span></div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Notify, never diagnose.</b> Katha cannot assess risk and must not appear to. The framing is 'he seemed low and you may want to call', not a clinical judgement. Getting this wrong in either direction — alarmism or silence — is a serious failure.",
+"<b>Very high bar for triggering.</b> A parent reminiscing about a dead spouse is normal and often healthy; that is the whole point of reminiscence therapy. Only sustained distress signals should surface here. Over-triggering trains the family to ignore the alert, which is worse than not having it.",
+"<b>Show how Katha responded.</b> The family needs to see it behaved well — didn't push, didn't platitude, ended gently. This is also what makes the alert feel trustworthy rather than mechanical.",
+"<b>iCall details rendered in full, per PRD §13.</b> Number, hours, languages, cost. Never a bare link — a worried adult child needs the number visible, not one tap away.",
+"<b>The medical disclaimer is mandatory and must be visible on this screen.</b> No medical claims, anywhere, ever.",
+"<b>Offer topic steering as the follow-up action</b> — it connects the alert to a control the family can actually exercise (D1's avoid-list).",
+"<b>Acceptance:</b> triggers only on the prompt layer's explicit distress classification, never on keyword matching; the same event raises a flag in the ops console (G2) so you can review the transcript; delivered by WhatsApp <i>and</i> email since it is time-sensitive; families can adjust sensitivity in settings."
+],
+crit:"With users aged 65–85, many recently bereaved and living alone, this is not an edge case. It will occur during a 30-family pilot. The protocol exists in the prompt layer (<code>backend/prompts/</code>) — the surfaces do not."
+});
+
+SCREENS.push({
+id:"E5", group:"Lifecycle states", title:"Memorial mode", prio:"P1", status:"New",
+purpose:"Katha's users are 65–85. Over a long enough pilot, a parent will die, and their family will open this product. Whatever happens next will be remembered forever. There is currently no path.",
+m:`<div class="nb"><b>katha</b><span class="lk">⚙</span></div>
+<div class="w">
+<div class="card" style="padding:18px;background:#F2EADD">
+<h3 class="wh">Subramaniam's archive</h3>
+<div class="sm">1949 — 2026</div>
+<div class="xs" style="margin-top:11px">71 stories, in his own voice, across 26 mornings. Nothing here will be deleted, and there is nothing more to pay.</div></div>
+
+<div class="grid g3" style="margin-top:12px"><div class="tile"><b>71</b><span>stories</span></div><div class="tile"><b>4h 12m</b><span>of his voice</span></div><div class="tile"><b>26</b><span>memory cards</span></div></div>
+
+<div class="card" style="margin-top:12px"><b class="sm">Keep it safe</b>
+<div class="xs">Download everything — recordings, transcripts, stories and cards — in formats that will open long after Katha is gone.</div>
+<div class="btn g sm">Download the archive</div></div>
+<div class="card"><b class="sm">Share it with the family</b>
+<div class="xs">Give his children and grandchildren permanent access, at no cost.</div>
+<div class="btn g sm">Invite family</div></div>
+<div class="card"><b class="sm">A printed book</b><div class="xs">His stories, bound.</div><div class="btn g sm">Learn more</div></div>
+
+<div class="card" style="margin-top:14px;border-style:dashed;background:transparent"><div class="xs">All conversations, reminders and billing have stopped. If we've got this wrong, <span style="color:var(--terra-d)">let us know</span> and we'll put it right.</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>The operator kill-switch is P0 even though this screen is P1.</b> You must be able to stop every automated message to one family instantly (G2). An automated 'we haven't heard from Appa in a while!' nudge sent to a grieving daughter is unrecoverable — for that family and for Katha's reputation.",
+"<b>Everything automated stops:</b> sessions, silence alerts, upgrade prompts, billing, engagement nudges. All of it. No exceptions, no 'gentle' re-engagement.",
+"<b>The archive becomes permanent and free.</b> Charging a bereaved family an annual fee to keep their father's voice is indefensible, and word of it would travel. Absorb the storage cost — it is trivial and it is the right call.",
+"<b>Lead with the total minutes of his voice.</b> '4h 12m of his voice' is the sentence that tells them what they have. It is also the clearest possible statement of what Katha was actually for.",
+"<b>Push export hard here.</b> This is the moment persona P4 (the grandchild in 2045) becomes real. The family should walk away holding everything, regardless of what happens to Katha the company.",
+"<b>Tone: plain, quiet, no ornament.</b> No condolence copy written by a marketing team. Muted palette, no accent colour, no engagement styling anywhere.",
+"<b>Acceptance:</b> triggered manually by the operator on request, never inferred; reversible (families sometimes report this in error or in anticipation); billing cancels and any unused portion is refunded automatically."
+]
+});
+
+SCREENS.push({
+id:"E3", group:"Lifecycle states", title:"Session & system failures", prio:"P1", status:"New",
+purpose:"STT failures, WhatsApp delivery errors, audio too quiet, unrecognised dialect. Today these are invisible to everyone — the family sees a gap, you see nothing.",
+m:`<div class="w" style="padding:14px">
+<div class="xs" style="letter-spacing:.08em">FAMILY-FACING · SOFT</div>
+<div class="card att" style="margin-top:7px"><b class="sm">Wednesday's conversation didn't go through</b>
+<div class="xs">A technical problem on our side, not Appa's. He wasn't left waiting — Katha has picked up again today.</div>
+<div class="xs" style="margin-top:6px;color:var(--mut-2)">You won't be charged for it.</div></div>
+
+<div class="xs" style="letter-spacing:.08em;margin-top:20px">IN CONVERSATION · TO THE PARENT</div>
+<div class="card" style="margin-top:7px"><div class="bub" style="max-width:100%">"I'm sorry, I didn't catch that clearly — there was some noise. Could you tell me again?"</div>
+<div class="bub" style="max-width:100%">"Something isn't working on my side today. Let me write to you tomorrow morning instead. Nothing you did."</div>
+<div class="xs">Never blame him. Never say 'error'. Always give a next step.</div></div>
+
+<div class="xs" style="letter-spacing:.08em;margin-top:20px">EMPTY &amp; ERROR STATES · PORTAL</div>
+<div class="card" style="margin-top:7px"><div class="xs"><b>No stories in this chapter yet</b><br>Katha hasn't reached Appa's working years. It's next after school.</div></div>
+<div class="card"><div class="xs"><b>We couldn't load this</b><br>Something went wrong on our side.</div><div class="btn g sm">Try again</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Never make the parent feel he did something wrong.</b> Technology anxiety and fear of 'doing it wrong' are named barriers in PRD §4.2. Every failure message must place the fault on our side, explicitly.",
+"<b>Failed sessions must not consume trial credits,</b> and the family should be told they didn't. Cheap goodwill, avoids a support email.",
+"<b>Every error state needs a retry.</b> The current implementation renders 'Couldn't load stories.' with no action — a dead end (F-15).",
+"<b>Every empty state needs a next step.</b> 'No stories yet in this chapter' becomes 'Katha hasn't reached his working years yet — it's next after school.' Same absence, completely different feeling (design rule 5).",
+"<b>Failures alert you before they reach the family.</b> Three consecutive failures for one family should page the operator (G1). Families should hear about problems from us, not the reverse.",
+"<b>Acceptance:</b> failed sessions logged with a reason code and excluded from the trial count; retry with exponential backoff before surfacing anything to the family; all error copy reviewed against the never-blame-the-parent rule."
+]
+});
+// ============ F · WHATSAPP (PARENT) ============
+SCREENS.push({
+id:"F1", group:"WhatsApp (parent)", title:"Welcome & consent", prio:"P0", status:"New",
+purpose:"The parent's first contact with Katha — and the missing consent step from F-02. A grep across <code>scheduler/session_initiator.py</code> and <code>adapters/whatsapp.py</code> finds no welcome message, despite PRD §6.1 step 4 specifying one.",
+m:`<div class="wa"><div class="wahd"><span class="av"></span><div><b>Katha</b><div style="font-size:9px;opacity:.8">business account</div></div></div>
+<div class="bub">🙏 வணக்கம், சுப்ரமணியம் அவர்களே.<div class="t">4:12 pm</div></div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:38</span></div>
+<div class="bub" style="margin-top:-4px"><i>Voice note, in Tamil:</i><br>"My name is Katha. Your daughter Priya asked me to write to you. She said you have a lifetime of stories that nobody has properly written down — and she'd like them kept.<br><br>I'm not a person. I'm a computer program, and I should say so honestly. But I can listen, I don't get tired, and I don't forget anything you tell me.<br><br>If you'd like, we could talk each morning for fifteen minutes or so, about your life. You'd speak, I'd listen and ask questions.<br><br>Would that be alright? You can say no — nothing will happen and nobody will mind. And if we start, you can stop whenever you like, just by telling me."<div class="t">4:12 pm</div></div>
+<div class="bub">You can reply by voice or just type <b>YES</b> or <b>NO</b>.
+<div class="xs" style="margin-top:6px">Anything you say is kept privately for your family. It's never used for anything else. — <span style="color:#075E54">katha.life/privacy</span></div><div class="t">4:12 pm</div></div>
+<div class="bub me vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:06</span></div>
+<div class="bub me" style="margin-top:-4px"><i>"Sari, seri… let's try."</i><div class="t">6:47 pm ✓✓</div></div>
+<div class="bub">Thank you, Subramaniam ji. I'll write to you tomorrow morning at 9:30. Sleep well.<div class="t">6:47 pm</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>This screen is the fix for F-02, the most serious finding in the review.</b> Under the DPDP Act the parent is the data principal. A competent adult cannot have consent given on his behalf by his daughter. No session may initiate until this exchange completes.",
+"<b>Name the daughter in the first sentence.</b> 'Your daughter Priya asked me to write to you' converts an unexplained message from an unknown number into something legitimate. Without it the most likely outcome is a block.",
+"<b>Say plainly that Katha is not a person.</b> Non-negotiable. Deceiving an elderly user about what they're talking to is unacceptable, and the honesty builds more trust than the pretence would. 'I'm not a person, but I can listen and I don't forget' is a genuinely appealing pitch.",
+"<b>'You can say no — nothing will happen and nobody will mind.'</b> Removes the obligation to please his daughter. If he only agrees out of duty, he won't engage, and the product fails anyway. A real no is more valuable than a coerced yes.",
+"<b>Voice note plus text, always.</b> Voice carries the warmth; text lets him re-read it and show it to someone. PRD §7.1 already establishes this pattern.",
+"<b>Accept a voice reply as consent.</b> Requiring typed input excludes exactly the users we care most about. Store the audio — it is the consent artifact, and it is what you would produce in a regulatory inquiry.",
+"<b>Acceptance:</b> written into <code>consent_records</code> with <code>principal=parent</code>, <code>channel=whatsapp</code>, audio S3 key and policy version; a decline notifies the family kindly and closes the account without charge; no reply within 48h triggers exactly one gentle re-ask, then stops."
+],
+crit:"<b>Blocking. Fixes F-02.</b> Do not onboard a real pilot family until this exists. Also note the WhatsApp template approval lead time — submit these templates well before you need them.",
+api:"New. Needs a WhatsApp template, a consent-capture branch in <code>backend/api/routes/webhook.py</code>, a <code>principal</code> field on <code>models/consent_record.py</code>, and a hard gate in <code>scheduler/session_initiator.py</code>."
+});
+
+SCREENS.push({
+id:"F2", group:"WhatsApp (parent)", title:"A daily conversation", prio:"P0", status:"Revise",
+purpose:"The core loop, already implemented in <code>core/orchestrator.py</code>. Storyboarded here so the conversational design is reviewable alongside the portal — this is the primary interface for the primary user.",
+m:`<div class="wa"><div class="wahd"><span class="av"></span><div><b>Katha</b><div style="font-size:9px;opacity:.8">online</div></div></div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:14</span></div>
+<div class="bub" style="margin-top:-4px"><i>"Good morning, Subramaniam ji. Yesterday you told me about your father's cloth shop on West Masi Street — I've been thinking about it. Today I'd love to hear about your school days. What was your school like?"</i><div class="t">9:30 am</div></div>
+<div class="bub me vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">3:22</span></div>
+<div class="bub me" style="margin-top:-4px;font-size:11px;color:#5C6B60"><i>He describes the government school, the long verandah, a headmaster called Iyer.</i><div class="t">9:33 am ✓✓</div></div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:11</span></div>
+<div class="bub" style="margin-top:-4px"><i>"Headmaster Iyer — he sounds like someone you remember clearly. What was he like?"</i><div class="t">9:34 am</div></div>
+<div class="bub me vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">4:10</span></div>
+<div class="bub">Just to be sure I have it right — was it <b>Iyer</b>, and the school was the Government Boys School in Madurai?<div class="t">9:39 am</div></div>
+<div class="bub me">Yes correct 👍<div class="t">9:40 am ✓✓</div></div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:16</span></div>
+<div class="bub" style="margin-top:-4px"><i>"Thank you for this morning, Subramaniam ji. I've kept all of it. Tomorrow, if you like, I'd love to hear about the day you first stood in front of a class yourself."</i><div class="t">9:48 am</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Open with continuity.</b> 'Yesterday you told me about your father's shop — I've been thinking about it' is the single line that proves memory, and memory is what separates Katha from a chatbot (PRD §7.1, context recall).",
+"<b>Text fallback for proper nouns only.</b> Names, places and dates are where STT fails and where the archive's accuracy matters most. Confirming in text is worth the small interruption — but keep it to once or twice a session.",
+"<b>Close with tomorrow's hook.</b> 'Tomorrow I'd love to hear about the day you first stood in front of a class' creates anticipation and does the scheduling work invisibly.",
+"<b>'I've kept all of it' is doing quiet emotional work.</b> It answers the unspoken worry — 'is any of this going anywhere?' — for someone who has been told his life isn't interesting.",
+"<b>Watch total session length.</b> PRD targets 15–25 minutes. <code>energy_signal</code> already drives graceful endings; make sure it errs toward ending early. Better a short good session than a long tiring one.",
+"<b>Acceptance:</b> covered by the existing TC-01–TC-10 eval set; verify continuity recall and graceful ending are explicitly among them, since those are the two behaviours families notice most."
+]
+});
+
+SCREENS.push({
+id:"F3", group:"WhatsApp (parent)", title:"When he doesn't reply", prio:"P0", status:"Revise",
+purpose:"PRD §7.1 specifies a 30-minute follow-up. What is missing is the multi-day ladder — and the point at which Katha must back off rather than nag.",
+m:`<div class="wa"><div class="wahd"><span class="av"></span><div><b>Katha</b></div></div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:12</span></div>
+<div class="bub" style="margin-top:-4px"><i>"Good morning, Subramaniam ji…"</i><div class="t">Tue 9:30 am ✓✓</div></div>
+<div class="bub">No rush at all — I'll be here whenever you feel like talking. 🙏<div class="t">Tue 10:00 am ✓✓</div></div>
+<div class="bub" style="opacity:.9">Good morning. No need to reply if you're busy — I just wanted to say hello.<div class="t">Wed 9:30 am ✓✓</div></div>
+<div class="bub" style="opacity:.8">Thinking of you, Subramaniam ji. I'm here whenever you'd like to talk.<div class="t">Thu 9:30 am ✓✓</div></div>
+<div class="xs" style="text-align:center;padding:9px 0;color:#7A8A80">— Katha pauses. Nothing on Friday, Saturday, Sunday. —</div>
+<div class="bub" style="opacity:.8">Good morning, Subramaniam ji. It's been a little while. I still have all your stories safe, and I'd love to hear more whenever you're ready.<div class="t">Mon 9:30 am ✓✓</div></div>
+<div class="bub me vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:22</span></div>
+<div class="bub me" style="margin-top:-4px"><i>"Sorry, I was unwell. Better now."</i><div class="t">Mon 11:14 am ✓✓</div></div>
+<div class="bub">I'm very glad you're feeling better. No apology needed at all. Would you like to talk today, or shall we start again tomorrow?<div class="t">Mon 11:14 am</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Messages get shorter and lighter as silence extends, then stop.</b> Escalating urgency is the wrong instinct entirely. An elderly person who hasn't replied doesn't need more messages; a daily stream of unanswered notes from a machine is precisely the loneliness we're meant to be addressing.",
+"<b>Back off to weekly after roughly four days.</b> The relationship survives a pause; it does not survive nagging.",
+"<b>'No apology needed at all' — never make him feel he owes us.</b> Guilt is the fastest route to a blocked number, and PRD §4.2 names being a burden as one of his core fears.",
+"<b>Offer a soft restart, not a demand.</b> 'Would you like to talk today, or shall we start again tomorrow?' returns control to him.",
+"<b>WhatsApp's 24-hour window matters technically.</b> After 24 hours of no reply, outbound requires a pre-approved template. Get the re-engagement templates approved early — they have real lead time.",
+"<b>Acceptance:</b> ladder driven by <code>Session.last_user_message_at</code>; hard cap of one message per day and a total stop after two weeks of silence pending family contact; every step mirrored to the family dashboard state (E2)."
+]
+});
+
+SCREENS.push({
+id:"F4", group:"WhatsApp (parent)", title:"Memory card delivery", prio:"P0", status:"Revise",
+purpose:"The moment the whole product exists to produce. Currently the card goes to the family only. It should go to both — and the parent's copy matters more than we might assume.",
+m:`<div class="wa"><div class="wahd"><span class="av"></span><div><b>Katha</b><div style="font-size:9px;opacity:.8">to Priya</div></div></div>
+<div class="bub" style="max-width:92%"><div class="img" style="height:150px;margin-bottom:7px">MEMORY CARD</div>
+Today Appa talked about his first day teaching. He spoke for 18 minutes and sounded wonderful.
+<div style="font-size:9px;color:#075E54;margin-top:6px">Read the full story → katha.life/s/a4f2</div><div class="t">10:04 am</div></div>
+
+<div class="xs" style="text-align:center;padding:12px 0 7px;color:#7A8A80">— and to Subramaniam —</div>
+<div class="bub" style="max-width:92%"><div class="img" style="height:150px;margin-bottom:7px">MEMORY CARD</div>
+Something you said this morning that I thought was beautiful. Priya has it too.<div class="t">10:04 am</div></div>
+<div class="bub me">😊 🙏<div class="t">10:31 am ✓✓</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>Send the card to the parent as well.</b> PRD §4.2 identifies immediate output as the intrinsic reward that sustains engagement — but the deeper point is that a man who thinks his life 'is nothing special' receives visible proof that it is. That is the therapeutic mechanism working, not a nicety.",
+"<b>'Priya has it too' closes the family loop from his side.</b> He learns his daughter is reading his stories. For a lonely parent that is the most valuable sentence in the entire product.",
+"<b>Include the wellbeing line in the family's message.</b> '18 minutes and sounded wonderful' is the peace-of-mind payload (PRD §5.2) delivered where Priya actually is — WhatsApp, not the portal.",
+"<b>The deep link is the growth loop's entry point (C8).</b> It must render an OG preview of the card so a forward into a family group looks like a memory, not a URL.",
+"<b>Card design must survive WhatsApp compression.</b> Large type, high contrast, no thin strokes. Test on a 5-inch screen at low brightness before shipping — this asset does more marketing work than the landing page.",
+"<b>Acceptance:</b> delivered within 15 minutes of session close; <code>MemoryCard.delivered_at</code> and <code>twilio_message_sid</code> already exist for tracking; delivery failures retry and surface in the ops console (G1)."
+]
+});
+
+SCREENS.push({
+id:"F5", group:"WhatsApp (parent)", title:"Boundaries & crisis", prio:"P0", status:"Revise",
+purpose:"Three things the parent must be able to do without going through his daughter: refuse a topic, stop entirely, and be met properly if he is in distress.",
+m:`<div class="wa"><div class="wahd"><span class="av"></span><div><b>Katha</b></div></div>
+<div class="xs" style="letter-spacing:.06em;color:#7A8A80;padding:2px 0 7px">REFUSING A TOPIC</div>
+<div class="bub me">I don't want to talk about those years.<div class="t">✓✓</div></div>
+<div class="bub">Of course. We won't go there again. Is there something else from that time you'd rather tell me about — or shall we talk about something completely different?</div>
+
+<div class="xs" style="letter-spacing:.06em;color:#7A8A80;padding:14px 0 7px">ASKING TO STOP</div>
+<div class="bub me">Please don't message me any more.<div class="t">✓✓</div></div>
+<div class="bub">I understand, and I'll stop. Thank you for everything you've shared with me — all of it is kept safely for your family. If you ever change your mind, just send me a message. Take care of yourself, Subramaniam ji. 🙏</div>
+<div class="xs" style="text-align:center;padding:7px 0;color:#7A8A80">— all messages stop immediately · Priya is told he asked to stop —</div>
+
+<div class="xs" style="letter-spacing:.06em;color:#7A8A80;padding:14px 0 7px">DISTRESS</div>
+<div class="bub me vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">1:40</span></div>
+<div class="bub me" style="margin-top:-4px;font-size:11px;color:#5C6B60"><i>He speaks about missing his wife and about feeling there's little point to the days.</i><div class="t">✓✓</div></div>
+<div class="bub">That sounds very heavy to carry, and I'm glad you told me. There's no need to talk about anything more today.</div>
+<div class="bub">If it would help to speak with someone, iCall have counsellors who speak Tamil — <b>9152987821</b>, ten in the morning to eight at night, and there's no charge. Many people call them.<br><br>I'll write to you tomorrow morning. 🙏</div>
+</div>`,
+d:null,
+notes:[
+"<b>'Stop' must be honoured instantly and unconditionally — including over the buyer's wishes.</b> He is the data principal. If he withdraws, the daughter cannot override it. This must be enforced in code, not policy.",
+"<b>Tell the family he asked to stop, and frame it neutrally.</b> Priya deserves to know, but 'he asked to stop' is not a failure state and must not be presented as one. She may want to ask him why; that is between them.",
+"<b>Topic refusal must persist permanently</b> and feed back into the avoid-list visible in D1. A boundary he sets once must never need setting twice.",
+"<b>Crisis response: acknowledge, release the pressure, offer, don't push.</b> No safety-assessment questioning — that is not our role and we would do it badly. iCall's number, hours, language and cost, then a gentle close.",
+"<b>Never end the relationship on a distress signal.</b> 'I'll write to you tomorrow morning' is important — withdrawal at that moment would confirm the very isolation he described.",
+"<b>These paths need the highest eval coverage in the system.</b> They are rare, high-stakes, and the ones where a wrong response causes real harm. They belong in the TC-01–TC-10 regression set with explicit cases.",
+"<b>Acceptance:</b> stop request writes a consent withdrawal, halts the scheduler and cannot be reversed from the portal; distress events flag in the ops console (G2) for same-day human review; iCall details verified current before pilot launch."
+]
+});
+
+SCREENS.push({
+id:"F6", group:"WhatsApp (parent)", title:"Trial pause message", prio:"P0", status:"New",
+purpose:"What Katha says to the parent when the free trial ends. Today: nothing. Sessions simply stop. This is the most harmful gap in the product.",
+m:`<div class="wa"><div class="wahd"><span class="av"></span><div><b>Katha</b></div></div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:24</span></div>
+<div class="bub" style="margin-top:-4px"><i>"Subramaniam ji, I need to be away for a few days.<br><br>I want you to know that everything you've told me — your father's shop, the school verandah, Headmaster Iyer, all of it — is kept safely, and Priya has all of it.<br><br>Thank you for these ten mornings. I've enjoyed them very much. I hope we'll talk again soon."</i><div class="t">9:30 am</div></div>
+<div class="bub me">🙏<div class="t">9:52 am ✓✓</div></div>
+
+<div class="xs" style="text-align:center;padding:14px 0 7px;color:#7A8A80">— if the family upgrades —</div>
+<div class="bub vn"><span class="pl">▶</span><span class="wv"></span><span style="font-size:9px">0:16</span></div>
+<div class="bub" style="margin-top:-4px"><i>"Good morning, Subramaniam ji! I'm back. Priya sorted things out. Shall we pick up where we left off — you were about to tell me about your first day teaching."</i><div class="t">9:30 am</div></div>
+</div>`,
+d:null,
+notes:[
+"<b>This is a duty-of-care issue, not a growth tactic.</b> An elderly man who has talked to a friend every morning for ten days must not simply find that the friend stopped coming. For a product built to reduce loneliness, silently disappearing is the worst thing we could do.",
+"<b>Never mention money to him.</b> The commercial relationship is with his daughter. Making him feel he is a cost is unacceptable, and it would poison the archive he has been building.",
+"<b>'Everything you've told me is kept safely, and Priya has all of it.'</b> His deepest worry is that this was pointless. Answer it explicitly on the way out.",
+"<b>Name specific things he said.</b> 'Your father's shop, the school verandah, Headmaster Iyer' proves the listening was real. Generic gratitude would undo ten days of trust in one message.",
+"<b>The return message closes the loop with continuity, not fanfare.</b> 'You were about to tell me about your first day teaching' picks up exactly where he left off.",
+"<b>Ship this even if the pilot is free.</b> The code path must exist before anyone can hit it, and it should also fire on cancellation and on payment failure.",
+"<b>Acceptance:</b> triggered from <code>core/freemium.py</code> when <code>is_session_allowed</code> first returns false; sent once only; the return message fires within a minute of the plan flipping to paid."
+],
+crit:"<b>Fixes the harmful half of F-07.</b> If you ship only one thing from this entire wireframe set, ship this one."
+});
+
+// ============ G · OPS CONSOLE ============
+SCREENS.push({
+id:"G1", group:"Ops console", title:"Pilot cohort health", prio:"P0", status:"New",
+purpose:"Your daily view of all 30 pilot families. <code>docs/PLAN.md</code> sets go/no-go criteria that require measuring completion rates, card opens and extraction accuracy — and there is no interface that reports any of them.",
+m:null,
+d:`<div class="nb" style="background:#211A61;color:#EDEFFB;border-color:#4249A8"><b>katha ops</b><div class="lk" style="color:#C3C9EE"><span style="color:#fff;font-weight:600">Cohort</span><span>Families</span><span>Extraction</span><span>Costs</span><span>Alerts</span></div></div>
+<div class="w" style="padding:20px 24px;background:#F2EADD">
+<div class="grid g4"><div class="tile"><b>28</b><span>active families</span></div><div class="tile"><b>19</b><span>past 10 sessions · 68%</span></div><div class="tile"><b>3</b><span>need attention</span></div><div class="tile"><b>₹4,180</b><span>API spend this month</span></div></div>
+
+<div style="display:flex;gap:9px;margin:16px 0 10px;align-items:center">
+<b class="sm">Needs attention</b><span class="badge att">3</span></div>
+<table class="tbl">
+<tr><th>Family</th><th>Parent</th><th>State</th><th>Last talk</th><th>Sessions</th><th>Why</th><th></th></tr>
+<tr><td>Priya S.</td><td>Subramaniam, 74</td><td><span class="badge att">Quiet 4d</span></td><td>28 Jul</td><td>26</td><td>Delivered, not read</td><td style="color:var(--terra-d)">Open</td></tr>
+<tr><td>Anil M.</td><td>Kamala, 81</td><td><span class="badge att">STT failing</span></td><td>31 Jul</td><td>7</td><td>Confidence 0.42 · Marathi</td><td style="color:var(--terra-d)">Open</td></tr>
+<tr><td>Deepa R.</td><td>Ramesh, 69</td><td><span class="badge att">Send failed ×3</span></td><td>29 Jul</td><td>12</td><td>Template rejected</td><td style="color:var(--terra-d)">Open</td></tr>
+</table>
+
+<div style="display:flex;gap:9px;margin:18px 0 10px;align-items:center"><b class="sm">All families</b>
+<span class="chip">All 28</span><span class="chip">Free trial 11</span><span class="chip">Paid 14</span><span class="chip">Paused 3</span><span class="chip">Near wall 4</span></div>
+<table class="tbl">
+<tr><th>Family</th><th>Parent</th><th>Lang</th><th>Plan</th><th>Sessions</th><th>Stories</th><th>Avg mins</th><th>Last 7d</th><th>Consent</th></tr>
+${[["Priya S.","Subramaniam, 74","ta","Trial 6/10","26","71","17.4","▇▇▁▇▇▁▁","✓ both"],
+["Anil M.","Kamala, 81","mr","Paid","7","14","6.2","▇▁▁▇▁▁▁","✓ both"],
+["Meera J.","Gopal, 77","hi","Paid","41","118","21.0","▇▇▇▇▇▇▇","✓ both"],
+["Deepa R.","Ramesh, 69","kn","Trial 9/10","12","31","14.8","▇▇▇▁▁▇▇","✓ both"],
+["Suresh K.","Padma, 84","te","Paused","18","44","12.1","▁▁▁▁▁▁▁","✓ both"],
+["Nisha P.","Vijay, 71","hi","Trial 2/10","2","3","19.6","▇▇▁▁▁▁▁","⚠ parent pending"]]
+.map(r=>`<tr>${r.map((c,i)=>`<td${i===8&&c.startsWith("⚠")?' style="color:#A25700"':''}>${c}</td>`).join("")}</tr>`).join("")}
+</table>
+<div class="xs" style="margin-top:12px">Go/no-go · 68% past 10 sessions (target ≥50% ✓) · 74% opened a card (target ≥70% ✓) · extraction 71% (target ≥75% ✗ — <span style="color:var(--terra-d)">review queue</span>)</div>
+</div>`,
+notes:[
+"<b>Fixes F-08.</b> Without this you run the pilot from <code>psql</code> and find out about problems from the families themselves — which in a 30-family pilot means finding out too late.",
+"<b>'Needs attention' at the top, always.</b> Silence, STT degradation and delivery failures are the three things that silently kill a pilot. Everything else can wait for the weekly review.",
+"<b>Track the go/no-go criteria live in the footer.</b> <code>docs/PLAN.md</code> defines four numeric gates; showing them continuously turns the pilot decision into an observation rather than an end-of-pilot scramble.",
+"<b>Per-language STT confidence is worth watching closely.</b> The Marathi row at 0.42 is exactly the kind of failure that looks like disengagement but is actually infrastructure. Confusing the two would lead you to a badly wrong conclusion about the product.",
+"<b>Sparkline per family beats any aggregate.</b> Seven characters tell you the shape of a family's week instantly.",
+"<b>Consent column is a compliance dashboard.</b> After F-02 there are two consents per family; any row missing the parent's is a family that must not have sessions running.",
+"<b>Track API spend against unit economics.</b> PRD §9.3 targets >70% gross margin at ~₹1/min STT. If a session costs more than expected, you want to know in week two, not month four.",
+"<b>Acceptance:</b> separate auth from family accounts (recommend a separate internal app for the pilot); read-only by default with explicit actions behind confirmation; auto-refresh every 5 minutes; every row links to G2."
+],
+crit:"<b>Highest leverage-per-hour item in this document.</b> It doesn't need to be pretty — a table and three counters shipped this week will do more for pilot success than any polish elsewhere.",
+api:"New <code>/ops/*</code> namespace with separate auth. Aggregates over <code>sessions</code>, <code>story_atoms</code>, <code>memory_cards</code>, <code>family_accounts</code>, <code>consent_records</code>. Needs STT confidence persisted per turn — check whether <code>adapters/sarvam_stt.py</code> currently stores it."
+});
+
+SCREENS.push({
+id:"G2", group:"Ops console", title:"Family detail", prio:"P0", status:"New",
+purpose:"Drill into one family to diagnose a problem: full session log, transcripts, API costs, failure reasons — and the emergency controls you will occasionally need.",
+m:null,
+d:`<div class="nb" style="background:#211A61;color:#EDEFFB;border-color:#4249A8"><span class="lk" style="color:#C3C9EE">← Cohort</span><b>Priya S. · Subramaniam, 74</b><div class="lk" style="color:#C3C9EE"><span>Impersonate view</span><span style="color:#FFCA9B">Emergency stop</span></div></div>
+<div class="w" style="padding:20px 24px;background:#F2EADD">
+<div style="display:flex;gap:18px">
+<div style="flex:1.6">
+<div class="grid g4"><div class="tile"><b>26</b><span>sessions</span></div><div class="tile"><b>71</b><span>stories</span></div><div class="tile"><b>17.4m</b><span>avg length</span></div><div class="tile"><b>₹412</b><span>API to date</span></div></div>
+<div class="card att" style="margin-top:12px"><b class="sm">Quiet 4 days</b><div class="xs">Last reply 28 Jul 09:41. Three outbound delivered, none read. Family notified 31 Jul.</div></div>
+<h4 class="wh">Session log</h4>
+<table class="tbl">
+<tr><th>#</th><th>Date</th><th>Chapter</th><th>Turns</th><th>Mins</th><th>Energy</th><th>Atoms</th><th>STT</th><th>State</th></tr>
+${[["26","28 Jul","Career","9","18.1","high","4","0.91","ok"],["25","27 Jul","Career","7","14.2","high","3","0.89","ok"],["24","26 Jul","Education","8","16.7","medium","3","0.93","ok"],["23","25 Jul","Education","4","6.1","low","1","0.72","ended early"],["22","24 Jul","Education","—","—","—","0","—","send failed"],["21","23 Jul","Education","9","19.4","high","4","0.90","ok"]]
+.map(r=>`<tr>${r.map(c=>`<td${c==="send failed"?' style="color:#A25700"':c==="ended early"?' style="color:#A25700"':''}>${c}</td>`).join("")}</tr>`).join("")}
+</table>
+<h4 class="wh">Session 26 · transcript</h4>
+<div class="card"><div class="xs" style="line-height:1.9"><b>Katha 09:30</b> Good morning, Subramaniam ji…<br><b>User 09:33</b> <i>(ta, conf 0.91)</i> அன்று காலை…<br><span style="color:var(--mut-2)">EN: That morning I walked to the school…</span><br><b>Katha 09:34</b> Headmaster Iyer — he sounds like…</div>
+<div class="btn g sm" style="max-width:150px">Full transcript</div></div>
+</div>
+<div style="width:230px;flex:none">
+<div class="card"><b class="sm">Account</b><div class="xs">priya@example.com<br>Trial · 6 of 10 used<br>Created 12 Jun 2026</div></div>
+<div class="card"><b class="sm">Parent</b><div class="xs">Subramaniam, 74<br>+91 98765 43210<br>Tamil · 9:30 IST daily<br>Consent ✓ 12 Jun (voice)</div><div class="btn g sm">Play consent audio</div></div>
+<div class="card"><b class="sm">Avoid list</b><div class="chips"><span class="chip">The year Amma passed</span></div></div>
+<div class="card att"><b class="sm">Operator actions</b>
+<div class="btn n sm">Send a message by hand</div>
+<div class="btn n sm">Re-run extraction</div>
+<div class="btn n sm">Pause this family</div>
+<div class="btn d sm">Emergency stop — all messaging</div>
+<div class="xs">Emergency stop halts every automated message including alerts, prompts and billing. Use for bereavement.</div></div>
+</div></div></div>`,
+notes:[
+"<b>The emergency stop is P0 and non-negotiable.</b> One click halts every automated message to one family: sessions, silence alerts, upgrade prompts, billing, everything. Needed the moment a family reports a death (E5). An automated nudge to a grieving daughter is unrecoverable.",
+"<b>Session log with STT confidence per session is your primary diagnostic.</b> The pattern 'low energy + 0.72 confidence + ended early' tells you it was an audio problem, not disengagement — and those two conclusions lead to opposite actions.",
+"<b>Bilingual transcript view.</b> You need the original to judge STT quality and the translation to judge conversation quality. Both, side by side.",
+"<b>'Send a message by hand' is the pilot's most valuable escape hatch.</b> At 30 families, personally reaching out to a stalled parent is entirely reasonable and will teach you more than any dashboard.",
+"<b>'Re-run extraction' lets you fix a bad extraction after a prompt improvement</b> without waiting for the next session — important while you're iterating toward the 75% accuracy gate.",
+"<b>Play the consent audio here.</b> It is your compliance artifact and should be one click away, not buried.",
+"<b>Acceptance:</b> every operator action is written to an audit log with actor and timestamp; impersonation is read-only and logged; emergency stop is reversible but requires typed confirmation."
+],
+api:"New <code>/ops/family/{id}</code>. Requires STT confidence stored per turn and a persisted turn-level transcript — verify what <code>core/session_manager.py</code> currently retains, since transcripts may only exist transiently."
+});
+
+SCREENS.push({
+id:"G3", group:"Ops console", title:"Extraction review", prio:"P0", status:"New",
+purpose:"<code>docs/PLAN.md</code> gates launch on ≥75% extraction accuracy, validated manually across the first 50 story atoms. That validation needs somewhere to happen.",
+m:null,
+d:`<div class="nb" style="background:#211A61;color:#EDEFFB;border-color:#4249A8"><span class="lk" style="color:#C3C9EE">← Cohort</span><b>Extraction review · 71% accurate · 34 of 50 reviewed</b><div class="lk" style="color:#C3C9EE"><span>Unreviewed 16</span><span>Rejected 10</span></div></div>
+<div class="w" style="padding:20px 24px;background:#F2EADD">
+<div class="bar" style="max-width:340px"><i style="width:68%"></i></div>
+<div class="xs" style="margin-top:-4px">34 of 50 reviewed · 24 accepted · 10 rejected · target ≥75%</div>
+<div style="display:flex;gap:18px;margin-top:14px">
+<div style="flex:1">
+<div class="card"><div style="display:flex;justify-content:space-between"><b class="sm">Atom 35 of 50</b><span class="xs">Subramaniam · session 26 · Career</span></div>
+<h4 class="wh">Source — what he said</h4>
+<div class="card" style="background:var(--parch);margin:0"><div class="xs" style="line-height:1.8">"…அன்று காலை நான் பள்ளிக்கு நடந்து சென்றேன்…"<br><span style="color:var(--mut-2)">EN: That morning I walked to the school. Forty boys were waiting. I was twenty-two years old and my hands were shaking. The headmaster, Iyer, stood at the back of the room the whole time.</span></div></div>
+<h4 class="wh">Extracted</h4>
+<table class="tbl">
+<tr><th>Field</th><th>Value</th><th></th></tr>
+<tr><td>Title</td><td>The first day he taught</td><td style="color:var(--ok)">✓</td></tr>
+<tr><td>Who</td><td>Headmaster Iyer, forty students</td><td style="color:var(--ok)">✓</td></tr>
+<tr><td>What</td><td>First day teaching, aged 22</td><td style="color:var(--ok)">✓</td></tr>
+<tr><td>When</td><td>1971</td><td style="color:#A25700">? inferred from age</td></tr>
+<tr><td>Where</td><td>Government Boys School, Madurai</td><td style="color:var(--ok)">✓</td></tr>
+<tr><td>Why</td><td>Start of a 35-year career</td><td style="color:#A25700">? not stated</td></tr>
+<tr><td>Quote</td><td>"Forty boys. I was twenty-two…"</td><td style="color:var(--ok)">✓</td></tr>
+<tr><td>Completeness</td><td>5 / 5</td><td style="color:#A25700">overstated</td></tr>
+</table>
+<div style="display:flex;gap:9px;margin-top:12px">
+<div class="btn sm" style="flex:1">Accept &nbsp;<span style="opacity:.7">A</span></div>
+<div class="btn g sm" style="flex:1">Fix &amp; accept &nbsp;<span style="opacity:.7">F</span></div>
+<div class="btn n sm" style="flex:1">Reject &nbsp;<span style="opacity:.7">R</span></div>
+<div class="btn n sm" style="flex:1">Skip &nbsp;<span style="opacity:.7">S</span></div></div></div></div>
+<div style="width:220px;flex:none">
+<div class="card"><b class="sm">Rejection reasons so far</b>
+<div class="xs" style="line-height:1.9">Hallucinated detail · 4<br>Wrong date · 3<br>Merged two stories · 2<br>Missed the point · 1</div></div>
+<div class="card"><b class="sm">By language</b><div class="xs" style="line-height:1.9">Tamil · 81% (13/16)<br>Hindi · 75% (9/12)<br>Marathi · 50% (2/4)<br>Kannada · 100% (2/2)</div></div>
+<div class="card" style="background:var(--parch)"><b class="sm">Patterns</b><div class="xs">'Why it mattered' is inferred rather than stated in 6 of 10 rejections — tighten the extraction prompt to leave it null when unstated.</div></div>
+</div></div></div>`,
+notes:[
+"<b>Keyboard-driven, one atom per screen.</b> Reviewing 50 atoms is a two-hour job if the interface is good and a week of avoidance if it isn't. A/F/R/S shortcuts make it tractable.",
+"<b>Flag inferred fields distinctly from stated ones.</b> The most damaging extraction failure is confident invention — a date the parent never gave, presented to the family as fact. This is the check that catches it.",
+"<b>The completeness score belongs here and nowhere else.</b> It is an engineering signal (F-11). This screen is exactly what it was designed for.",
+"<b>Track rejection reasons as structured categories.</b> 'Hallucinated detail ×4' is directly actionable against the extraction prompt; 'it was wrong' is not.",
+"<b>Break accuracy down by language.</b> Marathi at 50% versus Tamil at 81% is the difference between a prompt problem and an STT problem — and it changes what you fix.",
+"<b>'Fix &amp; accept' writes the correction back.</b> Corrected atoms make an excellent few-shot set for improving the extraction prompt, and they mean the family's archive is right in the meantime.",
+"<b>Acceptance:</b> accuracy percentage feeds the go/no-go panel in G1; rejected atoms are hidden from the family view immediately; reviewing a family's atoms is possible in-context from G2; corrections are versioned so prompt changes can be evaluated against a stable set."
+],
+api:"New <code>/ops/extraction</code>. Needs review-state columns on <code>story_atoms</code> (<code>review_status</code>, <code>reviewed_by</code>, <code>rejection_reason</code>, <code>corrected_fields</code>). Should reuse the <code>eval-runner</code> subagent's regression harness where the two overlap."
+});
+/*SCREENS*/
+
+const GROUPS = ["Acquisition","Onboarding","Family portal","Account & control","Lifecycle states","WhatsApp (parent)","Ops console"];
+const PTAG = {P0:"t0",P1:"t1",P2:"t2"};
+const PCLS = {P0:"p0",P1:"p1",P2:"p2"};
+
+function buildNav(){
+  const n = document.getElementById('nav');
+  GROUPS.forEach(g=>{
+    const items = SCREENS.filter(s=>s.group===g);
+    if(!items.length) return;
+    const h=document.createElement('div'); h.className='grp'; h.textContent=g; n.appendChild(h);
+    items.forEach(s=>{
+      const b=document.createElement('button');
+      b.className='nav'; b.dataset.id=s.id;
+      b.innerHTML=`<span class="id">${s.id}</span><span>${s.title}</span><span class="p ${PCLS[s.prio]}">${s.prio}</span>`;
+      b.onclick=()=>show(s.id);
+      n.appendChild(b);
+    });
+  });
+}
+
+function show(id){
+  const s = SCREENS.find(x=>x.id===id); if(!s) return;
+  document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
+  const statusTag = s.status==='New' ? '<span class="tag tn">NEW</span>'
+                  : s.status==='Rebuild' ? '<span class="tag tr">REBUILD</span>'
+                  : s.status ? '<span class="tag t2">REVISE</span>' : '';
+  const mobile = s.m ? `<div class="view"><div class="vlab">Mobile · 375px</div><div class="phone"><div class="scr">${s.m}</div></div></div>` : '';
+  const desk = s.d ? `<div class="view"><div class="vlab">Desktop · 1280px</div><div class="desk"><div class="scr">${s.d}</div></div></div>`
+                   : (s.m ? `<div class="view"><div class="vlab">Desktop</div><div class="na">Mobile-only screen.<br>Desktop uses the same layout at a wider measure.</div></div>` : '');
+  document.getElementById('main').innerHTML = `
+    <div class="hd">
+      <div class="row"><span class="kid">${s.id}</span><h2>${s.title}</h2>
+        <span class="tag ${PTAG[s.prio]}">${s.prio}</span>${statusTag}</div>
+      <p>${s.purpose}</p>
+    </div>
+    <div class="views">${mobile}${desk}</div>
+    ${s.crit?`<div class="crit">${s.crit}</div>`:''}
+    ${s.api?`<div class="api"><b>Backend:</b> ${s.api}</div>`:''}
+    <div class="ann"><h3>Design notes &amp; acceptance criteria</h3><ol>${s.notes.map(x=>`<li>${x}</li>`).join('')}</ol></div>`;
+  window.scrollTo(0,0);
+}
+
+buildNav();
+show(SCREENS[0].id);
+document.addEventListener('keydown',e=>{
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+  const cur=document.querySelector('.nav.on'); if(!cur)return;
+  const all=[...document.querySelectorAll('.nav')];
+  const i=all.indexOf(cur)+(e.key==='ArrowDown'?1:-1);
+  if(all[i]){all[i].click();all[i].scrollIntoView({block:'nearest'});e.preventDefault();}
+});
+</script>
+</body>
+</html>

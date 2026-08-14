@@ -32,15 +32,15 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#FDF6EC] p-8">
-      <div className="w-full max-w-sm rounded-xl bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-[#2C2C2C]">Welcome to Katha</h1>
-        <p className="mt-2 text-sm text-[#6B5B4E]">
+    <main id="main" className="flex min-h-screen items-center justify-center bg-page p-8">
+      <div className="w-full max-w-sm rounded-xl bg-surface p-8 shadow-sm">
+        <h1 className="font-display text-2xl font-semibold text-ink">Welcome to Katha</h1>
+        <p className="mt-2 text-sm text-ink-mid">
           Enter your email and we&apos;ll send you a login link.
         </p>
 
         {submitted ? (
-          <p className="mt-6 rounded-lg bg-[#FDF6EC] p-4 text-sm text-[#2C2C2C]">
+          <p className="mt-6 rounded-lg bg-page p-4 text-sm text-ink">
             Check your email for a login link.
           </p>
         ) : (
@@ -56,16 +56,16 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="rounded-lg border border-[#E8DDD4] px-4 py-2 text-[#2C2C2C] focus:border-[#C8956C] focus:outline-none"
+              className="rounded-lg border border-border px-4 py-2 text-ink focus:border-saffron"
             />
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-[#C8956C] px-4 py-2 font-medium text-white transition hover:bg-[#b17f57] disabled:opacity-60"
+              className="rounded-lg bg-saffron px-4 py-2 font-medium text-indigo transition hover:bg-gold disabled:opacity-60"
             >
               {loading ? "Sending..." : "Send login link"}
             </button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
           </form>
         )}
       </div>

@@ -17,15 +17,15 @@ export function StoryCard({ story }: StoryCardProps) {
   return (
     <Link
       href={`/family/stories/${story.id}`}
-      className="block rounded-lg border border-[#E8DDD4] bg-white p-5 transition hover:border-[#C8956C] hover:shadow-sm"
+      className="block rounded-lg border border-border bg-surface p-5 transition hover:border-saffron hover:shadow-sm"
     >
       <article>
-        <span className="inline-block rounded-full bg-[#FDF6EC] px-3 py-1 text-xs font-medium text-[#6B5B4E]">
+        <span className="inline-block rounded-full bg-page px-3 py-1 text-xs font-medium text-ink-mid">
           {story.domain_label}
         </span>
-        <h3 className="mt-2 text-lg font-semibold text-[#2C2C2C]">{title}</h3>
+        <h3 className="font-display mt-2 text-lg font-semibold text-ink">{title}</h3>
         {story.verbatim_quote && (
-          <blockquote className="mt-2 border-l-2 border-[#C8956C] pl-3 text-sm italic text-[#6B5B4E]">
+          <blockquote className="mt-2 font-display border-l-2 border-saffron pl-3 text-sm italic text-ink-mid">
             &ldquo;{story.verbatim_quote}&rdquo;
           </blockquote>
         )}
@@ -38,12 +38,12 @@ export function StoryCard({ story }: StoryCardProps) {
               <span
                 key={i}
                 className={`h-2 w-2 rounded-full ${
-                  i < story.completeness_score ? "bg-[#C8956C]" : "bg-[#E8DDD4]"
+                  i < story.completeness_score ? "bg-saffron" : "bg-border"
                 }`}
               />
             ))}
           </div>
-          <time dateTime={story.created_at} className="text-xs text-[#6B5B4E]">
+          <time dateTime={story.created_at} className="text-xs text-ink-mid">
             {date}
           </time>
         </div>

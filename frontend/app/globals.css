@@ -1,1 +1,132 @@
 @import "tailwindcss";
+
+/*
+ * Katha design tokens.
+ *
+ * Source of truth is the brand established on the coming-soon page
+ * (coming-soon/index.html): saffron + gold on deep indigo, Playfair Display
+ * for display type, DM Sans for everything else.
+ *
+ * Two rules that matter:
+ *
+ * 1. Saffron and gold are FILL colours only. Both fail WCAG AA as text on
+ *    any of our light surfaces (saffron measures 2.20:1 on parchment), and
+ *    white text on a saffron fill is worse still at 2.63:1. For accent text
+ *    and links use --color-saffron-ink / --color-gold-ink. For text sitting
+ *    ON a saffron fill use --color-indigo, which passes at 5.77:1 and keeps
+ *    the brand's vivid saffron intact rather than muddying it.
+ *
+ * 2. Anything ending in -ink is the text-safe variant of the hue beside it,
+ *    derived by holding the oklch hue and chroma and dropping lightness
+ *    until it clears 4.5:1 on --color-page. Never use a non-ink brand hue
+ *    for text.
+ *
+ * Hex values are pre-resolved from the oklch definitions on the coming-soon
+ * page so Tailwind v4 and Safari agree on them.
+ */
+
+@theme {
+  /* ---- Surfaces ---- */
+  --color-page: #f2eadd; /* parchment — app background */
+  --color-surface: #f9f4ee; /* warm white — cards, panels */
+  --color-surface-alt: #ffffff; /* pure white — nav, elevated sheets */
+  --color-border: #e3d5c2; /* parchment-dark — hairlines */
+  --color-border-strong: #cbbba5; /* inputs, hover borders */
+
+  /* ---- Ink ---- */
+  --color-ink: #17182d; /* primary text — 14.60:1 on page */
+  --color-ink-mid: #454b69; /* secondary text — 7.14:1 */
+  --color-ink-muted: #646983; /* meta, timestamps — 4.52:1 */
+  --color-ink-faint: #7f859f; /* DECORATIVE ONLY — 3.05:1, fails AA */
+
+  /* ---- Brand: indigo ---- */
+  --color-indigo: #211a61; /* display type, dark fills */
+  --color-indigo-mid: #30358b;
+  --color-indigo-soft: #cdd6f9;
+
+  /* ---- Brand: saffron & gold (fills only) ---- */
+  --color-saffron: #f77f00;
+  --color-saffron-soft: #ffca9b;
+  --color-saffron-ink: #b84500; /* accent text & links — 4.52:1 */
+  --color-gold: #d48500;
+  --color-gold-soft: #fad9a2;
+  --color-gold-ink: #a25700; /* 4.51:1 */
+
+  /* ---- Semantic ----
+   * attention deliberately maps to gold, never rose. Screens about a
+   * parent (silence, short sessions) must not read as an emergency;
+   * rose is reserved for destructive actions the family initiates.
+   */
+  --color-success: #007b40;
+  --color-success-fill: #00a263;
+  --color-success-soft: #c3f2d7;
+  --color-attention: #a25700;
+  --color-attention-soft: #fad9a2;
+  --color-danger: #ba3d5b;
+  --color-danger-fill: #d35570;
+  --color-danger-soft: #ffced5;
+
+  /* ---- WhatsApp ---- */
+  --color-whatsapp: #009141;
+  --color-whatsapp-ink: #007b2c;
+  --color-whatsapp-soft: #cff2da;
+
+  /* ---- Type ----
+   * Wired to next/font in app/layout.tsx. Base is 16px, not 14px:
+   * the buyer persona is 35-55 and presbyopia starts around 40.
+   */
+  --font-display: var(--font-playfair), Georgia, serif;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --text-meta: 0.875rem; /* 14px — timestamps, counts */
+  --text-meta--line-height: 1.5;
+  --text-body: 1rem; /* 16px — base */
+  --text-body--line-height: 1.6;
+  --text-narrative: 1.125rem; /* 18px — story prose */
+  --text-narrative--line-height: 1.7;
+
+  /* ---- Elevation ---- */
+  --shadow-card: 0 10px 30px -10px oklch(28% 0.12 280 / 0.22);
+  --shadow-soft: 0 18px 45px -18px oklch(28% 0.12 280 / 0.28);
+
+  --radius-card: 16px;
+  --radius-control: 14px;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Story titles and page headings carry the brand serif. */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Visible focus everywhere — the previous build removed outlines on inputs
+   with a bare outline-none utility and never replaced them. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-saffron-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -36,22 +36,25 @@ export default function FamilyLayout({
     !!stats && stats.plan === "free" && stats.session_count >= stats.session_limit;
 
   return (
-    <div className="min-h-screen bg-[#FDF6EC]">
-      <nav className="flex items-center justify-between border-b border-[#E8DDD4] bg-white px-6 py-4">
-        <Link href="/family" className="text-lg font-semibold text-[#2C2C2C]">
-          katha
+    <div className="min-h-screen bg-page">
+      <nav className="flex items-center justify-between border-b border-border bg-surface-alt px-6 py-4">
+        <Link
+          href="/family"
+          className="font-display text-xl font-bold text-indigo"
+        >
+          Katha
         </Link>
-        <div className="flex items-center gap-6 text-sm font-medium text-[#6B5B4E]">
-          <Link href="/family/stories" className="hover:text-[#C8956C]">
+        <div className="flex items-center gap-6 text-sm font-medium text-ink-mid">
+          <Link href="/family/stories" className="hover:text-saffron-ink">
             Stories
           </Link>
-          <Link href="/family/cards" className="hover:text-[#C8956C]">
+          <Link href="/family/cards" className="hover:text-saffron-ink">
             Memory Cards
           </Link>
           <button
             type="button"
             onClick={handleLogout}
-            className="hover:text-[#C8956C]"
+            className="hover:text-saffron-ink"
           >
             Logout
           </button>
@@ -59,7 +62,7 @@ export default function FamilyLayout({
       </nav>
 
       {showUpgradeBanner && (
-        <div className="flex flex-wrap items-center justify-center gap-2 bg-[#C8956C] px-6 py-3 text-center text-sm text-white">
+        <div className="flex flex-wrap items-center justify-center gap-2 bg-saffron px-6 py-3 text-center text-sm text-indigo">
           <span>
             {stats.user_name} has completed all {stats.session_limit} free
             sessions with Katha.

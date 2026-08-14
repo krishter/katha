@@ -4,12 +4,12 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12 text-[#2C2C2C]">
-      <h1 className="text-2xl font-semibold">Katha Privacy Policy</h1>
-      <p className="mt-2 text-sm text-[#6B5B4E]">Version 1.0</p>
+    <main id="main" className="mx-auto max-w-2xl px-6 py-12 text-ink">
+      <h1 className="font-display text-2xl font-semibold">Katha Privacy Policy</h1>
+      <p className="mt-2 text-sm text-ink-mid">Version 1.0</p>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">What data we collect</h2>
+        <h2 className="font-display text-lg font-semibold">What data we collect</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
           <li>Voice conversation transcripts (not the raw audio — see below)</li>
           <li>
@@ -25,7 +25,7 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">How it&apos;s used</h2>
+        <h2 className="font-display text-lg font-semibold">How it&apos;s used</h2>
         <p className="mt-2 text-sm">
           Transcripts and extracted details are used to preserve life stories,
           generate memory cards, and let Katha have continuous, informed
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Data residency</h2>
+        <h2 className="font-display text-lg font-semibold">Data residency</h2>
         <p className="mt-2 text-sm">
           All data is stored in India (AWS ap-south-1, Mumbai), in line with
           the Digital Personal Data Protection Act, 2023.
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Retention</h2>
+        <h2 className="font-display text-lg font-semibold">Retention</h2>
         <p className="mt-2 text-sm">
           We keep your family&apos;s data for as long as your account is
           active. Raw voice notes are never persisted — audio is processed in
@@ -54,11 +54,11 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Your right to deletion</h2>
+        <h2 className="font-display text-lg font-semibold">Your right to deletion</h2>
         <p className="mt-2 text-sm">
           You can permanently delete all of your family&apos;s data at any
           time from your account settings, or by emailing{" "}
-          <a href="mailto:privacy@katha.life" className="text-[#C8956C] underline">
+          <a href="mailto:privacy@katha.life" className="text-saffron-ink underline">
             privacy@katha.life
           </a>
           . Deletion removes stories, memory cards, session history, and
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">No AI training on your data</h2>
+        <h2 className="font-display text-lg font-semibold">No AI training on your data</h2>
         <p className="mt-2 text-sm">
           Katha never uses your family&apos;s conversations, stories, or any
           other content to train or fine-tune AI models.
@@ -76,10 +76,10 @@ export default function PrivacyPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Contact</h2>
+        <h2 className="font-display text-lg font-semibold">Contact</h2>
         <p className="mt-2 text-sm">
           Questions about this policy or your data:{" "}
-          <a href="mailto:privacy@katha.life" className="text-[#C8956C] underline">
+          <a href="mailto:privacy@katha.life" className="text-saffron-ink underline">
             privacy@katha.life
           </a>
         </p>
