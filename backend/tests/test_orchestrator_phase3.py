@@ -98,6 +98,97 @@ async def test_build_prior_context_includes_significant_people():
     assert isinstance(result, PriorContext)
 
 
+# ── build_prior_context degrades rather than raising (S1.5.2) ─────────────────
+#
+# Retrieval failing must never cost the user their reply. Before S1.5 this
+# call was unwrapped, so an outage in the retrieval backend raised straight
+# through process_voice_turn and the user got fallback text instead of a
+# conversation.
+
+
+async def test_build_prior_context_survives_retrieval_failure():
+    db = _make_db()
+    facts = {"birth_year": 1948}
+    people = [{"name": "Kamala", "relationship": "sister"}]
+
+    with (
+        patch(
+            "core.orchestrator.fact_store.get_facts",
+            new=AsyncMock(return_value=facts),
+        ),
+        patch(
+            "core.orchestrator.vector_store.retrieve_relevant",
+            new=AsyncMock(side_effect=RuntimeError("retrieval backend down")),
+        ),
+        patch(
+            "core.orchestrator.fact_store.get_significant_people",
+            new=AsyncMock(return_value=people),
+        ),
+    ):
+        result = await build_prior_context(_USER_ID, _DOMAIN, db)
+
+    # The load-bearing half survives intact.
+    assert result.facts == facts
+    assert result.significant_people == people
+    # Only the enrichment is lost.
+    assert result.open_threads == []
+
+
+async def test_build_prior_context_logs_warning_on_retrieval_failure(caplog):
+    db = _make_db()
+
+    with (
+        patch(
+            "core.orchestrator.fact_store.get_facts",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "core.orchestrator.vector_store.retrieve_relevant",
+            new=AsyncMock(side_effect=RuntimeError("retrieval backend down")),
+        ),
+        patch(
+            "core.orchestrator.fact_store.get_significant_people",
+            new=AsyncMock(return_value=[]),
+        ),
+        caplog.at_level("WARNING"),
+    ):
+        await build_prior_context(_USER_ID, _DOMAIN, db)
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings, "retrieval failure must be logged, not swallowed silently"
+    # Session context has to be in the message to be actionable in production.
+    assert any(_USER_ID in r.getMessage() for r in warnings)
+    assert any(_DOMAIN in r.getMessage() for r in warnings)
+
+
+async def test_fact_store_failure_still_raises():
+    """Only the retrieval half is guarded. If the fact store itself is down
+    the turn has no memory at all, and that must surface rather than being
+    quietly downgraded to a stranger-shaped conversation."""
+    db = _make_db()
+
+    with (
+        patch(
+            "core.orchestrator.fact_store.get_facts",
+            new=AsyncMock(side_effect=RuntimeError("postgres down")),
+        ),
+        patch(
+            "core.orchestrator.vector_store.retrieve_relevant",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "core.orchestrator.fact_store.get_significant_people",
+            new=AsyncMock(return_value=[]),
+        ),
+    ):
+        try:
+            await build_prior_context(_USER_ID, _DOMAIN, db)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("fact store failure should not be swallowed")
+
+
 # ── run_post_session ───────────────────────────────────────────────────────────
 #
 # Story atoms are persisted per-turn now (see process_voice_turn tests below).
