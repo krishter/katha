@@ -369,6 +369,40 @@ S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5
 
 <!-- Append anything discovered that is not covered above. Do not fix in-scope. -->
 
+- **(S1.5.3) Domain-filtered retrieval empties Layer 3 — measured, not
+  predicted.** 1.5.3 specified filtering the recency query to the session's
+  current domain. Implemented and run against gate 5.3: session 1 produced
+  three story atoms all tagged `childhood`, session 2 opened on
+  `family_ancestors`, and equality filtering returned **zero of twelve**
+  available open threads. Atoms carry the domain they are *about*, not the
+  domain of the session that surfaced them. Retrieval is therefore not
+  domain-scoped; the parameter is retained only as the seam for semantic
+  retrieval. Recorded because the same instinct will recur when embeddings
+  come back — the domain is a poor filter and was a poor query too.
+
+- **(S1.5.3) A stale `OPENAI_API_KEY` in `.env` is now a hard startup
+  failure.** `Settings` uses pydantic-settings with extra fields forbidden,
+  so removing the field from `config.py` means any operator whose `.env`
+  still carries the line gets a `ValidationError` at import, not a warning.
+  Removed from the local `.env` as part of this work; `.env.example` never
+  had it. Worth a line in deploy notes before anyone else pulls this branch.
+  **The live key that was in `.env` should be revoked** — it is now unused,
+  and an unused credential with no rotation story is pure liability.
+
+- **(S1.5.4) `recent_stories` deleted; the idea is not dead.** Logged here
+  per 1.5.4 so Phase 2 does not rediscover it. Verbatim quotes in Layer 3
+  are the strongest argument for reinstating semantic retrieval, because
+  choosing the most *evocative* quote is a judgement cosine similarity
+  makes better than `ORDER BY created_at DESC`. Reasoning in full in
+  `docs/proposals/embedding-strategy.md`.
+
+- **(S1.5) `significant_people` populates after all.** The S1.2 finding
+  that it came back empty did not reproduce: the same two-session scenario
+  now yields an entry (an unidentified person "two years older", flagged
+  with `why_significant`). The earlier empty result was model variance on a
+  three-turn session, not a defect. TC-11's failure is about *resurfacing*
+  a known person, which is a separate mechanism.
+
 - **(S1.1) S1's merge had already happened before this sprint started.**
   `fix/ws5-verification` was merged to `main` on 2026-08-09 as PR #16
   (`3d7524a`), including a sixth commit fixing the dialogue guard. The

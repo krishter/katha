@@ -20,7 +20,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 - **TTS:** Sarvam Bulbul V3 (35+ Indian voices, emotional prosody)
 - **LLM:** Claude Sonnet 4.6 (`claude-sonnet-4-6`) for MVP (evaluate Sarvam native LLM in Phase 2)
 - **Messaging:** WhatsApp Business API (via Meta or Twilio/360Dialog intermediary)
-- **Memory/RAG:** Pinecone or pgvector + OpenAI text-embedding-3-small
+- **Memory:** Postgres fact store + story-atom recency retrieval. **No embedding vendor** — the OpenAI dependency was removed in Sprint 1 for DPDP residency and single-point-of-failure reasons; pgvector is retained unwritten for Phase 2. See @docs/proposals/embedding-strategy.md
 - **Frontend:** Next.js (family dashboard at katha.life/family)
 - **Storage:** AWS Mumbai / Azure India (DPDP Act data residency requirement)
 
