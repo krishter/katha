@@ -11,7 +11,6 @@ _SAFE_KWARGS = dict(
     WHATSAPP_ADAPTER="twilio",
     ANTHROPIC_API_KEY="sk-ant-real",
     SARVAM_API_KEY="sk-sarvam-real",
-    OPENAI_API_KEY="sk-openai-real",
     TWILIO_ACCOUNT_SID="ACreal",
     TWILIO_AUTH_TOKEN="realtoken",
     APP_BASE_URL="https://katha.life",
@@ -69,7 +68,6 @@ def test_stub_whatsapp_adapter_raises_in_production():
     [
         "ANTHROPIC_API_KEY",
         "SARVAM_API_KEY",
-        "OPENAI_API_KEY",
         "TWILIO_ACCOUNT_SID",
         "TWILIO_AUTH_TOKEN",
     ],
