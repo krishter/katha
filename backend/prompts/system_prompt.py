@@ -37,8 +37,15 @@ class UserProfile:
 
 @dataclass
 class PriorContext:
+    """
+    Everything Layer 3 knows about the user. Every field here must be
+    rendered by _layer3_life_context — see the render-coverage test in
+    tests/test_system_prompt.py. A field that is populated but never
+    rendered is invisible work, which is how `recent_stories` survived
+    unnoticed until S1.5 removed it.
+    """
+
     facts: dict = field(default_factory=dict)
-    recent_stories: list[str] = field(default_factory=list)
     open_threads: list[str] = field(default_factory=list)
     significant_people: list[dict] = field(default_factory=list)
 

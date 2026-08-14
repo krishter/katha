@@ -105,18 +105,40 @@ def _extract_open_threads(recent_atoms: list) -> list[str]:
 
 
 async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
-    """Query fact store and vector store to build real prior context."""
+    """
+    Assemble what Katha already knows about this user, for Layer 3.
+
+    The fact store is the load-bearing half: names, relationships, dates
+    and places, straight from Postgres. Story-atom retrieval on top of it
+    is enrichment — it supplies open threads to revisit.
+
+    Retrieval is therefore wrapped and the fact store is not. Layer 3
+    enrichment must never be able to take down a turn: a session that
+    remembers the user's sister but forgets which threads were left open
+    is coherent, whereas a raised exception here costs the user their
+    whole reply. This held when retrieval was an OpenAI embedding call
+    and it holds for the SQL query that replaced it (S1.5).
+    """
     facts = await fact_store.get_facts(user_id, db)
-    recent_atoms = await vector_store.retrieve_relevant(user_id, domain, top_k=5, db=db)
     significant_people = await fact_store.get_significant_people(user_id, db)
-    open_threads = _extract_open_threads(recent_atoms)
+
+    open_threads: list[str] = []
+    try:
+        recent_atoms = await vector_store.retrieve_relevant(
+            user_id, domain, top_k=5, db=db
+        )
+        open_threads = _extract_open_threads(recent_atoms)
+    except Exception:
+        logger.warning(
+            "Story-atom retrieval failed for user %s (domain %s) — continuing "
+            "with facts and significant people only",
+            user_id,
+            domain,
+            exc_info=True,
+        )
+
     return PriorContext(
         facts=facts,
-        recent_stories=[
-            getattr(a, "verbatim_quote", None)
-            or (a.narrative[:200] if hasattr(a, "narrative") else "")
-            for a in recent_atoms
-        ],
         open_threads=open_threads,
         significant_people=significant_people,
     )
