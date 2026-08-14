@@ -49,6 +49,19 @@ _EMPTY_EXTRACTION: dict = {
     "session_end_suggested": False,
 }
 
+# How many story atoms Layer 3 retrieval fetches. Retrieval is ordered by
+# recency, so this is the window within which older domains stay visible at
+# all — at the previous value of 5, a user with more than five atoms spread
+# across domains lost the oldest ones entirely, which at a daily-session,
+# 8-domain cadence arrives around session 5-6 rather than the "session 100"
+# an earlier decision record claimed.
+#
+# 25 covers all 8 domains at the ~3 atoms each the interview framework
+# targets (TECH_DESIGN 2.2), with headroom. Fetching wide is cheap — it is
+# one indexed query, and _MAX_RENDERED_THREADS bounds what actually reaches
+# the prompt. See docs/proposals/embedding-strategy.md.
+_RETRIEVAL_TOP_K = 25
+
 _DIALOGUE_MAX_TOKENS = 300
 _EXTRACTION_MAX_TOKENS = 2000
 _EXTRACTION_RETRY_INSTRUCTION = (
@@ -93,14 +106,37 @@ def _parse_extraction_only(raw: str) -> dict:
 
 
 def _extract_open_threads(recent_atoms: list) -> list[str]:
-    """Aggregate open_threads from a list of StoryAtom objects."""
-    threads: list[str] = []
+    """
+    Aggregate open_threads from story atoms, ordered breadth-first across
+    domains rather than atom by atom.
+
+    Layer 3 renders only the first _MAX_RENDERED_THREADS of these, so this
+    ordering decides what survives the cut. Taking them atom by atom meant
+    one talkative session's domain could fill the whole budget — a user who
+    spent yesterday on childhood would get eight childhood threads and
+    nothing from the other seven domains, which is the same starvation
+    S2.5 is fixing one layer down. Round-robin instead: one thread from
+    each domain, then a second from each, and so on.
+
+    Order within a domain is preserved, and atoms arrive newest-first, so
+    the first thread offered per domain is its most recent.
+    """
+    by_domain: dict[str, list[str]] = {}
     seen: set[str] = set()
+
     for atom in recent_atoms:
+        domain = getattr(atom, "domain", None) or "unknown"
         for thread in getattr(atom, "open_threads", None) or []:
-            if thread not in seen:
-                threads.append(thread)
-                seen.add(thread)
+            if thread in seen:
+                continue
+            seen.add(thread)
+            by_domain.setdefault(domain, []).append(thread)
+
+    threads: list[str] = []
+    for tier in range(max((len(v) for v in by_domain.values()), default=0)):
+        for domain_threads in by_domain.values():
+            if tier < len(domain_threads):
+                threads.append(domain_threads[tier])
     return threads
 
 
@@ -125,7 +161,7 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
     open_threads: list[str] = []
     try:
         recent_atoms = await vector_store.retrieve_relevant(
-            user_id, domain, top_k=5, db=db
+            user_id, domain, top_k=_RETRIEVAL_TOP_K, db=db
         )
         open_threads = _extract_open_threads(recent_atoms)
     except Exception:

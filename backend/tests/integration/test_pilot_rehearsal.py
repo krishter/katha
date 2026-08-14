@@ -42,7 +42,6 @@ from prompts.system_prompt import PriorContext, UserProfile
 pytestmark = pytest.mark.integration
 
 _FAKE_WAV = b"RIFF" + b"\x00" * 40
-_FAKE_EMBEDDING = [0.01] * 1536
 _DIALOGUE_CONTENT = "<response>Tell me more about that.</response>"
 
 
@@ -143,10 +142,6 @@ async def test_full_session_pilot_rehearsal(real_db):
             new=AsyncMock(side_effect=lambda audio_bytes: audio_bytes),
         ),
         patch(
-            "memory.vector_store._embed",
-            new=AsyncMock(return_value=_FAKE_EMBEDDING),
-        ),
-        patch(
             "core.orchestrator.entity_extractor.extract_entities",
             new=AsyncMock(),
         ),
@@ -199,9 +194,13 @@ async def test_full_session_pilot_rehearsal(real_db):
     atom_turn_ids = {a.turn_id for a in atoms}
     assert atom_turn_ids == set(turn_ids[1:4])  # turns 2, 3, 4 (0-indexed 1,2,3)
 
-    # ── Every atom has a non-null embedding ──────────────────────────────
+    # ── The embedding column is retained but never written ───────────────
+    # S1.5 removed the OpenAI embedding call. story_atoms.embedding and the
+    # pgvector extension are deliberately kept for a Phase 2 reinstatement,
+    # so this asserts the current contract rather than the old one: nothing
+    # writes to the column, and nothing flags a failure to.
     for atom in atoms:
-        assert atom.embedding is not None
+        assert atom.embedding is None
         assert atom.embedding_failed is False
 
     # ── Exactly one memory card generated and delivered ──────────────────
@@ -220,3 +219,113 @@ async def test_full_session_pilot_rehearsal(real_db):
     assert session_row.status == "completed"
     assert session_row.ended_reason == "goal_met"
     assert session_row.goal_met is True
+
+
+# ── S2.5: older domains must survive retrieval ───────────────────────────────
+
+
+@pytest.mark.integration
+async def test_layer3_still_carries_the_earliest_domain(real_db):
+    """
+    A user several weeks into the interview has atoms across many domains.
+    Retrieval is ordered by recency, so if the window is narrow the domains
+    they covered first fall out of Layer 3 entirely — a probe at top_k=5
+    showed `childhood` disappearing completely once six domains existed.
+
+    Seeds six domains, three atoms each, oldest first, and asserts the
+    earliest one still reaches the prompt.
+    """
+    import uuid as _uuid
+    from datetime import datetime, timedelta, timezone
+
+    from core import orchestrator
+    from models.story_atom import StoryAtom
+    from prompts.system_prompt import (
+        PriorContext,
+        UserProfile,
+        build_system_prompt,
+    )
+
+    user_id = f"s25-{_uuid.uuid4().hex[:8]}"
+    domains = [
+        "childhood",
+        "family_ancestors",
+        "education",
+        "career",
+        "love_marriage",
+        "historical_events",
+    ]
+
+    base = datetime.now(timezone.utc) - timedelta(days=len(domains) * 2)
+    for day, domain in enumerate(domains):
+        # story_atoms.session_id is a real FK, so each domain needs the
+        # session it was captured in.
+        session_id = _uuid.uuid4()
+        real_db.add(
+            Session(
+                id=session_id,
+                user_id=user_id,
+                session_number=day + 1,
+                domain=domain,
+                exchange_count=3,
+                status="completed",
+            )
+        )
+        await real_db.flush()
+        for n in range(3):
+            real_db.add(
+                StoryAtom(
+                    session_id=session_id,
+                    user_id=user_id,
+                    domain=domain,
+                    title=f"{domain} story {n}",
+                    narrative=f"A story about {domain}, number {n}.",
+                    who=["someone"],
+                    completeness_score=3,
+                    open_threads=[f"{domain.upper()}-THREAD-{n}"],
+                    created_at=base + timedelta(days=day * 2, minutes=n),
+                )
+            )
+    await real_db.commit()
+
+    prior = await orchestrator.build_prior_context(user_id, "wisdom", real_db)
+
+    profile = UserProfile(
+        name="Subramaniam",
+        preferred_language="en-IN",
+        onboarding_context="",
+    )
+    state = SimpleNamespace(
+        session_id="s25-session",
+        user_id=user_id,
+        session_number=7,
+        domain="wisdom",
+        exchange_count=1,
+        energy_signal="high",
+        goal_met=False,
+        session_end_suggested=False,
+    )
+    prompt = build_system_prompt(profile, state, prior)
+
+    assert isinstance(prior, PriorContext)
+    # The oldest domain must not have been starved out of retrieval.
+    assert any("CHILDHOOD-THREAD" in t for t in prior.open_threads), (
+        f"earliest domain missing from retrieved threads: {prior.open_threads}"
+    )
+    # ...and must survive the render cap, which trims breadth-last.
+    assert "CHILDHOOD-THREAD" in prompt, (
+        "earliest domain was retrieved but trimmed out of the rendered prompt"
+    )
+
+    # Every domain should get a look in, rather than one filling the budget.
+    rendered_domains = {d for d in domains if f"{d.upper()}-THREAD" in prompt}
+    assert len(rendered_domains) >= 5, (
+        f"only {len(rendered_domains)} of {len(domains)} domains reached the "
+        f"prompt: {rendered_domains}"
+    )
+
+    # And the list stays bounded.
+    thread_lines = [
+        line for line in prompt.splitlines() if line.strip().startswith("- ")
+    ]
+    assert len(thread_lines) <= 20, len(thread_lines)

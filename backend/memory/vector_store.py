@@ -20,10 +20,14 @@ logger = logging.getLogger(__name__)
 # this domain" — is something SQL answers exactly.
 #
 # `story_atoms.embedding` and the pgvector extension are deliberately
-# retained. Nothing writes to them now, but at 100 sessions per user
-# rather than 5, recency stops being a good proxy for relevance and
-# semantic search starts earning its place again. The module keeps its
-# name and its function signature so reinstating it is a one-file change.
+# retained. Nothing writes to them now, but recency is only a good proxy
+# for relevance while a user's whole history fits inside the retrieval
+# window — and that window is finite, so the proxy degrades with every
+# session rather than holding until some distant milestone. S2.5 widened
+# the fetch to 25 atoms and made Layer 3's thread selection breadth-first
+# across domains, which buys pilot-scale headroom; it does not make
+# recency correct. The module keeps its name and its function signature so
+# reinstating semantic retrieval is a one-file change.
 # See docs/proposals/embedding-strategy.md.
 
 
