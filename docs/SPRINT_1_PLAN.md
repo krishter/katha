@@ -178,7 +178,7 @@ Add a test that renders a fully-populated `PriorContext` through `build_system_p
 
 Write a short decision record — `docs/proposals/embedding-strategy.md` — covering: why OpenAI was removed (DPDP cross-border transfer of verbatim life-history narratives, plus single-point-of-failure), why swapping vendors was not possible, what was kept in place for later, and the Phase 2 path.
 
-The Phase 2 path is self-hosting an open multilingual embedding model (BGE-M3, multilingual-e5, or an Indic-tuned equivalent) on the same AWS Mumbai / Azure India infrastructure the DPDP constraint already requires for storage. That satisfies both residency and vendor count, which no hosted API does.
+**Done 2026-08-14 (`dd9f3ff`).** The record documents two Phase 2 routes: Azure OpenAI in an India region (Route A, provisioning started) and self-hosted BGE-M3 (Route B, retained). Provisioning is deliberately decoupled from wiring — no code changes until the ~50-atom trigger.
 
 **Acceptance:** the decision record exists and is linked from `CLAUDE.md`'s Tech Stack section, which currently names `OpenAI text-embedding-3-small` and will otherwise be wrong.
 
@@ -395,6 +395,47 @@ S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5
   choosing the most *evocative* quote is a judgement cosine similarity
   makes better than `ORDER BY created_at DESC`. Reasoning in full in
   `docs/proposals/embedding-strategy.md`.
+
+- **(S1.5.7) P1 — the anchor/significant-people subsystem is fragile, and
+  the eval harness had been hiding it.** The regression run scored 9/11:
+  objective 5/5 (100%, above the 80% gate), rubric 4/6 (66.7%, **below the
+  75% gate**). Both rubric failures are in one subsystem, and neither is
+  in S1.5's diff — verified by reading the code, not by taking the run's
+  word for it:
+
+  - **TC-11** (unchanged from baseline): `story_extractor.process_extraction`
+    checks `mark_resolved` against `created_atoms` — the atoms produced by
+    the *same* extraction pass that just flagged the person. So someone can
+    be marked resolved on the turn they are discovered, and the
+    "resurface them in a later session" design never gets a chance to run.
+  - **TC-03** (newly *exposed*, not newly broken): `_pick_recall_anchor`
+    takes `significant_people[0]` unconditionally before falling back to
+    facts. A family member first mentioned in the current session gets
+    flagged and immediately outranks an established cross-session person,
+    so Kamala stops being the anchor even though she is correctly rendered
+    in Layer 3's facts block. Contributing cause: the extraction prompt
+    lists bare "unprompted mention" as a sufficient trigger for flagging
+    someone significant, which nearly every first mention satisfies.
+
+  **The rubric drop is not comparable to the baseline.** The baseline used
+  a harness that hand-constructed `PriorContext` and passed it in; this run
+  used a rewritten harness that drives real multi-turn sessions and lets
+  the fact store populate through the real pipeline. TC-03 fails *because*
+  the new harness is more realistic. That is the same mocked-shape blind
+  spot that produced the last four P0s, one level up — this time in the
+  eval harness itself. Do not read 83.3% → 66.7% as a regression.
+
+  Deliberately not fixed here: both belong on one focused branch with its
+  own eval loop, not as a tail-end fix on a vendor-removal PR.
+
+- **(S1.5.3) Recency starves older domains sooner than the decision record
+  first claimed.** `top_k=5` ordered by recency means a user with more than
+  five atoms across domains loses the oldest domains from Layer 3 entirely.
+  At daily sessions across 8 domains that is roughly session 5–6, not
+  "session 100". No current eval case reaches enough domain breadth to fail
+  on it. Correction recorded in `docs/proposals/embedding-strategy.md`;
+  raising `top_k` is the cheap stopgap if threads visibly thin before
+  Phase 2.
 
 - **(S1.5) `significant_people` populates after all.** The S1.2 finding
   that it came back empty did not reproduce: the same two-session scenario
