@@ -263,6 +263,30 @@ Fix by eliminating the redundant upload, not by tracking it: change `send_image`
 
 ---
 
+### 2.5 — Stop Layer 3 starving older domains
+
+**Added 2026-08-14.** Unrelated to deletion, folded in here so it has an owner rather than sitting in a decision record nobody is working from.
+
+`retrieve_relevant` returns `top_k=5` atoms ordered purely by `created_at DESC`, hardcoded at the call site (`core/orchestrator.py:128`). Once a user has more than five atoms spread across domains, the oldest domains fall out of Layer 3 entirely — a probe against seeded six-domain history confirmed `childhood` disappearing completely. At a daily-session, 8-domain cadence that is roughly **session 5–6**, inside the pilot's first fortnight. See `docs/proposals/embedding-strategy.md`.
+
+The fix has two halves, and doing only the first trades starvation for prompt bloat:
+
+**Fetch wider.** Raise `top_k` enough to cover a multi-domain history — 8 domains at ~3 atoms each is ~24, so something in that region rather than 5. Pick the number against real seeded data, not arithmetic.
+
+**Render bounded.** `_layer3_life_context` caps `significant_people` to 2 but renders `open_threads` unbounded — gate 5.3 already produced 14. Fetching 25 atoms could push that past 40, at which point the model starts ignoring the list rather than using it. Cap what is rendered, and prefer breadth across domains over depth within one when trimming.
+
+This is a stopgap, not the answer. The answer is semantic retrieval, deferred to Phase 2 for the reasons in the strategy doc. Do not build a relevance heuristic here.
+
+Also correct the stale comment block at the top of `memory/vector_store.py`, which still says recency holds "at 100 sessions per user rather than 5." That number was measured and found wrong; the module's own docstring should not contradict the decision record.
+
+**Acceptance:**
+- A test seeds a user with atoms across at least six domains and asserts the earliest domain still appears in the threads Layer 3 receives.
+- Rendered thread count is bounded, with the bound stated in the code.
+- The `vector_store.py` comment no longer cites the 100-session figure.
+- TC-01–TC-10 re-run via `eval-runner` — Layer 3 content changes, so this needs the same gate as any prompt-adjacent edit. At or above 80% objective, 75% rubric.
+
+---
+
 ## S3 — Ask the parent
 
 **Branch:** `feature/parent-consent-flow`
@@ -354,8 +378,8 @@ Do not do these in Sprint 1. Several are P0 in the UX review and genuinely matte
 | Days | Workstream | Ship gate |
 |---|---|---|
 | 1 | S1 — land verification | ✅ done 2026-08-14; WS5 on `main`, tagged `pre-pilot-verified` |
-| 1–2 | S1.5 — remove embedding dependency | Turns complete without OpenAI; gate 5.3 still passes |
-| 2–3 | S2 — deletion is real | Consent audit passes with zero stranded objects |
+| 1–2 | S1.5 — remove embedding dependency | ✅ done 2026-08-14; merged to `main` |
+| 2–3 | S2 — deletion is real | Consent audit passes with zero stranded objects; Layer 3 keeps older domains |
 | 3–5 | S3 — parent consent | Parent is asked before session 1; evals at target |
 | 5–6 | S4 — sign-off | Clean-database walkthrough passes |
 
