@@ -299,9 +299,11 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
 
     caption = f"A memory from today's conversation with {user_profile.name} \U0001f338"
     whatsapp = get_whatsapp_adapter()
-    message_sid, _delivery_s3_key = await whatsapp.send_image(
+    # Hand over the key just uploaded rather than the bytes — the adapter
+    # presigns it instead of uploading a second, untracked copy (S2.4b).
+    message_sid = await whatsapp.send_image(
         to_number=user_profile.family_whatsapp_number,
-        image_bytes=card_result.image_bytes,
+        s3_key=s3_key,
         caption=caption,
     )
 

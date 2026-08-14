@@ -37,20 +37,16 @@ class StubWhatsAppAdapter:
         )
         return sid, s3_key
 
-    async def send_image(
-        self, to_number: str, image_bytes: bytes, caption: str = ""
-    ) -> tuple[str, str]:
+    async def send_image(self, to_number: str, s3_key: str, caption: str = "") -> str:
         sid = self._fake_sid()
-        s3_key = f"cards/stub-{uuid.uuid4().hex[:12]}.png"
         logger.info(
-            "[STUB] send_image to=%s bytes=%d caption=%r sid=%s key=%s",
+            "[STUB] send_image to=%s key=%s caption=%r sid=%s",
             to_number,
-            len(image_bytes),
+            s3_key,
             caption[:80],
             sid,
-            s3_key,
         )
-        return sid, s3_key
+        return sid
 
     async def send_text(
         self,

@@ -57,9 +57,7 @@ def _patched(profile, card_result):
     """Patch the collaborators close_and_process_session touches, yielding
     the whatsapp adapter mock and the save_memory_card mock for assertions."""
     mock_whatsapp = MagicMock()
-    mock_whatsapp.send_image = AsyncMock(
-        return_value=("SM_CARD_123", "cards/delivery-x.png")
-    )
+    mock_whatsapp.send_image = AsyncMock(return_value="SM_CARD_123")
 
     with ExitStack() as stack:
         stack.enter_context(
@@ -116,7 +114,9 @@ async def test_close_and_process_session_delivers_card_when_family_number_set():
     mock_whatsapp.send_image.assert_called_once()
     call_kwargs = mock_whatsapp.send_image.call_args.kwargs
     assert call_kwargs["to_number"] == "+919876543210"
-    assert call_kwargs["image_bytes"] == _CARD_RESULT.image_bytes
+    # The key the caller just uploaded, not a second copy of the bytes.
+    assert call_kwargs["s3_key"] == f"cards/{_SESSION_ID}.png"
+    assert "image_bytes" not in call_kwargs
     mock_save.assert_called_once()
 
 
