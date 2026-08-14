@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from adapters import llm
@@ -24,6 +25,29 @@ _EXTRACTION_PROMPT = (
     "- Do NOT include the speaker themselves in the people list\n\n"
     "Transcript:\n"
 )
+
+
+_FENCE_RE = re.compile(
+    r"^\s*```(?:json)?\s*\n(?P<body>.*?)\n?\s*```\s*$",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _strip_code_fence(content: str) -> str:
+    """
+    Unwrap a ```json ... ``` fence if the model added one.
+
+    This call asks for bare JSON and gets fenced JSON almost every time —
+    which used to fail json.loads, log a warning, and return before the
+    fact store was ever written, so structured_facts stayed empty for
+    every user forever. Unlike the dialogue and story-extraction calls,
+    this one has no delimiting tags to parse against, so the fence is the
+    only thing standing between a correct extraction and a silent no-op.
+    """
+    if not isinstance(content, str):
+        return content
+    match = _FENCE_RE.match(content)
+    return match.group("body") if match else content.strip()
 
 
 @dataclass
@@ -50,13 +74,16 @@ async def extract_entities(
 
     entities = NamedEntities()
     try:
-        raw = json.loads(response.content)
+        raw = json.loads(_strip_code_fence(response.content))
         entities.people = raw.get("people", [])
         entities.places = raw.get("places", [])
         entities.dates = raw.get("dates", [])
         entities.institutions = raw.get("institutions", [])
-    except (json.JSONDecodeError, AttributeError):
-        logger.warning("entity_extractor: failed to parse LLM JSON response")
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        logger.warning(
+            "entity_extractor: failed to parse LLM JSON response: %.200r",
+            response.content,
+        )
         return entities
 
     # Load existing facts and merge
