@@ -362,3 +362,38 @@ Subramaniam" and carries:
 alongside 13 open threads. All four seeded session-1 specifics (Madurai,
 Kamala, 1948, the shop) reach session 2's prompt. Full assembled prompt in
 the PR body.
+
+### Gate 5.5 result (run 2026-08-14) — FAIL, as the plan predicted
+
+Seeded a complete user (profile, session, 2 turns, story atom, memory
+card, facts, consent record, crisis event) plus four real objects in
+`katha-media-500923064555-ap-south-1-an`, two tracked and two deliberately
+untracked. Called the real `delete_user` logic, then verified by direct
+table and bucket inspection rather than by the endpoint's return value —
+which reported `{"status": "deleted", "message": "All data has been
+permanently removed."}` while two objects were still in the bucket.
+
+**Database: clean.** Zero rows in `user_profiles`, `sessions`, `turns`,
+`story_atoms`, `memory_cards`, `facts`. Zero orphaned `crisis_events` —
+its `ON DELETE CASCADE` from `sessions` works, so it needs no explicit
+sweep. `consent_records` correctly *retained and anonymised*, not deleted:
+`user_id` → `"DELETED"`, `ip_address` and `user_agent` nulled,
+`email_hash` and `consent_version` kept for audit.
+
+**S3: two objects stranded**, confirming gaps (a) and (b) in S2.4 exactly
+as logged, with nothing else stranded beyond them:
+
+| Key | Tracked | Survived deletion |
+|---|---|---|
+| `audio/{uid}-turn1.ogg` | `turns.response_audio_s3_key` | no — swept |
+| `cards/{session_id}.png` | `memory_cards.image_s3_key` | no — swept |
+| `audio/{uid}-session-open.ogg` | — | **yes — stranded** |
+| `cards/katha-{uuid}.png` | — | **yes — stranded** |
+
+This is the baseline S2.4 must move to zero. Test objects were removed
+after the audit; the bucket was empty before it and is empty after.
+
+**2.4(c) note for S2:** `GetPublicAccessBlock` returns `AccessDenied` for
+the IAM user in `.env`, so Block Public Access cannot be verified with
+these credentials. It needs console access or an added IAM permission —
+worth knowing before S2.4 treats it as a quick check.
