@@ -116,6 +116,7 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["user_id"] == _USER_ID
     assert body["user_name"] == "Subramaniam"
     assert body["total_sessions"] == 5
     assert body["total_story_atoms"] == 3

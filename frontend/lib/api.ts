@@ -6,9 +6,11 @@ export interface DomainBreakdownEntry {
 }
 
 export interface Stats {
+  user_id: string;
   user_name: string;
   total_sessions: number;
   total_story_atoms: number;
+  total_memory_cards: number;
   domains_covered: number;
   domain_breakdown: DomainBreakdownEntry[];
   latest_card_url: string | null;
@@ -52,6 +54,20 @@ export interface MemoryCardItem {
 export interface CardsResponse {
   cards: MemoryCardItem[];
   total: number;
+}
+
+export interface ExportBundle {
+  exported_at: string;
+  schema_version: string;
+  audio_included: boolean;
+  profile: {
+    name: string | null;
+    preferred_language: string | null;
+    onboarding_context: string | null;
+  };
+  sessions: unknown[];
+  stories: unknown[];
+  memory_cards: unknown[];
 }
 
 export interface OnboardingStartResponse {
@@ -142,6 +158,16 @@ export const api = {
     }),
 
   isAuthenticated,
+
+  exportData: () => apiFetch<ExportBundle>("/family/export"),
+
+  // Scoped to the caller's own JWT — there is no user_id to pass. The
+  // backend clears the katha_token cookie itself via delete_cookie, so
+  // callers must NOT also call logout(); the two race.
+  deleteAllData: (userId: string) =>
+    apiFetch<{ status: string; message: string }>(`/user/${userId}`, {
+      method: "DELETE",
+    }),
 
   startOnboarding: (email: string) =>
     apiFetch<OnboardingStartResponse>("/onboarding/start", {

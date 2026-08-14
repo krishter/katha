@@ -134,6 +134,11 @@ async def get_stats(
     total_memory_cards = card_count_result.scalar_one()
 
     return {
+        # The deletion endpoint is /user/{user_id} and validates the path
+        # against the caller's own JWT. The portal needs to know its own id
+        # to call it at all; exposing it to the authenticated owner grants
+        # nothing they do not already hold.
+        "user_id": user_id,
         "user_name": user_name,
         "total_sessions": total_sessions,
         "total_story_atoms": total_story_atoms,

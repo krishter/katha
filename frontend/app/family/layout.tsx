@@ -14,21 +14,27 @@ export default function FamilyLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  const isAuthPage =
+  // Pages that render without the signed-in chrome. Two kinds: the routes
+  // you reach before authenticating, and the post-deletion confirmation —
+  // by the time that one renders the katha_token cookie is already gone,
+  // so fetching stats would 401 and bounce the user to a login screen at
+  // the exact moment they need to be told the deletion worked.
+  const isChromelessPage =
     pathname?.startsWith("/family/login") ||
     pathname?.startsWith("/family/auth") ||
-    pathname?.startsWith("/family/onboarding");
+    pathname?.startsWith("/family/onboarding") ||
+    pathname?.startsWith("/family/settings/privacy/deleted");
 
   // SWR dedupes this against the same "stats" key used by the dashboard
   // home page, so this doesn't add an extra request there.
-  const { data: stats } = useSWR(isAuthPage ? null : "stats", api.getStats);
+  const { data: stats } = useSWR(isChromelessPage ? null : "stats", api.getStats);
 
   async function handleLogout() {
     await api.logout();
     router.push("/family/login");
   }
 
-  if (isAuthPage) {
+  if (isChromelessPage) {
     return <>{children}</>;
   }
 
@@ -50,6 +56,9 @@ export default function FamilyLayout({
           </Link>
           <Link href="/family/cards" className="hover:text-saffron-ink">
             Memory Cards
+          </Link>
+          <Link href="/family/settings/privacy" className="hover:text-saffron-ink">
+            Settings
           </Link>
           <button
             type="button"

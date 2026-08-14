@@ -20,7 +20,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_CONSENT_VERSION = "1.0"
+# Bumped from 1.0 in Sprint 1 S2.3. The checklist text materially changed:
+# it now links to a deletion control that actually exists (F-01), and it no
+# longer implies the buyer can consent on the parent's behalf — it states
+# that Katha will ask the parent directly (F-02). consent_version exists to
+# record which wording a given record attests to, so records written against
+# the old text keep saying 1.0. No backfill.
+_CONSENT_VERSION = "1.1"
 _E164_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 
 
