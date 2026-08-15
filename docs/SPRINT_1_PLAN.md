@@ -393,6 +393,73 @@ S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5
 
 <!-- Append anything discovered that is not covered above. Do not fix in-scope. -->
 
+- **(S2.5) The eval harness invents pass criteria `TECH_DESIGN.md` does not
+  state, and two rubric cases now fail on them.** The S2.5 regression run
+  scored 7/11 — objective 5/5 (100%), rubric 2/6 (33.3%). Verified that
+  S2.5 caused none of it:
+
+  - **TC-05** seeds a *fresh user with no prior sessions*
+    (`run_eval.py` `tc05`), so `prior_context` is empty and neither
+    `_RETRIEVAL_TOP_K` nor `_MAX_RENDERED_THREADS` executes meaningfully.
+    It fails a `≤60 words on every response` cutoff that exists only in the
+    harness; §3.3 says "brief, warm, low-pressure" and its stated pass
+    condition — `session_end_suggested` within 3 exchanges — passed, at
+    68–69 words. This is the *second* harness-threshold defect found in
+    TC-05: S1 already fixed it scoring on one exchange when the spec allows
+    three.
+  - **TC-04** returned FAIL / PASS / FAIL across three live samples with
+    *identical* Layer 3 content each time (9 threads, under the 12 cap), so
+    nothing S2.5 changed could have affected it. Its "introduces a new
+    angle" check is a narrow keyword list that does not credit valid
+    non-repetitive follow-ups ("what did it look like before", "who was
+    with you").
+
+  Neither is a product defect. But an eval gate that fails on invented
+  thresholds cannot be used to decide whether a prompt change is safe,
+  which is exactly what `.claude/rules/testing.md` asks it to do. The
+  harness needs its criteria reconciled against §3.3 before the rubric
+  number means anything. Not fixed here: correcting the measure inside the
+  change it is measuring is how you end up tuning a test until it passes.
+
+- **(S2.5) TC-11's root cause is now directly evidenced.** By session 6,
+  `prior_context.significant_people` no longer contains Mr. Iyer at all —
+  he was flagged with `why_significant` in session 2 and is gone from the
+  fact store before any resurfacing is attempted. Confirms
+  `story_extractor.process_extraction` resolves a person within the same
+  extraction pass that flagged them. Reproduced across two independent
+  samples. Still filed for the focused anchor/significant-people branch
+  alongside `_pick_recall_anchor` taking `significant_people[0]`
+  unconditionally.
+
+- **(S2) `JWT_SECRET` in `backend/.env` is an unsubstituted placeholder.**
+  27 characters, still carrying the literal `<run: ...>` instruction text.
+  `validate_production_config` rejects secrets shorter than 32 characters,
+  so this fails at deploy rather than in dev, and it also breaks
+  `source .env` in bash. Local-only file, so nothing to fix in the repo —
+  but S4's clean-database walkthrough will hit it.
+
+- **(S2.4c) Block Public Access cannot be verified with the current
+  credentials.** `GetPublicAccessBlock` returns `AccessDenied` for the IAM
+  user in `backend/.env`. The audit needs console access or an added IAM
+  permission; it cannot be discharged from code. Recorded as unverified
+  rather than assumed ON.
+
+- **(S2) The integration suite is effectively unrun in CI, and had been
+  broken since S1.5.** `tests/integration/` skips itself when no Postgres
+  is reachable, which is CI's normal state. S1.5 deleted
+  `vector_store._embed` but left two integration tests patching it, and
+  left the pilot rehearsal asserting every story atom carries an embedding
+  — both broken for a full workstream without anything noticing. Fixed in
+  S2's commits. The structural point stands: these are the only tests that
+  exercise real DB behaviour, and nothing enforces that they run.
+
+- **(S2) FastAPI dependency overrides leak between test modules.** An E2E
+  test that ended with `app.dependency_overrides.pop(get_db)` broke seven
+  unrelated `test_webhook.py` tests, because those register their own
+  module-level override on the same shared `app`. `test_family_api.py`'s
+  `db` fixture already documents this hazard and saves/restores instead.
+  Worth knowing before S3 adds route tests.
+
 - **(S1.5.3) Domain-filtered retrieval empties Layer 3 — measured, not
   predicted.** 1.5.3 specified filtering the recency query to the session's
   current domain. Implemented and run against gate 5.3: session 1 produced
