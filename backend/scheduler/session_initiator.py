@@ -104,16 +104,19 @@ async def initiate_sessions(db_session_factory) -> None:
                 )
 
                 # Send voice note
-                message_sid, _s3_key = await whatsapp.send_voice_note(
+                message_sid, audio_s3_key = await whatsapp.send_voice_note(
                     profile.whatsapp_number, audio_bytes, mime_type="audio/ogg"
                 )
 
-                # Record session_open_message_id
+                # Record session_open_message_id and the audio key. The key
+                # was previously discarded, leaving the object unreachable
+                # by DELETE /user/{user_id} (S2.4a).
                 await db.execute(
                     update(Session)
                     .where(Session.id == state.session_id)
                     .values(
                         session_open_message_id=message_sid,
+                        session_open_audio_s3_key=audio_s3_key,
                         whatsapp_number=profile.whatsapp_number,
                     )
                 )

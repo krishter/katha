@@ -198,3 +198,16 @@ def test_onboarding_consent_stores_email_hash_not_raw_email(db):
     assert saved_record.email_hash == expected_hash
     assert saved_record.user_id == _USER_ID
     assert _EMAIL not in saved_record.email_hash
+
+
+def test_consent_version_is_current():
+    """S2.3 bumped the checklist text: it now links to a deletion control
+    that exists (F-01) and states that Katha asks the parent directly
+    rather than implying the buyer can consent for them (F-02). Records
+    written against the old wording keep saying 1.0 — this column exists to
+    say which text was agreed to, so changing the text without changing the
+    version would make every historical record a claim about copy the user
+    never saw."""
+    from api.routes.onboarding import _CONSENT_VERSION
+
+    assert _CONSENT_VERSION == "1.1"

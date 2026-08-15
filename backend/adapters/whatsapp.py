@@ -26,11 +26,18 @@ class WhatsAppAdapter(Protocol):
         the key so the object can be found and deleted later."""
         ...
 
-    async def send_image(
-        self, to_number: str, image_bytes: bytes, caption: str = ""
-    ) -> tuple[str, str]:
-        """Upload PNG to S3 (private) and send Twilio a short-lived
-        presigned URL. Returns (MessageSid, s3_key)."""
+    async def send_image(self, to_number: str, s3_key: str, caption: str = "") -> str:
+        """
+        Send Twilio a short-lived presigned URL for an image ALREADY in S3.
+        Returns MessageSid.
+
+        Takes a key rather than bytes deliberately. This used to accept
+        bytes and upload them itself, which meant every memory card was
+        stored twice — once by the caller under cards/{session_id}.png and
+        tracked in memory_cards.image_s3_key, then again here under a random
+        cards/katha-{uuid}.png that nothing recorded and deletion could
+        never find (S2.4b). The caller already has the key.
+        """
         ...
 
     async def send_text(
@@ -78,13 +85,7 @@ class TwilioWhatsAppAdapter:
         logger.info("Sent voice note to %s: %s", to_number, msg.sid)
         return msg.sid, s3_key
 
-    async def send_image(
-        self, to_number: str, image_bytes: bytes, caption: str = ""
-    ) -> tuple[str, str]:
-        import uuid
-
-        key = f"cards/katha-{uuid.uuid4().hex[:12]}.png"
-        s3_key = await storage.upload_media(image_bytes, key, "image/png")
+    async def send_image(self, to_number: str, s3_key: str, caption: str = "") -> str:
         presigned_url = await storage.generate_presigned_url(s3_key)
         msg = await asyncio.to_thread(
             self._client.messages.create,
@@ -94,7 +95,7 @@ class TwilioWhatsAppAdapter:
             body=caption,
         )
         logger.info("Sent image to %s: %s", to_number, msg.sid)
-        return msg.sid, s3_key
+        return msg.sid
 
     async def send_text(
         self,

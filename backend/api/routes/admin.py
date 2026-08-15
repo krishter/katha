@@ -85,6 +85,27 @@ async def delete_user(
     except Exception:
         logger.exception("Failed to look up turn audio keys for user %s", user_id)
 
+    # 1c. The session-opening voice note. It has no Turn row of its own, so
+    # its key lives on the session (S2.4a) and needs its own sweep — this
+    # was the object the S1.2 consent audit found stranded.
+    try:
+        result = await db.execute(
+            select(Session.session_open_audio_s3_key)
+            .where(Session.user_id == user_id)
+            .where(Session.session_open_audio_s3_key.is_not(None))
+        )
+        for s3_key in result.scalars().all():
+            try:
+                await storage.delete_media(s3_key)
+            except Exception:
+                logger.exception(
+                    "Failed to delete S3 object %s for user %s", s3_key, user_id
+                )
+    except Exception:
+        logger.exception(
+            "Failed to look up session-open audio keys for user %s", user_id
+        )
+
     # 3-7. Delete rows that belong directly to this user_id
     for label, stmt in [
         ("memory_cards", delete(MemoryCard).where(MemoryCard.user_id == user_id)),

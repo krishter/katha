@@ -36,7 +36,6 @@ from prompts.system_prompt import UserProfile
 pytestmark = pytest.mark.integration
 
 _FAKE_WAV = b"RIFF" + b"\x00" * 40
-_FAKE_EMBEDDING = [0.01] * 1536
 _DIALOGUE_CONTENT = "<response>Tell me more about that.</response>"
 
 
@@ -137,11 +136,6 @@ async def test_failure_stage_never_silent_and_never_corrupts_rows(
         "core.orchestrator.llm.chat": AsyncMock(side_effect=_llm_ok),
         "core.orchestrator.sarvam_tts.synthesize": _tts_ok,
         "core.orchestrator.convert_wav_to_ogg": _convert_ok,
-        # build_prior_context always embeds the query for semantic
-        # retrieval, even on a fresh session with no prior atoms — must be
-        # mocked regardless of which stage this case is injecting a
-        # failure into, or every case makes a live (billed) OpenAI call.
-        "memory.vector_store._embed": AsyncMock(return_value=_FAKE_EMBEDDING),
     }
     active_patches.update(patches)
 

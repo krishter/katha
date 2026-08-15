@@ -17,11 +17,10 @@ async def test_stub_send_voice_note_returns_fake_sid_and_key():
     assert s3_key.startswith("audio/")
 
 
-async def test_stub_send_image_returns_fake_sid_and_key():
+async def test_stub_send_image_returns_fake_sid():
     adapter = StubWhatsAppAdapter()
-    sid, s3_key = await adapter.send_image(_TO, b"fake-png-bytes", caption="A memory")
+    sid = await adapter.send_image(_TO, "cards/abc.png", caption="A memory")
     assert sid.startswith("STUB_MSG_")
-    assert s3_key.startswith("cards/")
 
 
 async def test_stub_send_text_returns_fake_sid():
@@ -79,7 +78,10 @@ async def test_twilio_send_voice_note_uploads_then_sends():
     assert s3_key == "audio/test.ogg"
 
 
-async def test_twilio_send_image_uploads_then_sends():
+async def test_twilio_send_image_presigns_without_uploading():
+    """S2.4b: send_image takes a key the caller already uploaded. It must
+    never upload a second copy — that copy was untracked and survived
+    DELETE /user/{user_id}."""
     from adapters.whatsapp import TwilioWhatsAppAdapter
 
     mock_msg = MagicMock()
@@ -92,26 +94,23 @@ async def test_twilio_send_image_uploads_then_sends():
         patch("adapters.whatsapp.TwilioClient", return_value=mock_twilio),
         patch(
             "adapters.whatsapp.storage.upload_media",
-            new=AsyncMock(return_value="cards/test.png"),
+            new=AsyncMock(return_value="cards/should-never-happen.png"),
         ) as mock_upload,
         patch(
             "adapters.whatsapp.storage.generate_presigned_url",
             new=AsyncMock(return_value="https://signed.example/cards/test.png"),
-        ),
+        ) as mock_presign,
     ):
         adapter = TwilioWhatsAppAdapter("ACtest", "authtest", "whatsapp:+14155238886")
-        sid, s3_key = await adapter.send_image(
-            _TO, b"fake-png-bytes", caption="A memory"
-        )
+        sid = await adapter.send_image(_TO, "cards/test.png", caption="A memory")
 
-    mock_upload.assert_called_once()
-    upload_kwargs = mock_upload.call_args.args
-    assert upload_kwargs[2] == "image/png"
+    mock_upload.assert_not_called()
+    mock_presign.assert_called_once_with("cards/test.png")
     call_kwargs = mock_twilio.messages.create.call_args.kwargs
     assert call_kwargs["to"] == f"whatsapp:{_TO}"
     assert call_kwargs["body"] == "A memory"
+    assert call_kwargs["media_url"] == ["https://signed.example/cards/test.png"]
     assert sid == "SM_IMG_789"
-    assert s3_key == "cards/test.png"
 
 
 async def test_twilio_send_text_correct_format():

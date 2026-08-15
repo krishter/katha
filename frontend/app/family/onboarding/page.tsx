@@ -263,21 +263,71 @@ export default function OnboardingPage() {
           <p className="mt-2 text-sm text-ink-mid">
             Please read and agree to the following:
           </p>
+          {/*
+            Two corrections here, both from the UX review.
+
+            F-01: this list used to promise deletion "from your account
+            settings" when no settings route existed. It now links to the
+            page that does the thing, because a right you cannot find is
+            not a right you can exercise.
+
+            F-02: the buyer cannot consent on the parent's behalf. Under
+            the DPDP Act the parent is the data principal, and a competent
+            adult's consent is not their child's to give. The line below
+            says plainly that Katha will ask them directly. The flow that
+            does the asking is S3; this text stops over-claiming now,
+            rather than after it ships.
+          */}
           <ul className="mt-4 flex flex-col gap-2 text-sm text-ink">
             {[
-              `Katha will record voice conversations with ${parentName || "your parent"} via WhatsApp`,
-              "Conversations are transcribed and stored to preserve life stories",
-              "Story summaries and quotes are shared with you (the family account holder)",
-              "Your family's data is stored securely in India (Mumbai)",
-              "You can delete all data at any time from your account settings",
-              "Katha does not use your family's data to train AI models",
-              "Katha is not a medical service. For emergencies, please call 112.",
+              {
+                key: "record",
+                node: `Katha will record voice conversations with ${parentName || "your parent"} via WhatsApp`,
+              },
+              {
+                key: "transcribe",
+                node: "Conversations are transcribed and stored to preserve life stories",
+              },
+              {
+                key: "parent-consent",
+                node: `Before the first conversation, Katha will ask ${parentName || "your parent"} for their own permission, in their own language. If they decline, no conversations will take place.`,
+              },
+              {
+                key: "share",
+                node: "Story summaries and quotes are shared with you (the family account holder)",
+              },
+              {
+                key: "residency",
+                node: "Your family's data is stored securely in India (Mumbai)",
+              },
+              {
+                key: "deletion",
+                node: (
+                  <>
+                    You can export or delete all data at any time from{" "}
+                    <a
+                      href="/family/settings/privacy"
+                      className="underline hover:text-saffron-ink"
+                    >
+                      Privacy &amp; Data settings
+                    </a>
+                  </>
+                ),
+              },
+              {
+                key: "no-training",
+                node: "Katha does not use your family's data to train AI models",
+              },
+              {
+                key: "not-medical",
+                node: "Katha is not a medical service. For emergencies, please call 112.",
+              },
             ].map((line) => (
-              <li key={line} className="flex gap-2">
+              <li key={line.key} className="flex gap-2">
                 <span aria-hidden="true" className="text-saffron-ink">
                   ✓
                 </span>
-                <span>{line}</span>
+                <span>{line.node}</span>
               </li>
             ))}
           </ul>

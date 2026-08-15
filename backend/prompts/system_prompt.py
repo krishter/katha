@@ -9,6 +9,13 @@ if TYPE_CHECKING:
     from core.session_manager import SessionState
 
 # Maps BCP-47 language codes to natural language names
+# Ceiling on open threads rendered into Layer 3. Retrieval fetches far more
+# atoms than this (orchestrator._RETRIEVAL_TOP_K) so that older domains stay
+# reachable; this is what stops that width becoming prompt bloat. 12 gives
+# roughly one or two threads per life domain — enough to offer the model a
+# choice, few enough that it still reads them.
+_MAX_RENDERED_THREADS = 12
+
 _LANGUAGE_NAMES: dict[str, str] = {
     "hi-IN": "Hindi",
     "ta-IN": "Tamil",
@@ -141,8 +148,16 @@ def _layer3_life_context(
 
     threads = ""
     if prior_context.open_threads:
+        # Bounded deliberately. Retrieval fetches 25 atoms so older domains
+        # stay reachable at all (S2.5), but every thread those atoms carry
+        # would put 40+ bullets in front of the model, at which point it
+        # stops treating the list as a menu and starts ignoring it. The
+        # incoming order is already breadth-first across domains — see
+        # orchestrator._extract_open_threads — so truncating here keeps one
+        # thread from each domain before it keeps a second from any.
+        shown = prior_context.open_threads[:_MAX_RENDERED_THREADS]
         threads = "\nOpen story threads to revisit:\n" + "\n".join(
-            f"  - {t}" for t in prior_context.open_threads
+            f"  - {t}" for t in shown
         )
 
     significant_block = ""

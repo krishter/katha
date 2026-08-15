@@ -72,7 +72,11 @@ async def test_build_prior_context_calls_retrieve_relevant():
     ):
         await build_prior_context(_USER_ID, _DOMAIN, db)
 
-    mock_retrieve.assert_called_once_with(_USER_ID, _DOMAIN, top_k=5, db=db)
+    from core.orchestrator import _RETRIEVAL_TOP_K
+
+    mock_retrieve.assert_called_once_with(
+        _USER_ID, _DOMAIN, top_k=_RETRIEVAL_TOP_K, db=db
+    )
 
 
 async def test_build_prior_context_includes_significant_people():

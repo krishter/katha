@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -124,10 +125,24 @@ async def get_stats(
         else None
     )
 
+    # Counted, not inferred. The deletion confirmation names exactly what is
+    # destroyed, and stats previously exposed only latest_card_url — leaving
+    # the UI to either invent a card number or omit cards from the copy.
+    card_count_result = await db.execute(
+        select(func.count(MemoryCard.id)).where(MemoryCard.user_id == user_id)
+    )
+    total_memory_cards = card_count_result.scalar_one()
+
     return {
+        # The deletion endpoint is /user/{user_id} and validates the path
+        # against the caller's own JWT. The portal needs to know its own id
+        # to call it at all; exposing it to the authenticated owner grants
+        # nothing they do not already hold.
+        "user_id": user_id,
         "user_name": user_name,
         "total_sessions": total_sessions,
         "total_story_atoms": total_story_atoms,
+        "total_memory_cards": total_memory_cards,
         "domains_covered": domains_covered,
         "domain_breakdown": domain_breakdown,
         "latest_card_url": latest_card_url,
@@ -229,4 +244,102 @@ async def list_cards(
             for card in rows
         ],
         "total": total,
+    }
+
+
+@router.get("/family/export")
+async def export_data(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Everything captured about this family, as JSON.
+
+    Offered immediately before deletion. A user who deletes their mother's
+    stories because they meant to cancel a subscription is a support
+    incident nobody can undo, so the destructive path has a way out that
+    costs one click.
+
+    Scoped to the caller's own user_id via the JWT, exactly like deletion —
+    there is no user_id parameter to tamper with.
+
+    Audio is deliberately excluded. Voice notes live in S3 behind
+    short-lived presigned URLs, and a JSON document full of links that
+    expire in fifteen minutes is worse than honest silence about them. PRD
+    13.1 promises audio export too; that needs an async job producing a
+    durable archive, which is Phase 2.
+    """
+    user_id = current_user["user_id"]
+
+    profile_result = await db.execute(
+        select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+    )
+    profile = profile_result.scalar_one_or_none()
+
+    sessions_result = await db.execute(
+        select(Session).where(Session.user_id == user_id).order_by(Session.started_at)
+    )
+    sessions = sessions_result.scalars().all()
+
+    atoms_result = await db.execute(
+        select(StoryAtom)
+        .where(StoryAtom.user_id == user_id)
+        .order_by(StoryAtom.created_at)
+    )
+    atoms = atoms_result.scalars().all()
+
+    cards_result = await db.execute(
+        select(MemoryCard)
+        .where(MemoryCard.user_id == user_id)
+        .order_by(MemoryCard.created_at)
+    )
+    cards = cards_result.scalars().all()
+
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "schema_version": "1.0",
+        "audio_included": False,
+        "profile": {
+            "name": profile.name if profile else None,
+            "preferred_language": profile.preferred_language if profile else None,
+            "onboarding_context": profile.onboarding_context if profile else None,
+        },
+        "sessions": [
+            {
+                "session_number": s.session_number,
+                "domain": s.domain,
+                "status": s.status,
+                "started_at": s.started_at.isoformat() if s.started_at else None,
+                "ended_at": s.ended_at.isoformat() if s.ended_at else None,
+                "exchange_count": s.exchange_count,
+            }
+            for s in sessions
+        ],
+        "stories": [
+            {
+                "domain": a.domain,
+                "domain_label": get_domain(a.domain).name
+                if a.domain in get_domain_sequence()
+                else a.domain,
+                "title": a.title,
+                "narrative": a.narrative,
+                "who": a.who,
+                "what": a.what,
+                "when": a.when_approx,
+                "where": a.where_approx,
+                "why": a.why,
+                "verbatim_quote": a.verbatim_quote,
+                "completeness_score": a.completeness_score,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in atoms
+        ],
+        "memory_cards": [
+            {
+                "verbatim_quote": c.verbatim_quote,
+                "domain": c.domain,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in cards
+        ],
     }

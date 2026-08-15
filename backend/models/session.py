@@ -39,6 +39,13 @@ class Session(Base):
     session_open_message_id: Mapped[Optional[str]] = mapped_column(
         String, nullable=True
     )
+    # The opening voice note has no Turn row to hang its audio key on, so
+    # without this column the object is private but unenumerable, and
+    # DELETE /user/{user_id} cannot reach it. Mirrors
+    # turns.response_audio_s3_key.
+    session_open_audio_s3_key: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
