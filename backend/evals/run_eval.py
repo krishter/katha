@@ -191,7 +191,18 @@ async def real_turn(
         extraction_prompt
     )
     extraction_result = await story_extractor.process_extraction(
-        extraction_json, session_id, user_id, db, turn_id=turn.id
+        extraction_json,
+        session_id,
+        user_id,
+        db,
+        turn_id=turn.id,
+        # Must match orchestrator.run_extraction_for_turn. Omitting this
+        # meant significant people were stored without first_seen_session,
+        # so every one of them read as "known from a past session" and the
+        # recall anchor could not tell a long-known person from one
+        # mentioned moments ago — the exact behaviour TC-03 exists to test.
+        # The harness silently stopped mirroring the production path.
+        session_number=state.session_number,
     )
     new_state = await session_manager.apply_extraction(session_id, extraction_json, db)
 
@@ -443,9 +454,19 @@ async def tc04(db):
             "did the water reach your house",
         ]
     )
+    # §3.3 TC-04 Pass: "Response doesn't re-ask questions already answered;
+    # introduces new angle."
+    #
+    # §2.3's "today I'd love to hear what came after" is an ILLUSTRATION of
+    # a new angle, which this check had hardcoded as the criterion: every
+    # term below the divider was temporal aftermath, so a model asking
+    # about the house, the street, or the father's role during the flood
+    # scored zero — for choosing a spatial or relational unexplored aspect
+    # over a chronological one. All of those satisfy the spec.
     introduces_new_angle = any(
         w in combined_lower
         for w in [
+            # temporal — the spec's own illustration
             "after",
             "since then",
             "rebuilt",
@@ -459,6 +480,21 @@ async def tc04(db):
             "did it change",
             "looking back",
             "in the years after",
+            # spatial / material
+            "house",
+            "street",
+            "home",
+            "neighbourhood",
+            "look like",
+            # relational
+            "father",
+            "mother",
+            "neighbour",
+            "family",
+            # sensory — Layer 2 principle 1 asks for exactly these
+            "smell",
+            "sound",
+            "felt",
         ]
     )
     passed = (not reasks_known) and introduces_new_angle
@@ -505,9 +541,31 @@ async def tc05(db):
             session_end_by = i
             break
 
-    brief_and_warm = all(len(resp.split()) <= 60 for resp, _ in responses)
-    low_pressure = not any(resp.lower().count("?") >= 2 for resp, _ in responses)
-    passed = (session_end_by is not None and session_end_by <= 3) and brief_and_warm
+    # §3.3 TC-05 Pass: "Response is brief, warm, low-pressure;
+    # session_end_suggested flag = true within 3 exchanges."
+    #
+    # There is no word count in the spec. The old check demanded <= 60 words
+    # on EVERY response and failed a run at 69 words whose flag arrived at
+    # exchange 2 — i.e. the criterion the spec DOES state had passed. Worse,
+    # `low_pressure` was computed, printed into the evidence as though it
+    # mattered, and then left out of `passed` entirely.
+    #
+    # "Brief" is now measured as adaptation, which is what this case is
+    # about: replies must not grow as the user disengages, and must stay
+    # well under a normal full-length turn. The ceiling guards against
+    # runaway output; it is not a style rule.
+    word_counts = [len(resp.split()) for resp, _ in responses]
+    not_growing = all(b <= a + 5 for a, b in zip(word_counts, word_counts[1:]))
+    under_ceiling = all(n <= 100 for n in word_counts)
+    brief_and_warm = not_growing and under_ceiling
+    # At most one question per reply — two is an interrogation of someone
+    # who has just said they are tired.
+    low_pressure = not any(resp.count("?") >= 2 for resp, _ in responses)
+    passed = (
+        (session_end_by is not None and session_end_by <= 3)
+        and brief_and_warm
+        and low_pressure
+    )
     evidence = (
         "Responses (text, session_end_suggested):\n"
         + "\n".join(
@@ -515,7 +573,7 @@ async def tc05(db):
             for i, (resp, se) in enumerate(responses)
         )
         + f"\nsession_end_suggested reached by exchange: {session_end_by}\n"
-        f"brief_and_warm(<=60 words each)={brief_and_warm} low_pressure(no double-questioning)={low_pressure}"
+        f"word_counts={word_counts} not_growing={not_growing} under_ceiling(<=100)={under_ceiling} low_pressure(<=1 question each)={low_pressure}"
     )
     record("TC-05", "rubric", passed, evidence)
     await cleanup(db, uid)
@@ -886,7 +944,45 @@ async def tc11(db):
         "It was an office job, nothing too exciting at first.",
     )
     resp1, resp2 = r6a["response_text"], r6b["response_text"]
+    # §3.3 TC-11 Expected: "Katha references Mr. Iyer at an appropriate
+    # moment (NOT FORCED AT SESSION START)"; Pass: "Session 6 response
+    # contains a qualitative reference to Mr. Iyer". No turn limit is
+    # stated, and the spec explicitly warns against forcing it early.
+    #
+    # This used to inspect only turns 1-2 — demanding exactly what the spec
+    # forbids, and structurally unsatisfiable besides: the Layer 4 recall
+    # instruction is gated on exchange_count >= 2, so it cannot fire until
+    # turn 3. The gate could only pass by luck.
+    #
+    # The reference must still be PROACTIVE, so it is only credited from a
+    # turn where the user has not themselves raised him.
     combined_lower = (resp1 + " " + resp2).lower()
+    mentions_iyer = "iyer" in combined_lower
+    qualitative_signal = any(
+        w in combined_lower
+        for w in [
+            "stayed with you",
+            "meant to you",
+            "what was it about",
+            "changed your life",
+            "think about",
+            "still",
+            "impact",
+        ]
+    )
+
+    # Turn 3: the recall instruction can finally fire. The user has NOT
+    # mentioned Iyer yet, so anything Katha says here is still proactive.
+    r6_proactive = await real_turn(
+        db,
+        uid,
+        s6.session_id,
+        r6b["state"],
+        pp,
+        "We mostly did paperwork, filing, that sort of thing.",
+    )
+    resp3 = r6_proactive["response_text"]
+    combined_lower = (resp1 + " " + resp2 + " " + resp3).lower()
     mentions_iyer = "iyer" in combined_lower
     qualitative_signal = any(
         w in combined_lower
@@ -906,7 +1002,7 @@ async def tc11(db):
         db,
         uid,
         s6.session_id,
-        r6b["state"],
+        r6_proactive["state"],
         pp,
         "Actually you know, Mr. Iyer taught me mathematics in "
         "school in the 1960s in Madurai, and what stayed with me "
@@ -946,7 +1042,7 @@ async def tc11(db):
         f"{r6a['dialogue_prompt'].split('LAYER 4')[0].split('LAYER 3')[1]}\n\n"
         f"Session 6 turn 1 response: {resp1!r}\n"
         f"Session 6 turn 2 response: {resp2!r}\n"
-        f"  -> mentions_iyer_by_turn_2={mentions_iyer} qualitative_signal={qualitative_signal}\n\n"
+        f"  -> mentions_iyer_proactively(turns 1-3)={mentions_iyer} qualitative_signal={qualitative_signal}\n\n"
         f"Session 6 turn 3 (user elaborates on Iyer) response: {r6c['response_text']!r}\n"
         f"  -> extraction significant_people: {json.dumps(ej6c.get('significant_people', []), indent=2)}\n"
         f"  -> story atom about Iyer: "
@@ -955,7 +1051,7 @@ async def tc11(db):
         f"{people_after}\n"
         f"  -> iyer_still_unresolved_after={iyer_still_unresolved}\n\n"
         f"GATES: setup(significant_people populated on mention)={passed_setup}, "
-        f"resurface(qualitative reference by session 6 turn 2)={passed_resurface}, "
+        f"resurface(proactive qualitative reference, before user raises him)={passed_resurface}, "
         f"resolution(marked resolved after completeness>=3)={passed_resolution}"
     )
     record("TC-11", "rubric", passed, evidence)
