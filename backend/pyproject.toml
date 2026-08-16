@@ -33,6 +33,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
+[tool.ruff.lint.per-file-ignores]
+# The eval harness builds long human-readable evidence strings that get
+# pasted into PR bodies and read by eye. Wrapping them at 88 columns makes
+# the source harder to read without making the output any better.
+"evals/*.py" = ["E501"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
