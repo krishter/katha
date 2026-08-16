@@ -8,7 +8,6 @@ from prompts.domains import get_domain
 if TYPE_CHECKING:
     from core.session_manager import SessionState
 
-# Maps BCP-47 language codes to natural language names
 # Ceiling on open threads rendered into Layer 3. Retrieval fetches far more
 # atoms than this (orchestrator._RETRIEVAL_TOP_K) so that older domains stay
 # reachable; this is what stops that width becoming prompt bloat. 12 gives
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
 # choice, few enough that it still reads them.
 _MAX_RENDERED_THREADS = 12
 
+# Maps BCP-47 language codes to natural language names
 _LANGUAGE_NAMES: dict[str, str] = {
     "hi-IN": "Hindi",
     "ta-IN": "Tamil",
@@ -162,8 +162,14 @@ def _layer3_life_context(
 
     significant_block = ""
     if prior_context.significant_people:
-        # Cap to most recent 2 to avoid prompt bloat
-        people_to_show = prior_context.significant_people[:2]
+        # Cap to 2 to avoid prompt bloat, but order the same way
+        # _pick_recall_anchor does — people known from an earlier session
+        # first. Otherwise Layer 3 can name two people the anchor in Layer 4
+        # does not, and the prompt argues with itself about who matters.
+        people_to_show = sorted(
+            prior_context.significant_people,
+            key=lambda p: not is_from_earlier_session(p, session_state.session_number),
+        )[:2]
         lines = "\n".join(
             f"  - {p.get('name', 'Unknown')} ({p.get('relationship', '')}) "
             f"— {p.get('why_significant', '')}. Not yet fully explored."
@@ -189,7 +195,30 @@ def _layer3_life_context(
 Today's focus domain: {domain.name}{entry_line}"""
 
 
-def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
+def _describe_person(person: dict) -> str:
+    name = person.get("name", "")
+    relationship = person.get("relationship", "")
+    return f"{name}{f' ({relationship})' if relationship else ''}"
+
+
+def is_from_earlier_session(person: dict, session_number: Optional[int]) -> bool:
+    """
+    Whether this significant person was first seen before the current
+    session. Entries written before `first_seen_session` was recorded lack
+    the key and count as earlier, which is correct — they are older than
+    the change that introduced it.
+    """
+    if session_number is None:
+        return True
+    first_seen = person.get("first_seen_session")
+    if first_seen is None:
+        return True
+    return first_seen < session_number
+
+
+def _pick_recall_anchor(
+    prior_context: PriorContext, session_number: Optional[int] = None
+) -> Optional[str]:
     """
     Pick one concrete, nameable thing from prior_context to anchor the
     Layer 4 recall instruction to. A generic pointer back to "Layer 3
@@ -197,13 +226,25 @@ def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
     treated it as a soft nudge satisfiable by any lexical match rather
     than the "loose connection" leap it asked for. Naming the actual
     person/fact/thread gives it something concrete to reach for.
+
+    Order matters, and it used to be wrong: this took significant_people[0]
+    unconditionally, so someone the extractor flagged during the current
+    session's own first turn outranked a person known for weeks. Layer 4
+    then told the model it knew them "from a past session", which was
+    false, and the established person was never raised — a live run had
+    Katha ignore a sister recorded in the fact store to ask about
+    grandparents mentioned thirty seconds earlier.
+
+    Someone met this session is still a usable anchor, but only after
+    everything genuinely remembered has been considered.
     """
-    if prior_context.significant_people:
-        person = prior_context.significant_people[0]
-        name = person.get("name", "")
-        if name:
-            relationship = person.get("relationship", "")
-            return f"{name}{f' ({relationship})' if relationship else ''}"
+    fresh_people: list[dict] = []
+    for person in prior_context.significant_people or []:
+        if not person.get("name"):
+            continue
+        if is_from_earlier_session(person, session_number):
+            return _describe_person(person)
+        fresh_people.append(person)
 
     if prior_context.facts:
         people = prior_context.facts.get("people")
@@ -221,6 +262,12 @@ def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
     if prior_context.open_threads:
         return prior_context.open_threads[0]
 
+    # Last resort: someone first flagged during this very session. Better
+    # than no anchor at all, but it must lose to anything actually
+    # remembered, or it recreates the bug this ordering exists to fix.
+    if fresh_people:
+        return _describe_person(fresh_people[0])
+
     return None
 
 
@@ -236,7 +283,11 @@ def _layer4_session_state(
             "know what you'd love to hear about tomorrow."
         )
     recall_instruction = ""
-    anchor = _pick_recall_anchor(prior_context) if prior_context else None
+    anchor = (
+        _pick_recall_anchor(prior_context, session_state.session_number)
+        if prior_context
+        else None
+    )
     if anchor and session_state.exchange_count >= 2:
         recall_instruction = (
             f"\nYou know about {anchor} from a past session. If you haven't "

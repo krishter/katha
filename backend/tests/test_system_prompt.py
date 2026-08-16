@@ -372,3 +372,86 @@ def test_render_coverage_test_knows_about_every_field():
         f"test_every_prior_context_field_is_rendered to assert the new "
         f"field reaches the prompt."
     )
+
+
+# ── recall anchor priority ───────────────────────────────────────────────────
+#
+# The anchor is the single name Layer 4 tells the model to raise. It used to
+# be significant_people[0] unconditionally, so a person the extractor flagged
+# during the current session's own first turn outranked someone known for
+# weeks — and Layer 4 then claimed to know them "from a past session", which
+# was false. A live TC-03 run had Katha ignore a sister recorded in the fact
+# store to ask about grandparents mentioned thirty seconds earlier.
+
+
+def _state(session_number: int):
+    return SimpleNamespace(**{**_SESSION.__dict__, "session_number": session_number})
+
+
+def test_anchor_prefers_prior_session_person_over_one_met_today():
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Grandparents", "relationship": "family", "first_seen_session": 5},
+            {"name": "Mr. Iyer", "relationship": "teacher", "first_seen_session": 2},
+        ],
+    )
+    anchor = _pick_recall_anchor(prior, session_number=5)
+
+    assert "Mr. Iyer" in anchor
+    assert "Grandparents" not in anchor
+
+
+def test_anchor_falls_back_to_facts_before_a_person_met_today():
+    """Someone met this session must lose even to the fact store — that is
+    where TC-03's Kamala lives, and she was never reachable while
+    significant_people won unconditionally."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        facts={"people": [{"name": "Kamala", "relationship": "sister"}]},
+        significant_people=[
+            {"name": "Grandparents", "relationship": "family", "first_seen_session": 5},
+        ],
+    )
+    anchor = _pick_recall_anchor(prior, session_number=5)
+
+    assert "Kamala" in anchor
+
+
+def test_anchor_uses_a_person_met_today_as_a_last_resort():
+    """Better than no anchor at all — it just must not outrank memory."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Grandparents", "relationship": "family", "first_seen_session": 5},
+        ],
+    )
+    assert "Grandparents" in _pick_recall_anchor(prior, session_number=5)
+
+
+def test_anchor_treats_entries_without_provenance_as_old():
+    """Entries written before first_seen_session existed lack the key. They
+    predate the change, so 'old' is the correct reading."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(significant_people=[{"name": "Mr. Iyer"}])
+    assert "Mr. Iyer" in _pick_recall_anchor(prior, session_number=9)
+
+
+def test_layer3_shows_prior_session_people_first():
+    """Layer 3's 2-person cap must order the same way the anchor does, or
+    the prompt names two people the recall instruction does not."""
+    prior = PriorContext(
+        significant_people=[
+            {"name": "MetToday", "relationship": "x", "first_seen_session": 7},
+            {"name": "MetToday2", "relationship": "y", "first_seen_session": 7},
+            {"name": "LongKnown", "relationship": "z", "first_seen_session": 1},
+        ],
+    )
+    prompt = build_system_prompt(_PROFILE, _state(7), prior)
+
+    assert "LongKnown" in prompt
+    assert "MetToday2" not in prompt

@@ -329,3 +329,137 @@ async def test_layer3_still_carries_the_earliest_domain(real_db):
         line for line in prompt.splitlines() if line.strip().startswith("- ")
     ]
     assert len(thread_lines) <= 20, len(thread_lines)
+
+
+# ── significant-person lifecycle (TC-11 shape) ───────────────────────────────
+
+
+@pytest.mark.integration
+async def test_significant_person_survives_to_be_resurfaced_then_resolves(real_db):
+    """
+    The full arc TECH_DESIGN 3.3 TC-11 describes, against real Postgres:
+    flagged in session 2, still present in session 6's prior_context, and
+    only then retired once an atom elaborates on them.
+
+    Before this, `mark_resolved` scanned the atoms of the pass that flagged
+    the person, so Mr. Iyer was retired in session 2 and session 6 never saw
+    him. The mocked unit tests could not catch it — one of them asserted the
+    behaviour was correct.
+    """
+    import uuid as _uuid
+
+    from core import orchestrator
+    from extraction import story_extractor
+    from memory import fact_store
+
+    user_id = f"tc11-{_uuid.uuid4().hex[:8]}"
+    session_2 = _uuid.uuid4()
+    session_6 = _uuid.uuid4()
+    for sid, number, domain in (
+        (session_2, 2, "family_ancestors"),
+        (session_6, 6, "career"),
+    ):
+        real_db.add(
+            Session(
+                id=sid,
+                user_id=user_id,
+                session_number=number,
+                domain=domain,
+                exchange_count=2,
+                status="completed",
+            )
+        )
+    await real_db.commit()
+
+    iyer = {
+        "name": "Mr. Iyer",
+        "relationship": "school teacher",
+        "why_significant": "Said he had it in him when he failed twice",
+    }
+
+    # Session 2 — flagged, alongside a complete atom about him. This is
+    # exactly the shape that used to retire him on the spot.
+    await story_extractor.process_extraction(
+        {
+            "story_atoms": [
+                {
+                    "domain": "education",
+                    "narrative": "Mr. Iyer never let me feel small.",
+                    "who": ["Mr. Iyer"],
+                    "what": "Encouragement through repeated failure",
+                    "when_approx": "1960s",
+                    "where_approx": "Madurai",
+                    "why": "Lasting source of confidence",
+                }
+            ],
+            "significant_people": [iyer],
+        },
+        str(session_2),
+        user_id,
+        real_db,
+        session_number=2,
+    )
+
+    after_s2 = await fact_store.get_significant_people(user_id, real_db)
+    assert any("iyer" in p["name"].lower() for p in after_s2), (
+        f"Mr. Iyer was retired in the very session that flagged him: {after_s2}"
+    )
+
+    # He must reach session 6's prompt, which is what "resurfacing" needs.
+    prior = await orchestrator.build_prior_context(user_id, "career", real_db)
+    assert any("iyer" in p["name"].lower() for p in prior.significant_people)
+
+    # Session 6 — the user elaborates. NOW he retires.
+    result = await story_extractor.process_extraction(
+        {
+            "story_atoms": [
+                {
+                    "domain": "career",
+                    "narrative": "Mr. Iyer's belief is why I kept going at work.",
+                    "who": ["Mr. Iyer"],
+                    "what": "Belief carried into working life",
+                    "when_approx": "1970s",
+                    "where_approx": "Bangalore",
+                    "why": "Explains his persistence",
+                }
+            ],
+            "significant_people": [iyer],
+        },
+        str(session_6),
+        user_id,
+        real_db,
+        session_number=6,
+    )
+
+    assert "Mr. Iyer" in result.resolved_people
+    after_s6 = await fact_store.get_significant_people(user_id, real_db)
+    assert not any("iyer" in p["name"].lower() for p in after_s6), (
+        f"resolved people must drop out of Layer 3 injection: {after_s6}"
+    )
+
+
+@pytest.mark.integration
+async def test_first_seen_session_is_not_moved_by_a_later_mention(real_db):
+    """Re-mentioning someone must not make them newly discovered, or a
+    long-known person keeps losing the anchor to whoever spoke last."""
+    import uuid as _uuid
+
+    from memory import fact_store
+
+    user_id = f"prov-{_uuid.uuid4().hex[:8]}"
+    person = {"name": "Kamala", "relationship": "sister"}
+
+    await fact_store.upsert_significant_person(
+        user_id, person, real_db, session_number=2
+    )
+    await fact_store.upsert_significant_person(
+        user_id,
+        {**person, "why_significant": "mentioned again"},
+        real_db,
+        session_number=9,
+    )
+
+    people = await fact_store.get_significant_people(user_id, real_db)
+    assert len(people) == 1
+    assert people[0]["first_seen_session"] == 2
+    assert people[0]["why_significant"] == "mentioned again"

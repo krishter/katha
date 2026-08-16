@@ -1049,7 +1049,12 @@ async def test_run_extraction_for_turn_gives_up_after_two_malformed_responses():
 
     assert mock_llm.call_count == 2
     mock_extract.assert_called_once_with(
-        _EMPTY_EXTRACTION, _SESSION_ID, _USER_ID, db, turn_id=turn_id
+        _EMPTY_EXTRACTION,
+        _SESSION_ID,
+        _USER_ID,
+        db,
+        turn_id=turn_id,
+        session_number=session_state.session_number,
     )
 
 

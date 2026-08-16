@@ -144,27 +144,29 @@ async def test_process_extraction_calls_upsert_significant_person():
     ):
         await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
 
-    mock_upsert.assert_called_once_with(_USER_ID, people[0], db)
+    mock_upsert.assert_called_once_with(_USER_ID, people[0], db, session_number=None)
 
 
-async def test_process_extraction_marks_resolved_when_atom_scores_3():
-    db = _make_db()
-    # Atom narrative contains person name; score = 5
-    atom_about_iyer = {
-        "domain": "education",
-        "narrative": "Mr. Iyer was the teacher who changed my life.",
-        "who": ["Mr. Iyer"],
-        "what": "Inspired teaching career",
-        "when_approx": "1965",
-        "where_approx": "Madurai school",
-        "why": "Encouragement despite family pressure",
-    }
-    people = [
-        {"name": "Mr. Iyer", "relationship": "teacher", "why_significant": "Inspiring"}
-    ]
-    extraction = {"story_atoms": [atom_about_iyer], "significant_people": people}
+_IYER = {"name": "Mr. Iyer", "relationship": "teacher", "why_significant": "Inspiring"}
+_ATOM_ABOUT_IYER = {
+    "domain": "education",
+    "narrative": "Mr. Iyer was the teacher who changed my life.",
+    "who": ["Mr. Iyer"],
+    "what": "Inspired teaching career",
+    "when_approx": "1965",
+    "where_approx": "Madurai school",
+    "why": "Encouragement despite family pressure",
+}
 
-    with (
+
+def _resolution_patches(already_on_file):
+    """Patch the fact-store calls process_extraction makes, varying only
+    who was already known before this pass."""
+    return (
+        patch(
+            "extraction.story_extractor.fact_store.get_significant_people",
+            new=AsyncMock(return_value=already_on_file),
+        ),
         patch(
             "extraction.story_extractor.fact_store.upsert_significant_person",
             new=AsyncMock(),
@@ -172,9 +174,91 @@ async def test_process_extraction_marks_resolved_when_atom_scores_3():
         patch(
             "extraction.story_extractor.fact_store.mark_resolved",
             new=AsyncMock(),
-        ) as mock_resolve,
-    ):
+        ),
+    )
+
+
+async def test_does_not_resolve_someone_flagged_in_the_same_pass():
+    """Person introduced AND fully written about in one extraction. They
+    must not be resolved.
+
+    This test asserted the opposite until now. Resolution retires someone
+    from future Layer 3 injection, so doing it in the pass that first
+    flagged them retires them before Katha has ever raised them.
+    TECH_DESIGN 3.3 TC-11 has session 2 flag Mr. Iyer and session 6
+    resurface him; a live run found him gone from significant_people before
+    session 6 ran, so nobody was ever resurfaced.
+    """
+    db = _make_db()
+    extraction = {"story_atoms": [_ATOM_ABOUT_IYER], "significant_people": [_IYER]}
+    get_people, upsert, resolve = _resolution_patches(already_on_file=[])
+
+    with get_people, upsert, resolve as mock_resolve:
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_resolve.assert_not_called()
+    assert result.resolved_people == []
+
+
+async def test_resolves_someone_already_on_file_when_an_atom_elaborates():
+    """The other half: flagged in an earlier session, and now an atom
+    scoring >= 3 explores them. That is the moment they have actually been
+    resurfaced, so they retire from Layer 3."""
+    db = _make_db()
+    extraction = {"story_atoms": [_ATOM_ABOUT_IYER], "significant_people": [_IYER]}
+    get_people, upsert, resolve = _resolution_patches(
+        already_on_file=[{"name": "Mr. Iyer"}]
+    )
+
+    with get_people, upsert, resolve as mock_resolve:
         result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
 
     mock_resolve.assert_called_once_with(_USER_ID, "Mr. Iyer", db)
     assert "Mr. Iyer" in result.resolved_people
+
+
+async def test_resolution_matches_names_carrying_a_parenthetical():
+    """Extracted names routinely look like "Grandfather (unnamed)". Matching
+    that literally against narrative text never succeeded, which used to be
+    the only reason anyone survived long enough to be resurfaced — survival
+    by failed string match rather than by design."""
+    db = _make_db()
+    atom = {
+        "domain": "family_ancestors",
+        "narrative": "My grandfather ran the farm until he was eighty.",
+        "who": ["grandfather"],
+        "what": "Ran the family farm",
+        "when_approx": "1950s",
+        "where_approx": "near Mysore",
+        "why": "Anchor of the family",
+    }
+    people = [{"name": "Grandfather (unnamed)", "relationship": "grandfather"}]
+    extraction = {"story_atoms": [atom], "significant_people": people}
+    get_people, upsert, resolve = _resolution_patches(
+        already_on_file=[{"name": "Grandfather (unnamed)"}]
+    )
+
+    with get_people, upsert, resolve as mock_resolve:
+        await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_resolve.assert_called_once_with(_USER_ID, "Grandfather (unnamed)", db)
+
+
+async def test_does_not_resolve_when_the_atom_is_incomplete():
+    """A known person merely mentioned again, without a substantially
+    complete story, stays open."""
+    db = _make_db()
+    thin_atom = {
+        "domain": "education",
+        "narrative": "Mr. Iyer taught me.",
+        "who": ["Mr. Iyer"],
+    }
+    extraction = {"story_atoms": [thin_atom], "significant_people": [_IYER]}
+    get_people, upsert, resolve = _resolution_patches(
+        already_on_file=[{"name": "Mr. Iyer"}]
+    )
+
+    with get_people, upsert, resolve as mock_resolve:
+        await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_resolve.assert_not_called()

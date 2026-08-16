@@ -50,17 +50,33 @@ async def get_significant_people(user_id: str, db: AsyncSession) -> list[dict]:
 
 
 async def upsert_significant_person(
-    user_id: str, person: dict, db: AsyncSession
+    user_id: str,
+    person: dict,
+    db: AsyncSession,
+    session_number: int | None = None,
 ) -> None:
     """
     Add a new significant person, or update if the same name already exists.
     Never adds duplicates. Match by name (case-insensitive).
+
+    `session_number` is stamped as `first_seen_session` on NEW entries only,
+    never overwritten on update — it records when Katha first learned of
+    this person, so the Layer 4 recall anchor can prefer someone known from
+    a past session over someone mentioned moments ago. Entries written
+    before this existed simply lack the key, which reads as "old", and that
+    is correct for them. `significant_people` is JSONB, so no migration.
     """
     result = await db.execute(select(Fact).where(Fact.user_id == user_id))
     fact = result.scalar_one_or_none()
 
+    new_entry = dict(person)
+    if session_number is not None:
+        new_entry.setdefault("first_seen_session", session_number)
+
     if fact is None:
-        fact = Fact(user_id=user_id, structured_facts={}, significant_people=[person])
+        fact = Fact(
+            user_id=user_id, structured_facts={}, significant_people=[new_entry]
+        )
         db.add(fact)
         await db.commit()
         return
@@ -70,12 +86,19 @@ async def upsert_significant_person(
 
     for i, existing in enumerate(people):
         if existing.get("name", "").lower() == incoming_name:
-            people[i] = {**existing, **person}
+            # Merge incoming detail over the existing entry, but never move
+            # first_seen_session — re-mentioning someone does not make them
+            # newly discovered, and overwriting it would let a long-known
+            # person keep losing the anchor to whoever spoke last.
+            merged = {**existing, **person}
+            if "first_seen_session" in existing:
+                merged["first_seen_session"] = existing["first_seen_session"]
+            people[i] = merged
             fact.significant_people = people
             await db.commit()
             return
 
-    people.append(person)
+    people.append(new_entry)
     fact.significant_people = people
     await db.commit()
 
