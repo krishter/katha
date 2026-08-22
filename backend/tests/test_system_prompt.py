@@ -455,3 +455,102 @@ def test_layer3_shows_prior_session_people_first():
 
     assert "LongKnown" in prompt
     assert "MetToday2" not in prompt
+
+
+# ── anchor: named people, and no starvation ──────────────────────────────────
+
+
+def test_anchor_prefers_a_real_name_over_a_role_label():
+    """Layer 4 asks the model to raise this person by name. "ask about
+    Father" restates the vague pointer the anchor exists to replace, while
+    "ask about Kamala (sister)" gives it a real target. A live TC-03 run
+    anchored on "Father" and never reached the sister in the fact store."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        facts={"people": [{"name": "Kamala", "relationship": "sister"}]},
+        significant_people=[
+            {"name": "Father", "relationship": "Father", "first_seen_session": 1},
+            {
+                "name": "Paternal grandparents",
+                "relationship": "Grandparents (father's side)",
+                "first_seen_session": 1,
+            },
+        ],
+    )
+    anchor = _pick_recall_anchor(prior, session_number=2)
+
+    assert "Kamala" in anchor
+
+
+def test_anchor_falls_back_to_role_labels_when_no_name_is_known():
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Father", "relationship": "Father", "first_seen_session": 1},
+        ],
+    )
+    assert "Father" in _pick_recall_anchor(prior, session_number=3)
+
+
+def test_anchor_rotates_across_sessions_so_nobody_is_starved():
+    """The old precedence never varied, so whoever came first held the
+    anchor every session until resolved — weeks, or never — and everyone
+    behind them was unreachable. Same starvation the retrieval window had."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Kamala", "relationship": "sister", "first_seen_session": 1},
+            {"name": "Mr. Iyer", "relationship": "teacher", "first_seen_session": 1},
+            {"name": "Ravi", "relationship": "friend", "first_seen_session": 1},
+        ],
+    )
+    anchors = {_pick_recall_anchor(prior, session_number=n) for n in range(2, 8)}
+
+    assert len(anchors) == 3, f"every remembered person should get a turn: {anchors}"
+
+
+def test_anchor_is_stable_within_a_session():
+    """It varies across sessions, not within one — Katha should not jump
+    between people turn to turn in the same conversation."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Kamala", "relationship": "sister", "first_seen_session": 1},
+            {"name": "Mr. Iyer", "relationship": "teacher", "first_seen_session": 1},
+        ],
+    )
+    assert _pick_recall_anchor(prior, session_number=4) == _pick_recall_anchor(
+        prior, session_number=4
+    )
+
+
+def test_anchor_does_not_offer_the_same_person_twice():
+    """Someone can be both a curated significant person and a fact-store
+    entry; rotation must not hand them two slots."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        facts={"people": [{"name": "Kamala", "relationship": "sister"}]},
+        significant_people=[
+            {"name": "Kamala", "relationship": "sister", "first_seen_session": 1},
+        ],
+    )
+    anchors = {_pick_recall_anchor(prior, session_number=n) for n in range(2, 6)}
+    assert len(anchors) == 1
+
+
+def test_is_named_person_distinguishes_names_from_roles():
+    from prompts.system_prompt import _is_named_person
+
+    assert _is_named_person("Kamala")
+    assert _is_named_person("Mr. Iyer")
+    assert _is_named_person("Vellai anna")
+    assert not _is_named_person("Father")
+    assert not _is_named_person("Paternal grandparents")
+    assert not _is_named_person("Grandfather (name unknown)")
+    assert not _is_named_person("my elder sister")
+    assert not _is_named_person("")

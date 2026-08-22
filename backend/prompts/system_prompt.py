@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
@@ -195,6 +196,102 @@ def _layer3_life_context(
 Today's focus domain: {domain.name}{entry_line}"""
 
 
+# How many fact-store people join the anchor rotation. That list grows with
+# every named person ever extracted; without a cap, rotation would sooner or
+# later anchor on someone mentioned once in passing.
+_MAX_FACT_PEOPLE_IN_ROTATION = 3
+
+# Same shape as story_extractor's: extracted names routinely carry a
+# qualifier, e.g. "Grandfather (name unknown)". Duplicated rather than
+# shared so prompts/ does not import from extraction/.
+_PARENTHETICAL_RE = re.compile(r"\s*\([^)]*\)")
+
+# Words that make up a role label rather than a name, plus the modifiers that
+# travel with them. "Father", "Paternal grandparents" and "Grandfather (name
+# unknown)" are all descriptions of a position in a family, not people the
+# model can ask after by name.
+_ROLE_WORDS = {
+    "a",
+    "an",
+    "the",
+    "my",
+    "his",
+    "her",
+    "their",
+    "paternal",
+    "maternal",
+    "elder",
+    "older",
+    "younger",
+    "late",
+    "unnamed",
+    "unknown",
+    "name",
+    "side",
+    "father",
+    "mother",
+    "dad",
+    "mum",
+    "mom",
+    "papa",
+    "amma",
+    "appa",
+    "parent",
+    "parents",
+    "grandparent",
+    "grandparents",
+    "grandfather",
+    "grandmother",
+    "grandpa",
+    "grandma",
+    "granddad",
+    "sister",
+    "brother",
+    "sibling",
+    "siblings",
+    "son",
+    "daughter",
+    "child",
+    "children",
+    "wife",
+    "husband",
+    "spouse",
+    "uncle",
+    "aunt",
+    "cousin",
+    "nephew",
+    "niece",
+    "in",
+    "law",
+    "teacher",
+    "neighbour",
+    "neighbor",
+    "friend",
+    "colleague",
+    "boss",
+}
+
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def _is_named_person(name: str) -> bool:
+    """
+    Whether this is an actual name rather than a role label.
+
+    The Layer 4 instruction asks the model to raise this person by name, so
+    "ask about Father" restates the generic pointer the anchor is meant to
+    replace, while "ask about Kamala (sister)" gives it a real target.
+    """
+    words = _WORD_RE.findall(_PARENTHETICAL_RE.sub("", name or "").lower())
+    return any(word not in _ROLE_WORDS for word in words)
+
+
+def _anchor_key(person: dict) -> str:
+    """Identity for dedup — the same person can appear both as a curated
+    significant person and as a fact-store entry."""
+    return _PARENTHETICAL_RE.sub("", person.get("name", "") or "").strip().lower()
+
+
 def _describe_person(person: dict) -> str:
     name = person.get("name", "")
     relationship = person.get("relationship", "")
@@ -237,22 +334,51 @@ def _pick_recall_anchor(
 
     Someone met this session is still a usable anchor, but only after
     everything genuinely remembered has been considered.
+
+    Two further rules, both about not starving anyone:
+
+    Prefer a candidate who can actually be NAMED. "Father" and "Paternal
+    grandparents" are role labels, and "pivot one sentence to ask about
+    Father" is precisely the vague pointer this function exists to replace.
+    A real name gives the model something to reach for.
+
+    Then rotate. The old precedence never varied, so whoever came first
+    held the anchor every session until they were resolved — which may be
+    weeks, or never — and everyone behind them was unreachable. That is the
+    same starvation the Layer 3 retrieval window had (S2.5): a fixed
+    ordering into a single slot. Rotation is keyed on the session number so
+    the anchor is stable within a conversation and moves between them.
     """
     fresh_people: list[dict] = []
+    remembered: list[dict] = []
     for person in prior_context.significant_people or []:
         if not person.get("name"):
             continue
         if is_from_earlier_session(person, session_number):
-            return _describe_person(person)
-        fresh_people.append(person)
+            remembered.append(person)
+        else:
+            fresh_people.append(person)
+
+    # Fact-store people are equally valid anchors — they are how a name
+    # like a sister's reaches Layer 3 at all. Capped because this list
+    # accumulates every named person ever extracted, and rotating over all
+    # of them would eventually anchor on someone mentioned once in passing.
+    fact_people = (prior_context.facts or {}).get("people")
+    if isinstance(fact_people, list):
+        seen = {_anchor_key(p) for p in remembered}
+        for person in fact_people[:_MAX_FACT_PEOPLE_IN_ROTATION]:
+            if not isinstance(person, dict) or not person.get("name"):
+                continue
+            if _anchor_key(person) not in seen:
+                remembered.append(person)
+                seen.add(_anchor_key(person))
+
+    if remembered:
+        named = [p for p in remembered if _is_named_person(p.get("name", ""))]
+        pool = named or remembered
+        return _describe_person(pool[(session_number or 0) % len(pool)])
 
     if prior_context.facts:
-        people = prior_context.facts.get("people")
-        if isinstance(people, list) and people and isinstance(people[0], dict):
-            name = people[0].get("name", "")
-            if name:
-                relationship = people[0].get("relationship", "")
-                return f"{name}{f' ({relationship})' if relationship else ''}"
         for key, value in prior_context.facts.items():
             if key == "people" or not value:
                 continue
