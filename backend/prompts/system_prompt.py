@@ -541,8 +541,9 @@ Respond in exactly this format and no other:
       "name": "string",
       "relationship": "string",
       "why_significant": "string",
-      "signal": "string — why flagged: repetition, unprompted mention, \
-emotional language, explicit phrases like changed my life or I still think about"
+      "signal": "string — why flagged: repetition across turns or sessions, \
+unusual emotional detail, explicit phrases like changed my life or I still \
+think about. Mention alone does not qualify."
     }}
   ],
   "themes": [],
@@ -558,8 +559,14 @@ or contentless reply. Each entry must be a JSON object with exactly the \
 fields shown above, not a plain string. If nothing story-worthy was said, \
 return an empty list.
 
-For significant_people: only add entries when there is a genuine signal — \
-repetition, unprompted mention, unusual emotional detail, or explicit phrases \
-like "changed my life" or "I still think about". Do not tag every named person.
+For significant_people: this list is for the few people who shaped this life, \
+not everyone who appears in it. Add an entry only when the user signals weight \
+beyond the mention itself — they return to the person across turns or sessions, \
+describe them with unusual emotional detail, or say something explicit like \
+"changed my life" or "I still think about him". Being mentioned unprompted is \
+NOT by itself a signal: in a conversation like this almost every person is \
+volunteered unprompted. If the only reason you can give for why someone matters \
+is that they came up, leave them out — they are already captured as a named \
+entity. Most turns should add nobody at all.
 
 Return only the <extraction> block above — no other text."""

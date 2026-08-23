@@ -554,3 +554,21 @@ def test_is_named_person_distinguishes_names_from_roles():
     assert not _is_named_person("Grandfather (name unknown)")
     assert not _is_named_person("my elder sister")
     assert not _is_named_person("")
+
+
+def test_extraction_does_not_offer_bare_mention_as_a_significance_signal():
+    """Layer 2 principle 6 defines significance as "unusual warmth,
+    repetition, or emotional weight". The extraction prompt had drifted to
+    also accept "unprompted mention" as a standalone signal — and in a
+    reminiscence interview nearly every person is volunteered unprompted, so
+    that qualified almost anyone. Live runs flagged a father and a set of
+    grandparents whose stated justification was only that they came up."""
+    prompt = build_extraction_prompt(
+        _PROFILE, _SESSION, PriorContext(), "I had a sister.", "Tell me about her."
+    )
+
+    assert "significant_people" in prompt
+    # The guidance must say mention alone is insufficient.
+    lowered = prompt.lower()
+    assert "not by itself a signal" in lowered
+    assert "most turns should add nobody" in lowered
