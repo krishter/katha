@@ -372,3 +372,203 @@ def test_render_coverage_test_knows_about_every_field():
         f"test_every_prior_context_field_is_rendered to assert the new "
         f"field reaches the prompt."
     )
+
+
+# ── recall anchor priority ───────────────────────────────────────────────────
+#
+# The anchor is the single name Layer 4 tells the model to raise. It used to
+# be significant_people[0] unconditionally, so a person the extractor flagged
+# during the current session's own first turn outranked someone known for
+# weeks — and Layer 4 then claimed to know them "from a past session", which
+# was false. A live TC-03 run had Katha ignore a sister recorded in the fact
+# store to ask about grandparents mentioned thirty seconds earlier.
+
+
+def _state(session_number: int):
+    return SimpleNamespace(**{**_SESSION.__dict__, "session_number": session_number})
+
+
+def test_anchor_prefers_prior_session_person_over_one_met_today():
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Grandparents", "relationship": "family", "first_seen_session": 5},
+            {"name": "Mr. Iyer", "relationship": "teacher", "first_seen_session": 2},
+        ],
+    )
+    anchor = _pick_recall_anchor(prior, session_number=5)
+
+    assert "Mr. Iyer" in anchor
+    assert "Grandparents" not in anchor
+
+
+def test_anchor_falls_back_to_facts_before_a_person_met_today():
+    """Someone met this session must lose even to the fact store — that is
+    where TC-03's Kamala lives, and she was never reachable while
+    significant_people won unconditionally."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        facts={"people": [{"name": "Kamala", "relationship": "sister"}]},
+        significant_people=[
+            {"name": "Grandparents", "relationship": "family", "first_seen_session": 5},
+        ],
+    )
+    anchor = _pick_recall_anchor(prior, session_number=5)
+
+    assert "Kamala" in anchor
+
+
+def test_anchor_uses_a_person_met_today_as_a_last_resort():
+    """Better than no anchor at all — it just must not outrank memory."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Grandparents", "relationship": "family", "first_seen_session": 5},
+        ],
+    )
+    assert "Grandparents" in _pick_recall_anchor(prior, session_number=5)
+
+
+def test_anchor_treats_entries_without_provenance_as_old():
+    """Entries written before first_seen_session existed lack the key. They
+    predate the change, so 'old' is the correct reading."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(significant_people=[{"name": "Mr. Iyer"}])
+    assert "Mr. Iyer" in _pick_recall_anchor(prior, session_number=9)
+
+
+def test_layer3_shows_prior_session_people_first():
+    """Layer 3's 2-person cap must order the same way the anchor does, or
+    the prompt names two people the recall instruction does not."""
+    prior = PriorContext(
+        significant_people=[
+            {"name": "MetToday", "relationship": "x", "first_seen_session": 7},
+            {"name": "MetToday2", "relationship": "y", "first_seen_session": 7},
+            {"name": "LongKnown", "relationship": "z", "first_seen_session": 1},
+        ],
+    )
+    prompt = build_system_prompt(_PROFILE, _state(7), prior)
+
+    assert "LongKnown" in prompt
+    assert "MetToday2" not in prompt
+
+
+# ── anchor: named people, and no starvation ──────────────────────────────────
+
+
+def test_anchor_prefers_a_real_name_over_a_role_label():
+    """Layer 4 asks the model to raise this person by name. "ask about
+    Father" restates the vague pointer the anchor exists to replace, while
+    "ask about Kamala (sister)" gives it a real target. A live TC-03 run
+    anchored on "Father" and never reached the sister in the fact store."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        facts={"people": [{"name": "Kamala", "relationship": "sister"}]},
+        significant_people=[
+            {"name": "Father", "relationship": "Father", "first_seen_session": 1},
+            {
+                "name": "Paternal grandparents",
+                "relationship": "Grandparents (father's side)",
+                "first_seen_session": 1,
+            },
+        ],
+    )
+    anchor = _pick_recall_anchor(prior, session_number=2)
+
+    assert "Kamala" in anchor
+
+
+def test_anchor_falls_back_to_role_labels_when_no_name_is_known():
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Father", "relationship": "Father", "first_seen_session": 1},
+        ],
+    )
+    assert "Father" in _pick_recall_anchor(prior, session_number=3)
+
+
+def test_anchor_rotates_across_sessions_so_nobody_is_starved():
+    """The old precedence never varied, so whoever came first held the
+    anchor every session until resolved — weeks, or never — and everyone
+    behind them was unreachable. Same starvation the retrieval window had."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Kamala", "relationship": "sister", "first_seen_session": 1},
+            {"name": "Mr. Iyer", "relationship": "teacher", "first_seen_session": 1},
+            {"name": "Ravi", "relationship": "friend", "first_seen_session": 1},
+        ],
+    )
+    anchors = {_pick_recall_anchor(prior, session_number=n) for n in range(2, 8)}
+
+    assert len(anchors) == 3, f"every remembered person should get a turn: {anchors}"
+
+
+def test_anchor_is_stable_within_a_session():
+    """It varies across sessions, not within one — Katha should not jump
+    between people turn to turn in the same conversation."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        significant_people=[
+            {"name": "Kamala", "relationship": "sister", "first_seen_session": 1},
+            {"name": "Mr. Iyer", "relationship": "teacher", "first_seen_session": 1},
+        ],
+    )
+    assert _pick_recall_anchor(prior, session_number=4) == _pick_recall_anchor(
+        prior, session_number=4
+    )
+
+
+def test_anchor_does_not_offer_the_same_person_twice():
+    """Someone can be both a curated significant person and a fact-store
+    entry; rotation must not hand them two slots."""
+    from prompts.system_prompt import _pick_recall_anchor
+
+    prior = PriorContext(
+        facts={"people": [{"name": "Kamala", "relationship": "sister"}]},
+        significant_people=[
+            {"name": "Kamala", "relationship": "sister", "first_seen_session": 1},
+        ],
+    )
+    anchors = {_pick_recall_anchor(prior, session_number=n) for n in range(2, 6)}
+    assert len(anchors) == 1
+
+
+def test_is_named_person_distinguishes_names_from_roles():
+    from prompts.system_prompt import _is_named_person
+
+    assert _is_named_person("Kamala")
+    assert _is_named_person("Mr. Iyer")
+    assert _is_named_person("Vellai anna")
+    assert not _is_named_person("Father")
+    assert not _is_named_person("Paternal grandparents")
+    assert not _is_named_person("Grandfather (name unknown)")
+    assert not _is_named_person("my elder sister")
+    assert not _is_named_person("")
+
+
+def test_extraction_does_not_offer_bare_mention_as_a_significance_signal():
+    """Layer 2 principle 6 defines significance as "unusual warmth,
+    repetition, or emotional weight". The extraction prompt had drifted to
+    also accept "unprompted mention" as a standalone signal — and in a
+    reminiscence interview nearly every person is volunteered unprompted, so
+    that qualified almost anyone. Live runs flagged a father and a set of
+    grandparents whose stated justification was only that they came up."""
+    prompt = build_extraction_prompt(
+        _PROFILE, _SESSION, PriorContext(), "I had a sister.", "Tell me about her."
+    )
+
+    assert "significant_people" in prompt
+    # The guidance must say mention alone is insufficient.
+    lowered = prompt.lower()
+    assert "not by itself a signal" in lowered
+    assert "most turns should add nobody" in lowered

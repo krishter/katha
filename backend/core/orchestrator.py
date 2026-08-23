@@ -793,7 +793,12 @@ async def run_extraction_for_turn(
         )
 
         await story_extractor.process_extraction(
-            extraction_json, session_id, session_state.user_id, db, turn_id=turn_id
+            extraction_json,
+            session_id,
+            session_state.user_id,
+            db,
+            turn_id=turn_id,
+            session_number=session_state.session_number,
         )
 
         turn_result = await db.execute(select(Turn).where(Turn.id == turn_id))

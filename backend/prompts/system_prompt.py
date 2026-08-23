@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
@@ -8,7 +9,6 @@ from prompts.domains import get_domain
 if TYPE_CHECKING:
     from core.session_manager import SessionState
 
-# Maps BCP-47 language codes to natural language names
 # Ceiling on open threads rendered into Layer 3. Retrieval fetches far more
 # atoms than this (orchestrator._RETRIEVAL_TOP_K) so that older domains stay
 # reachable; this is what stops that width becoming prompt bloat. 12 gives
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 # choice, few enough that it still reads them.
 _MAX_RENDERED_THREADS = 12
 
+# Maps BCP-47 language codes to natural language names
 _LANGUAGE_NAMES: dict[str, str] = {
     "hi-IN": "Hindi",
     "ta-IN": "Tamil",
@@ -162,8 +163,14 @@ def _layer3_life_context(
 
     significant_block = ""
     if prior_context.significant_people:
-        # Cap to most recent 2 to avoid prompt bloat
-        people_to_show = prior_context.significant_people[:2]
+        # Cap to 2 to avoid prompt bloat, but order the same way
+        # _pick_recall_anchor does — people known from an earlier session
+        # first. Otherwise Layer 3 can name two people the anchor in Layer 4
+        # does not, and the prompt argues with itself about who matters.
+        people_to_show = sorted(
+            prior_context.significant_people,
+            key=lambda p: not is_from_earlier_session(p, session_state.session_number),
+        )[:2]
         lines = "\n".join(
             f"  - {p.get('name', 'Unknown')} ({p.get('relationship', '')}) "
             f"— {p.get('why_significant', '')}. Not yet fully explored."
@@ -189,7 +196,126 @@ def _layer3_life_context(
 Today's focus domain: {domain.name}{entry_line}"""
 
 
-def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
+# How many fact-store people join the anchor rotation. That list grows with
+# every named person ever extracted; without a cap, rotation would sooner or
+# later anchor on someone mentioned once in passing.
+_MAX_FACT_PEOPLE_IN_ROTATION = 3
+
+# Same shape as story_extractor's: extracted names routinely carry a
+# qualifier, e.g. "Grandfather (name unknown)". Duplicated rather than
+# shared so prompts/ does not import from extraction/.
+_PARENTHETICAL_RE = re.compile(r"\s*\([^)]*\)")
+
+# Words that make up a role label rather than a name, plus the modifiers that
+# travel with them. "Father", "Paternal grandparents" and "Grandfather (name
+# unknown)" are all descriptions of a position in a family, not people the
+# model can ask after by name.
+_ROLE_WORDS = {
+    "a",
+    "an",
+    "the",
+    "my",
+    "his",
+    "her",
+    "their",
+    "paternal",
+    "maternal",
+    "elder",
+    "older",
+    "younger",
+    "late",
+    "unnamed",
+    "unknown",
+    "name",
+    "side",
+    "father",
+    "mother",
+    "dad",
+    "mum",
+    "mom",
+    "papa",
+    "amma",
+    "appa",
+    "parent",
+    "parents",
+    "grandparent",
+    "grandparents",
+    "grandfather",
+    "grandmother",
+    "grandpa",
+    "grandma",
+    "granddad",
+    "sister",
+    "brother",
+    "sibling",
+    "siblings",
+    "son",
+    "daughter",
+    "child",
+    "children",
+    "wife",
+    "husband",
+    "spouse",
+    "uncle",
+    "aunt",
+    "cousin",
+    "nephew",
+    "niece",
+    "in",
+    "law",
+    "teacher",
+    "neighbour",
+    "neighbor",
+    "friend",
+    "colleague",
+    "boss",
+}
+
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def _is_named_person(name: str) -> bool:
+    """
+    Whether this is an actual name rather than a role label.
+
+    The Layer 4 instruction asks the model to raise this person by name, so
+    "ask about Father" restates the generic pointer the anchor is meant to
+    replace, while "ask about Kamala (sister)" gives it a real target.
+    """
+    words = _WORD_RE.findall(_PARENTHETICAL_RE.sub("", name or "").lower())
+    return any(word not in _ROLE_WORDS for word in words)
+
+
+def _anchor_key(person: dict) -> str:
+    """Identity for dedup — the same person can appear both as a curated
+    significant person and as a fact-store entry."""
+    return _PARENTHETICAL_RE.sub("", person.get("name", "") or "").strip().lower()
+
+
+def _describe_person(person: dict) -> str:
+    name = person.get("name", "")
+    relationship = person.get("relationship", "")
+    return f"{name}{f' ({relationship})' if relationship else ''}"
+
+
+def is_from_earlier_session(person: dict, session_number: Optional[int]) -> bool:
+    """
+    Whether this significant person was first seen before the current
+    session. Entries written before `first_seen_session` was recorded lack
+    the key and count as earlier, which is correct — they are older than
+    the change that introduced it.
+    """
+    if session_number is None:
+        return True
+    first_seen = person.get("first_seen_session")
+    if first_seen is None:
+        return True
+    return first_seen < session_number
+
+
+def _pick_recall_anchor(
+    prior_context: PriorContext, session_number: Optional[int] = None
+) -> Optional[str]:
     """
     Pick one concrete, nameable thing from prior_context to anchor the
     Layer 4 recall instruction to. A generic pointer back to "Layer 3
@@ -197,21 +323,62 @@ def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
     treated it as a soft nudge satisfiable by any lexical match rather
     than the "loose connection" leap it asked for. Naming the actual
     person/fact/thread gives it something concrete to reach for.
+
+    Order matters, and it used to be wrong: this took significant_people[0]
+    unconditionally, so someone the extractor flagged during the current
+    session's own first turn outranked a person known for weeks. Layer 4
+    then told the model it knew them "from a past session", which was
+    false, and the established person was never raised — a live run had
+    Katha ignore a sister recorded in the fact store to ask about
+    grandparents mentioned thirty seconds earlier.
+
+    Someone met this session is still a usable anchor, but only after
+    everything genuinely remembered has been considered.
+
+    Two further rules, both about not starving anyone:
+
+    Prefer a candidate who can actually be NAMED. "Father" and "Paternal
+    grandparents" are role labels, and "pivot one sentence to ask about
+    Father" is precisely the vague pointer this function exists to replace.
+    A real name gives the model something to reach for.
+
+    Then rotate. The old precedence never varied, so whoever came first
+    held the anchor every session until they were resolved — which may be
+    weeks, or never — and everyone behind them was unreachable. That is the
+    same starvation the Layer 3 retrieval window had (S2.5): a fixed
+    ordering into a single slot. Rotation is keyed on the session number so
+    the anchor is stable within a conversation and moves between them.
     """
-    if prior_context.significant_people:
-        person = prior_context.significant_people[0]
-        name = person.get("name", "")
-        if name:
-            relationship = person.get("relationship", "")
-            return f"{name}{f' ({relationship})' if relationship else ''}"
+    fresh_people: list[dict] = []
+    remembered: list[dict] = []
+    for person in prior_context.significant_people or []:
+        if not person.get("name"):
+            continue
+        if is_from_earlier_session(person, session_number):
+            remembered.append(person)
+        else:
+            fresh_people.append(person)
+
+    # Fact-store people are equally valid anchors — they are how a name
+    # like a sister's reaches Layer 3 at all. Capped because this list
+    # accumulates every named person ever extracted, and rotating over all
+    # of them would eventually anchor on someone mentioned once in passing.
+    fact_people = (prior_context.facts or {}).get("people")
+    if isinstance(fact_people, list):
+        seen = {_anchor_key(p) for p in remembered}
+        for person in fact_people[:_MAX_FACT_PEOPLE_IN_ROTATION]:
+            if not isinstance(person, dict) or not person.get("name"):
+                continue
+            if _anchor_key(person) not in seen:
+                remembered.append(person)
+                seen.add(_anchor_key(person))
+
+    if remembered:
+        named = [p for p in remembered if _is_named_person(p.get("name", ""))]
+        pool = named or remembered
+        return _describe_person(pool[(session_number or 0) % len(pool)])
 
     if prior_context.facts:
-        people = prior_context.facts.get("people")
-        if isinstance(people, list) and people and isinstance(people[0], dict):
-            name = people[0].get("name", "")
-            if name:
-                relationship = people[0].get("relationship", "")
-                return f"{name}{f' ({relationship})' if relationship else ''}"
         for key, value in prior_context.facts.items():
             if key == "people" or not value:
                 continue
@@ -220,6 +387,12 @@ def _pick_recall_anchor(prior_context: PriorContext) -> Optional[str]:
 
     if prior_context.open_threads:
         return prior_context.open_threads[0]
+
+    # Last resort: someone first flagged during this very session. Better
+    # than no anchor at all, but it must lose to anything actually
+    # remembered, or it recreates the bug this ordering exists to fix.
+    if fresh_people:
+        return _describe_person(fresh_people[0])
 
     return None
 
@@ -236,7 +409,11 @@ def _layer4_session_state(
             "know what you'd love to hear about tomorrow."
         )
     recall_instruction = ""
-    anchor = _pick_recall_anchor(prior_context) if prior_context else None
+    anchor = (
+        _pick_recall_anchor(prior_context, session_state.session_number)
+        if prior_context
+        else None
+    )
     if anchor and session_state.exchange_count >= 2:
         recall_instruction = (
             f"\nYou know about {anchor} from a past session. If you haven't "
@@ -364,8 +541,9 @@ Respond in exactly this format and no other:
       "name": "string",
       "relationship": "string",
       "why_significant": "string",
-      "signal": "string — why flagged: repetition, unprompted mention, \
-emotional language, explicit phrases like changed my life or I still think about"
+      "signal": "string — why flagged: repetition across turns or sessions, \
+unusual emotional detail, explicit phrases like changed my life or I still \
+think about. Mention alone does not qualify."
     }}
   ],
   "themes": [],
@@ -381,8 +559,14 @@ or contentless reply. Each entry must be a JSON object with exactly the \
 fields shown above, not a plain string. If nothing story-worthy was said, \
 return an empty list.
 
-For significant_people: only add entries when there is a genuine signal — \
-repetition, unprompted mention, unusual emotional detail, or explicit phrases \
-like "changed my life" or "I still think about". Do not tag every named person.
+For significant_people: this list is for the few people who shaped this life, \
+not everyone who appears in it. Add an entry only when the user signals weight \
+beyond the mention itself — they return to the person across turns or sessions, \
+describe them with unusual emotional detail, or say something explicit like \
+"changed my life" or "I still think about him". Being mentioned unprompted is \
+NOT by itself a signal: in a conversation like this almost every person is \
+volunteered unprompted. If the only reason you can give for why someone matters \
+is that they came up, leave them out — they are already captured as a named \
+entity. Most turns should add nobody at all.
 
 Return only the <extraction> block above — no other text."""
