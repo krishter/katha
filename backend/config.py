@@ -19,13 +19,18 @@ class Settings(BaseSettings):
     WHATSAPP_ADAPTER: str = "twilio"  # "stub" in dev/test
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_WHATSAPP_NUMBER: str = "whatsapp:+14155238886"
+    TWILIO_WHATSAPP_NUMBER: str = "whatsapp:+917019058242"
     WEBHOOK_VERIFY_TOKEN: str = "katha-webhook-verify"
 
-    # WhatsApp message template SIDs (filled after Meta approval)
+    # WhatsApp message template SIDs (filled after Meta approval).
+    # Empty defaults on purpose: a SID is environment-specific, and baking
+    # one in means a machine with no configuration still sends against a
+    # real approved template. Set them in .env — see .env.example.
     TWILIO_TEMPLATE_SESSION_OPEN: str = ""
     TWILIO_TEMPLATE_FOLLOWUP: str = ""
     TWILIO_TEMPLATE_MEMORY_CARD: str = ""
+    TWILIO_TEMPLATE_PARENT_WELCOME: str = ""
+    TWILIO_TEMPLATE_PARENT_WELCOME_FOLLOWUP: str = ""
 
     # AWS S3 (Mumbai — DPDP Act data residency)
     AWS_ACCESS_KEY_ID: str = ""
