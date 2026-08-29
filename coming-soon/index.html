@@ -476,6 +476,16 @@
     gap: 8px;
   }
   footer .heart { color: var(--accent-rose); }
+  footer .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  footer .entity {
+    font-size: 0.76rem;
+    opacity: 0.95;
+    letter-spacing: 0.015em;
+  }
 
   /* ---------- Responsive ---------- */
   @media (max-width: 900px) {
@@ -491,6 +501,7 @@
     .sub { margin-left: auto; margin-right: auto; }
     .waitlist { justify-content: center; }
     footer { justify-content: center; text-align: center; }
+    footer .footer-left { align-items: center; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -596,7 +607,10 @@
   </main>
 
   <footer>
-    <span>© 2026 Katha · Made with <span class="heart">♥</span> in India</span>
+    <span class="footer-left">
+      <span>© 2026 Katha · Made with <span class="heart">♥</span> in India</span>
+      <span class="entity">Katha is a product of ONENOTSEVEN LABS (107 Labs)</span>
+    </span>
     <span>Their voice. Their words. Forever yours.</span>
   </footer>
 
