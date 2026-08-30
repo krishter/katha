@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import session_manager
 from core.auth import send_email_ses
 from models.family_account import FamilyAccount
 from models.session import Session
@@ -27,7 +28,10 @@ _last_prompt_sent: dict[str, datetime] = {}
 async def get_session_count(user_id: str, db: AsyncSession) -> int:
     """Count all sessions for this user."""
     result = await db.execute(
-        select(func.count(Session.id)).where(Session.user_id == user_id)
+        select(func.count(Session.id))
+        .where(Session.user_id == user_id)
+        # The consent handshake is not one of the free conversations.
+        .where(Session.status != session_manager.CONSENT_SESSION_STATUS)
     )
     return result.scalar_one()
 
