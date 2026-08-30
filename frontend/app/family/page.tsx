@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
 import { DomainProgress } from "@/components/DomainProgress";
+import { ParentConsentBanner } from "@/components/ParentConsentBanner";
 import { api } from "@/lib/api";
 
 export default function FamilyDashboard() {
@@ -38,6 +39,18 @@ export default function FamilyDashboard() {
       <h1 className="font-display text-2xl font-semibold text-ink">
         {stats.user_name}&apos;s Stories
       </h1>
+
+      {/* Until the parent has agreed, this is the only thing on the page
+          that matters — an empty archive means nothing without knowing
+          whether Katha is waiting on a person or on the child. */}
+      <div className="mt-6">
+        <ParentConsentBanner
+          status={stats.parent_consent_status}
+          parentName={stats.user_name}
+          whatsappLink={stats.parent_whatsapp_link}
+          consentedAt={stats.parent_consented_at}
+        />
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-border bg-surface p-4">

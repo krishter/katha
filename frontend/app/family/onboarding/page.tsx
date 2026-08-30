@@ -45,6 +45,7 @@ export default function OnboardingPage() {
   const [doneInfo, setDoneInfo] = useState<{
     parentName: string;
     sessionTime: string;
+    whatsappLink: string;
   } | null>(null);
 
   // A magic-link click is a full page reload landing back on this same
@@ -102,6 +103,7 @@ export default function OnboardingPage() {
       setDoneInfo({
         parentName: result.parent_name,
         sessionTime: result.session_time,
+        whatsappLink: result.parent_whatsapp_link,
       });
       setStep("done");
     } catch {
@@ -367,16 +369,83 @@ export default function OnboardingPage() {
       )}
 
       {step === "done" && doneInfo && (
-        <div className={`${CARD_CLASS} text-center`}>
-          <h1 className="font-display text-2xl font-semibold text-ink">All set!</h1>
+        /*
+          Katha cannot send the first message. Meta rejected the approved
+          template with error 63049: a first-contact introduction counts as
+          Marketing, and Marketing is throttled to recipients who have never
+          replied — every parent, on day one. So the parent has to open the
+          conversation, and this screen is where that gets set up.
+
+          This step used to say "Katha will message {parent} tomorrow",
+          which is no longer true and would have left families waiting for
+          a message that never came.
+        */
+        <div className={CARD_CLASS}>
+          <h1 className="font-display text-2xl font-semibold text-ink">
+            One last thing — and it matters
+          </h1>
           <p className="mt-3 text-sm text-ink-mid">
-            Katha will message {doneInfo.parentName} tomorrow at{" "}
-            {doneInfo.sessionTime} IST.
+            {doneInfo.parentName} has to send the first message. WhatsApp
+            doesn&apos;t let Katha message someone who hasn&apos;t reached out
+            first, and honestly that&apos;s the right way round — it should be{" "}
+            {doneInfo.parentName}&apos;s choice.
           </p>
+
+          <ol className="mt-5 flex flex-col gap-4 text-sm text-ink">
+            <li className="flex gap-3">
+              <span className="font-semibold text-saffron-ink">1</span>
+              <span>
+                <strong>Call {doneInfo.parentName} first.</strong> A message
+                from an unknown number is exactly what older people are told
+                to ignore — and they&apos;re right to. Your voice is what makes
+                this safe.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-semibold text-saffron-ink">2</span>
+              <span>
+                Send them this link while you&apos;re on the call, and stay on
+                while they tap it.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-semibold text-saffron-ink">3</span>
+              <span>
+                Katha will introduce herself, explain that she&apos;s an AI, and
+                ask {doneInfo.parentName} whether they&apos;re happy to go
+                ahead. Nothing is recorded until they say yes.
+              </span>
+            </li>
+          </ol>
+
+          {doneInfo.whatsappLink && (
+            <>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `I set up something I think you'll like, Katha. Tap this and say hello: ${doneInfo.whatsappLink}`,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${BUTTON_CLASS} mt-6 block text-center no-underline`}
+              >
+                Share on WhatsApp
+              </a>
+              <p className="mt-3 break-all text-meta text-ink-muted">
+                Or copy this link: {doneInfo.whatsappLink}
+              </p>
+            </>
+          )}
+
+          <p className="mt-5 text-meta text-ink-muted">
+            Once they&apos;ve said yes, Katha will call around{" "}
+            {doneInfo.sessionTime} IST each day. You&apos;ll see it on your
+            dashboard.
+          </p>
+
           <button
             type="button"
             onClick={() => router.push("/family")}
-            className={`${BUTTON_CLASS} mt-6`}
+            className="mt-6 w-full rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-ink hover:border-saffron-ink"
           >
             Go to dashboard →
           </button>

@@ -243,6 +243,47 @@ async def close_session(
     return _to_state(row)
 
 
+# Sessions that hold the consent handshake rather than a conversation.
+# Distinct status so the active-session lookup, the stale sweep and the
+# freemium counter all pass over them: agreeing to be recorded is not one
+# of the ten free conversations, and it must not block the next day's.
+CONSENT_SESSION_STATUS = "consent"
+
+
+async def get_or_create_consent_session(
+    user_id: str, whatsapp_number: str, db: AsyncSession
+) -> Session:
+    """
+    The session that carries the welcome and the parent's answer.
+
+    A Turn needs a Session, and the consent exchange needs Turns — they are
+    the evidence a ConsentRecord points at. This is that container, and it
+    never advances into a domain conversation.
+    """
+    result = await db.execute(
+        select(Session)
+        .where(Session.user_id == user_id)
+        .where(Session.status == CONSENT_SESSION_STATUS)
+        .order_by(desc(Session.started_at))
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is not None:
+        return row
+
+    row = Session(
+        user_id=user_id,
+        session_number=0,
+        domain=CONSENT_SESSION_STATUS,
+        status=CONSENT_SESSION_STATUS,
+        whatsapp_number=whatsapp_number,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
 async def abandon_stale_sessions(db: AsyncSession) -> int:
     """
     Mark any session that has been 'active' for longer than the stale

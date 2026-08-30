@@ -104,6 +104,10 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
             new=AsyncMock(return_value=True),
         ),
         patch(
+            "scheduler.session_initiator.parent_consent.has_granted",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
             "scheduler.session_initiator.sarvam_tts.synthesize",
             new=AsyncMock(return_value=b"fake-audio"),
         ),
@@ -154,6 +158,10 @@ async def test_initiate_sessions_uses_session_domain_not_hardcoded_childhood():
         ),
         patch(
             "scheduler.session_initiator.freemium.is_session_allowed",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "scheduler.session_initiator.parent_consent.has_granted",
             new=AsyncMock(return_value=True),
         ),
         patch(
@@ -291,3 +299,54 @@ def test_create_scheduler_returns_scheduler():
     # Verify the job was registered
     jobs = scheduler.get_jobs()
     assert any(j.id == "initiate_sessions" for j in jobs)
+
+
+async def test_scheduler_does_not_initiate_without_parent_consent():
+    """S3.2: the parent is the data principal, and her child's tick-box is
+    not her consent (F-02). Until she has agreed, nothing is scheduled —
+    which also matches what Meta permits, since Katha cannot open the
+    conversation anyway (63049)."""
+    from scheduler.session_initiator import initiate_sessions
+
+    now_ist = datetime.now(timezone.utc).astimezone(
+        __import__("pytz").timezone("Asia/Kolkata")
+    )
+    profile = _make_profile(now_ist.hour, now_ist.minute)
+    factory, _ = _make_db_factory(profile=profile)
+
+    stub_adapter = MagicMock()
+    stub_adapter.send_voice_note = AsyncMock(
+        return_value=("STUB_MSG_001", "audio/stub-test.ogg")
+    )
+    stub_adapter.send_text = AsyncMock(return_value="STUB_MSG_002")
+
+    with (
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=0),
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.get_active_session_by_number",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.start_session",
+            new=AsyncMock(),
+        ) as mock_start,
+        patch(
+            "scheduler.session_initiator.parent_consent.has_granted",
+            new=AsyncMock(return_value=False),
+        ),
+        patch(
+            "scheduler.session_initiator.sarvam_tts.synthesize",
+            new=AsyncMock(return_value=b"fake-audio"),
+        ),
+    ):
+        await initiate_sessions(factory)
+
+    mock_start.assert_not_called()
+    stub_adapter.send_voice_note.assert_not_called()

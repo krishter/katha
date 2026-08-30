@@ -4,12 +4,15 @@ import math
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
+from core import parent_consent
 from core.auth import get_current_user
 from core.freemium import FREE_SESSION_LIMIT
 from media import storage
@@ -22,6 +25,24 @@ from models.user_profile import UserProfileModel
 from prompts.domains import get_domain, get_domain_sequence
 
 router = APIRouter()
+
+
+def _wa_me_link(parent_number: str) -> str:
+    """
+    Click-to-chat link the parent taps to start the conversation.
+
+    Katha cannot message first (Meta 63049, see SPRINT_1_PLAN S3.0), so
+    this is how first contact happens at all: the child forwards it, the
+    parent taps, and her message opens the 24-hour window.
+
+    The link addresses KATHA's number, not the parent's — tapping it opens
+    a chat *with Katha*. The pre-filled text is deliberately something an
+    elderly person will not hesitate to send.
+    """
+    sender = settings.TWILIO_WHATSAPP_NUMBER.replace("whatsapp:", "").lstrip("+")
+    if not sender:
+        return ""
+    return f"https://wa.me/{sender}?text={quote('Namaste')}"
 
 
 class StoryAtomResponse(BaseModel):
@@ -133,7 +154,22 @@ async def get_stats(
     )
     total_memory_cards = card_count_result.scalar_one()
 
+    # Parent consent (F-02). The dashboard needs to distinguish "she has
+    # not messaged yet" — where the child must act — from "she has, and has
+    # not yet answered", where Katha is simply waiting on a person.
+    consent = await parent_consent.get_status(user_id, db)
+
     return {
+        "parent_consent_status": consent.status.value,
+        "parent_consented_at": (
+            consent.consented_at.isoformat()
+            if getattr(consent.consented_at, "isoformat", None)
+            else None
+        ),
+        # The wa.me link the child forwards. Built from the configured
+        # sender rather than hardcoded in the frontend, and carried here so
+        # the dashboard can offer it again when she has not used it.
+        "parent_whatsapp_link": _wa_me_link(profile.whatsapp_number if profile else ""),
         # The deletion endpoint is /user/{user_id} and validates the path
         # against the caller's own JWT. The portal needs to know its own id
         # to call it at all; exposing it to the authenticated owner grants

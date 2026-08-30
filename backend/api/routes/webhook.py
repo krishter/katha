@@ -5,11 +5,13 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adapters import sarvam_stt
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
-from core import orchestrator, session_manager
+from core import orchestrator, parent_consent, session_manager
 from core.fallback_audio import FailureStage, get_fallback_text
 from models.db import get_db
+from models.user_profile import UserProfileModel
 from prompts.system_prompt import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,152 @@ _TEXT_ONLY_REPLY = (
     "Please send me a voice message — I'd love to hear your voice! \U0001f399"
 )
 _NOT_SCHEDULED_TEXT = "Hi! Your session isn't scheduled yet."
+
+
+async def _handle_parent_consent(
+    whatsapp,
+    profile: UserProfileModel,
+    transcript: str,
+    turn_id=None,
+    *,
+    db: AsyncSession,
+) -> None:
+    """
+    Ask the parent, or read her answer. Runs instead of a domain session
+    for anyone who has not yet agreed (F-02).
+
+    Everything here is a free-form message inside the 24-hour window her
+    own inbound message opened. That is the only reason a voice note is
+    possible at all — Meta rejected the approved template for first
+    contact with 63049, so there is no template path to fall back on.
+    """
+    state = await parent_consent.get_status(profile.user_id, db)
+
+    if state.status is parent_consent.ConsentStatus.HALTED:
+        # Asked twice, still unclear. Pestering an elderly person who does
+        # not understand what is being asked is its own harm; a human picks
+        # this up from the dashboard.
+        logger.info("Parent consent halted for %s — not re-asking", profile.user_id)
+        return
+
+    # Nothing said yet: this is her first message, so introduce and ask.
+    if state.status is parent_consent.ConsentStatus.NOT_ASKED:
+        await _speak(
+            whatsapp,
+            profile,
+            parent_consent.build_welcome_text(profile.name),
+            stage="parent_welcome",
+        )
+        await parent_consent.note_asked(profile.user_id, db)
+        return
+
+    # She has been asked. Read what she said.
+    answer = parent_consent.interpret_answer(transcript)
+
+    # Persist the exchange before recording anything. A ConsentRecord whose
+    # evidence_ref points at nothing proves nothing — the audio and the
+    # transcript of her saying yes are what make it auditable.
+    if answer is not parent_consent.Answer.UNCLEAR:
+        turn_id = await _persist_consent_turn(profile, transcript, answer, db)
+
+    if answer is parent_consent.Answer.YES:
+        await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
+        await _speak(
+            whatsapp, profile, parent_consent.GRANTED_TEXT, stage="parent_granted"
+        )
+        return
+
+    if answer is parent_consent.Answer.NO:
+        await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
+        await _speak(
+            whatsapp, profile, parent_consent.DECLINE_TEXT, stage="parent_declined"
+        )
+        return
+
+    # Unclear — one clarification, then stop.
+    await _speak(
+        whatsapp,
+        profile,
+        parent_consent.build_reask_text(profile.name),
+        stage="parent_reask",
+    )
+    await parent_consent.note_asked(profile.user_id, db)
+
+
+async def _persist_consent_turn(
+    profile: UserProfileModel,
+    transcript: str,
+    answer,
+    db: AsyncSession,
+):
+    """Store the consent exchange as a Turn, and return its id."""
+    try:
+        session_row = await session_manager.get_or_create_consent_session(
+            profile.user_id, profile.whatsapp_number, db
+        )
+        turn = await orchestrator._persist_turn(
+            session_id=str(session_row.id),
+            user_id=profile.user_id,
+            turn_number=0,
+            inbound_message_sid=None,
+            transcript=transcript,
+            detected_language=profile.preferred_language,
+            response_text=f"[parent consent: {answer.value}]",
+            extraction_json={},
+            input_tokens=0,
+            output_tokens=0,
+            db=db,
+        )
+        return turn.id
+    except Exception:
+        # Never let bookkeeping cost us the answer itself. A record with a
+        # null evidence_ref is weaker than one with it, but far better than
+        # losing a clearly-given yes or a clearly-given no.
+        logger.exception(
+            "Could not persist consent turn for %s — recording without evidence",
+            profile.user_id,
+        )
+        return None
+
+
+async def _speak(whatsapp, profile: UserProfileModel, text: str, *, stage: str) -> None:
+    """
+    Say something as a voice note in the parent's own language, falling
+    back to text if speech fails.
+
+    Voice is the point: this user was chosen for a product that talks, and
+    the first thing she hears should not be a wall of text in English.
+    """
+    try:
+        from adapters import sarvam_tts
+        from media.audio_convert import convert_wav_to_ogg
+
+        audio = await sarvam_tts.synthesize(
+            text, language_code=profile.preferred_language
+        )
+        audio = await convert_wav_to_ogg(audio)
+        await whatsapp.send_voice_note(
+            profile.whatsapp_number, audio, mime_type="audio/ogg"
+        )
+    except Exception:
+        logger.exception(
+            "Voice failed for %s (stage=%s) — falling back to text", stage, stage
+        )
+        await _safe_send_text(whatsapp, profile.whatsapp_number, text, stage=stage)
+
+
+async def _load_profile_by_number(
+    whatsapp_number: str, db: AsyncSession
+) -> UserProfileModel | None:
+    """The parent is known by the number she messages from."""
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(UserProfileModel).where(
+            UserProfileModel.whatsapp_number == whatsapp_number
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 async def _load_user_profile_for_session(
@@ -177,7 +325,39 @@ async def whatsapp_incoming(
                 )
                 return Response(status_code=200, content="OK")
 
-        # 5. Look up active session by WhatsApp number
+        # 5. Consent gate (F-02). Before anything else, has this parent
+        # agreed? She is the data principal; her child's tick-box is not
+        # her consent. An inbound message from someone who has not agreed
+        # gets the welcome and the question — never a domain session.
+        #
+        # This sits ahead of the session lookup deliberately: her first
+        # message arrives with no session at all, and the old path answered
+        # it with "your session isn't scheduled yet".
+        profile = await _load_profile_by_number(from_number, db)
+        if profile is not None and not await parent_consent.has_granted(
+            profile.user_id, db
+        ):
+            transcript = ""
+            turn_id = None
+            if media_url and "audio" in media_type:
+                # Her answer is spoken, so it has to be transcribed before
+                # it can be read. Failure here is not consent — it falls
+                # through to UNCLEAR and asks again.
+                try:
+                    audio_bytes = await whatsapp.download_voice_note(media_url)
+                    stt = await sarvam_stt.transcribe(audio_bytes)
+                    transcript = stt.transcript
+                except Exception:
+                    logger.exception(
+                        "Could not transcribe consent reply from %s", from_number
+                    )
+            else:
+                transcript = params.get("Body", "") or ""
+
+            await _handle_parent_consent(whatsapp, profile, transcript, turn_id, db=db)
+            return Response(status_code=200, content="OK")
+
+        # 6. Look up active session by WhatsApp number
         state = await session_manager.get_active_session_by_number(from_number, db)
         if state is None:
             logger.info("No active session for %s", from_number)

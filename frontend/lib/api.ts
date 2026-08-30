@@ -5,8 +5,18 @@ export interface DomainBreakdownEntry {
   target: number;
 }
 
+export type ParentConsentStatus =
+  | "not_asked"
+  | "awaiting"
+  | "granted"
+  | "declined"
+  | "halted";
+
 export interface Stats {
   user_id: string;
+  parent_consent_status: ParentConsentStatus;
+  parent_consented_at: string | null;
+  parent_whatsapp_link: string;
   user_name: string;
   total_sessions: number;
   total_story_atoms: number;
@@ -89,6 +99,7 @@ export interface OnboardingConsentResponse {
   status: "complete";
   parent_name: string;
   session_time: string;
+  parent_whatsapp_link: string;
 }
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";

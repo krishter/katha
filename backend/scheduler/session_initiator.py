@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_tts
 from adapters.whatsapp_stub import get_whatsapp_adapter
-from core import freemium, session_manager
+from core import freemium, parent_consent, session_manager
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
 from prompts.domains import get_domain
@@ -70,6 +70,19 @@ async def initiate_sessions(db_session_factory) -> None:
                         "Scheduler: user %s already has active session %s — skipping",
                         profile.user_id,
                         active.session_id,
+                    )
+                    continue
+
+                # Consent gate. Nothing is scheduled for a parent who has
+                # not agreed — that includes one who has never messaged,
+                # one who has been asked and not answered clearly, and one
+                # who declined. Katha cannot open the conversation anyway
+                # (Meta 63049, see plan S3.0); she waits to be spoken to.
+                if not await parent_consent.has_granted(profile.user_id, db):
+                    logger.info(
+                        "Scheduler: user %s has no recorded parent consent — "
+                        "not initiating",
+                        profile.user_id,
                     )
                     continue
 
