@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -63,10 +64,31 @@ class WhatsAppAdapter(Protocol):
 
 
 class TwilioWhatsAppAdapter:
-    def __init__(self, account_sid: str, auth_token: str, from_number: str) -> None:
+    def __init__(
+        self,
+        account_sid: str,
+        auth_token: str,
+        from_number: str,
+        messaging_service_sid: str = "",
+    ) -> None:
         self._client = TwilioClient(account_sid, auth_token)
         self._auth_token = auth_token
         self._from = from_number  # e.g. "whatsapp:+14155238886"
+        self._messaging_service_sid = messaging_service_sid
+
+    def _sender(self) -> dict:
+        """
+        How this message identifies its sender.
+
+        The production number lives in a Messaging Service, and Twilio wants
+        `messaging_service_sid` rather than `from_` for those — passing the
+        bare number sends from outside the service and loses its sender
+        pool, compliance settings and fallback behaviour. Falls back to
+        `from_` so the sandbox number keeps working unconfigured.
+        """
+        if self._messaging_service_sid:
+            return {"messaging_service_sid": self._messaging_service_sid}
+        return {"from_": self._from}
 
     async def send_voice_note(
         self, to_number: str, audio_bytes: bytes, mime_type: str = "audio/ogg"
@@ -78,7 +100,7 @@ class TwilioWhatsAppAdapter:
         presigned_url = await storage.generate_presigned_url(s3_key)
         msg = await asyncio.to_thread(
             self._client.messages.create,
-            from_=self._from,
+            **self._sender(),
             to=f"whatsapp:{to_number}",
             media_url=[presigned_url],
         )
@@ -89,7 +111,7 @@ class TwilioWhatsAppAdapter:
         presigned_url = await storage.generate_presigned_url(s3_key)
         msg = await asyncio.to_thread(
             self._client.messages.create,
-            from_=self._from,
+            **self._sender(),
             to=f"whatsapp:{to_number}",
             media_url=[presigned_url],
             body=caption,
@@ -106,13 +128,17 @@ class TwilioWhatsAppAdapter:
         template_variables: dict | None = None,
     ) -> str:
         kwargs: dict = {
-            "from_": self._from,
+            **self._sender(),
             "to": f"whatsapp:{to_number}",
         }
         if template_sid:
             kwargs["content_sid"] = template_sid
             if template_variables:
-                kwargs["content_variables"] = str(template_variables)
+                # JSON, not str(). str() on a dict yields a Python repr with
+                # single quotes — {'1': 'Lakshmi'} — which Twilio does not
+                # parse, so the template either fails or substitutes nothing.
+                # Every variable in the welcome templates is a name.
+                kwargs["content_variables"] = json.dumps(template_variables)
         else:
             kwargs["body"] = text
         msg = await asyncio.to_thread(self._client.messages.create, **kwargs)

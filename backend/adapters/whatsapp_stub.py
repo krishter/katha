@@ -95,4 +95,5 @@ def get_whatsapp_adapter():
         account_sid=settings.TWILIO_ACCOUNT_SID,
         auth_token=settings.TWILIO_AUTH_TOKEN,
         from_number=settings.TWILIO_WHATSAPP_NUMBER,
+        messaging_service_sid=settings.TWILIO_MESSAGING_SERVICE_SID,
     )

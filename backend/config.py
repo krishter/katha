@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_WHATSAPP_NUMBER: str = "whatsapp:+917019058242"
+    # The production sender sits in a Messaging Service; when set, sends go
+    # through it rather than the bare number. Empty keeps the sandbox path.
+    TWILIO_MESSAGING_SERVICE_SID: str = ""
     WEBHOOK_VERIFY_TOKEN: str = "katha-webhook-verify"
 
     # WhatsApp message template SIDs (filled after Meta approval).
