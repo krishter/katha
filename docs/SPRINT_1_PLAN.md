@@ -291,28 +291,70 @@ Also correct the stale comment block at the top of `memory/vector_store.py`, whi
 
 **Branch:** `feature/parent-consent-flow`
 **Closes:** F-02
-**Why third:** It depends on nothing in S2, but it is prompt-adjacent and needs the eval set from S1 in place to detect regression.
+**Why third:** It depends on nothing in S2, but it is prompt-adjacent and needs a working eval set to detect regression. That set was reconciled in PR #22, so this is no longer blocked.
+
+**Rewritten 2026-08-15.** The original 3.1 assumed Katha sends the first message. She cannot — see below. First contact now runs the other way, which pulls a piece of onboarding into this workstream.
 
 ---
 
-### 3.1 — Send a welcome before the first conversation
+### 3.0 — Why the direction reversed
 
-Today `initiate_sessions` in `backend/scheduler/session_initiator.py` opens session 1 with `"Namaste {name} ji! I'm Katha, your daily companion..."` followed immediately by a domain entry prompt. The parent has never heard of Katha. There is no welcome turn anywhere in the scheduler or the WhatsApp adapter, despite PRD §6.1 step 4 specifying one — a voice note and text sent *before* day 1, explaining who Katha is and that their child set this up as a gift. Note the PRD specifies the welcome but stops short of asking for consent; this workstream extends it to do both.
+The original design had Katha open with an approved WhatsApp template. That was submitted, approved, and then failed on send with **Twilio error 63049 — "Meta chose not to deliver this WhatsApp marketing message."**
 
-This is a compliance problem and an activation problem at once. Under the DPDP Act the parent is the data principal, and a competent adult's consent cannot be delegated to their child. Separately, an unexplained voice note from an unknown number at 9:30am gets blocked.
+Two mechanisms, both structural:
 
-Gate session 1 behind a welcome turn: who Katha is, that their child set this up, that conversations are recorded and kept for the family, and that they can stop any time by saying so. Then ask, and wait for an answer.
+1. **Meta re-categorised the template as Marketing.** Utility means a message about a specific transaction the recipient has already agreed to. A first-contact introduction to someone who has never transacted with us is Marketing by definition, whatever category we submit. This is not a copy problem and cannot be reworded around.
+2. **Meta throttles Marketing to recipients who have never replied.** Which is every parent, on day one, by construction.
 
-Outbound messages outside a 24-hour window need a pre-approved template — this one always is, since it is the first contact. Get the template submitted for approval early; approval is not instant and it will gate the whole workstream.
+Underneath both is the same gap F-02 identifies: the child supplied the number, the parent never opted in. Meta enforces that in policy; the DPDP Act enforces it in law. They agree.
+
+**So the parent initiates.** The child forwards a `wa.me` click-to-chat link, ideally alongside a phone call. She taps it, WhatsApp opens a chat with Katha and a pre-filled message, she sends it. That inbound message opens the 24-hour window, and everything after — welcome, spoken consent, voice notes — happens inside it as free-form messages. No template, no category, no 63049.
+
+This is a better consent posture than what it replaces. A parent who chooses to send the first message has actively initiated contact, which is stronger evidence for both Meta's opt-in requirement and DPDP's data-principal standard than a tap on a message she never asked for.
+
+The approved templates are not wasted. `TWILIO_TEMPLATE_PARENT_WELCOME` and `..._FOLLOWUP` become re-engagement tools for a parent who has already been warm and has gone quiet — not first contact. Their button IDs are fixed by Meta approval and cannot be edited: `welcome_accept`, `welcome_verify`, `welcome_decline`, and `welcome_followup_accept`, `welcome_followup_decline`.
+
+---
+
+### 3.1 — Give the child a link to forward
+
+New work, in the onboarding wizard (`frontend/app/family/onboarding/page.tsx`). Not previously in this plan.
+
+After the profile step, show the `wa.me` link for the parent's number with a Share-on-WhatsApp action and a short instruction: call your parent first, then send this. The phone call is the trust transfer — a message arriving cold from an unknown number is what elderly recipients are trained to block, and 45% of Indian seniors report being unable to reliably identify a scam.
+
+The link is `https://wa.me/<production_sender>?text=<pre-filled>`. Pre-fill something she will not hesitate to send — "Namaste" is enough. Keep the sender number in config, not hardcoded in the frontend.
+
+Onboarding must not report itself complete on the strength of the link being displayed. Nothing has happened until she messages.
 
 **Acceptance:**
-- A profile with no recorded parent consent receives the welcome instead of a domain opening.
-- No `Session` row advances past the welcome until consent is recorded.
-- The welcome is spoken in `profile.preferred_language`.
+- Onboarding renders a correct, tappable `wa.me` link for the entered number.
+- The instruction to call first is present and unmissable.
+- `onboarding_complete` does not depend on the link being shown.
 
 ---
 
-### 3.2 — Record the parent as a distinct principal
+### 3.2 — Welcome and ask, inside the window
+
+When an inbound message arrives from a number with no recorded parent consent, do not start a domain session. Send the welcome instead.
+
+Because this is inside the 24-hour window it can be a voice note in `profile.preferred_language`, which is the right medium for this user — no template constraint applies.
+
+The welcome covers: who Katha is, **that she is an AI and not a person**, that her child arranged this, that conversations are recorded and kept for the family, and that she can stop at any time by saying so. Then it asks, and waits.
+
+The AI disclosure is not optional. Consent to being recorded, given to something the person believes is human, is not informed consent — and informed consent is the entire purpose of this workstream.
+
+Gate session 1 behind the answer. `initiate_sessions` in `backend/scheduler/session_initiator.py` currently opens with `"Namaste {name} ji! I'm Katha, your daily companion..."` and a domain prompt regardless of consent state; that path must not run for an unconsented profile.
+
+**Acceptance:**
+- An inbound message from a profile with no parent consent triggers the welcome, not a domain opening.
+- The welcome states plainly that Katha is an AI.
+- No `Session` row advances past the welcome until consent is recorded.
+- The welcome is spoken in `profile.preferred_language`.
+- The scheduler does not initiate a session for an unconsented profile at its scheduled time.
+
+---
+
+### 3.3 — Record the parent as a distinct principal
 
 `ConsentRecord` currently has `user_id`, `email_hash`, `consent_version`, `consented_at`, `ip_address`, `user_agent` — shaped entirely around a web form. A spoken consent has no IP and no user agent, and it needs to be distinguishable from the buyer's record.
 
@@ -328,21 +370,41 @@ Interpretation is a judgement call: prefer an explicit affirmative. Ambiguity, s
 
 ---
 
-### 3.3 — Surface consent status to the buyer
+### 3.4 — Surface consent status to the buyer
 
 The dashboard should show whether the parent has agreed. A buyer who set this up on Tuesday and sees nothing by Thursday needs to know whether Katha is waiting on a person or is broken.
 
+Now that first contact depends on the child forwarding a link, this is not a status label — it is a call to action. Distinguish *link not yet sent or not yet tapped* from *she has messaged but not yet agreed*. In the first case the dashboard should tell the child exactly what to do: send the link, and call.
+
 **Acceptance:**
-- Dashboard shows one of: awaiting parent's consent / consented on {date} / declined.
+- Dashboard distinguishes: link not yet used / awaiting parent's consent / consented on {date} / declined.
+- The "not yet used" state offers the link again and prompts a phone call.
 - The declined state explains what happens next and does not read as an error.
 
 ---
 
-### 3.4 — Eval regression
+### 3.5 — Fix the two adapter defects blocking real sends
 
-Run TC-01–TC-10 via the `eval-runner` subagent. Targets per `.claude/rules/testing.md`: 80%+ objective, 75%+ rubric.
+Both found while provisioning the WhatsApp sender. Neither is visible to the existing tests, because `test_whatsapp_adapter.py` asserts against a mocked Twilio client that accepts anything.
 
-**Acceptance:** at or above target. If the welcome turn regresses session-1 rapport, tune the welcome — do not remove the consent gate.
+**(a) `content_variables` is not JSON.** `whatsapp.py:115` does `str(template_variables)`, which produces a Python dict repr — `{'1': 'Lakshmi'}`, single quotes. Twilio expects a JSON string. Every variable in the welcome templates is a name, so the first real template send fails or substitutes nothing. Use `json.dumps`.
+
+**(b) No Messaging Service support.** `TwilioWhatsAppAdapter` passes `from_=self._from` in all three send methods (`whatsapp.py:80, 92, 108`). The production sender lives in a Messaging Service, and sends go through `messaging_service_sid` instead. Add a config variable and thread it through all three.
+
+Add a test that asserts the outgoing `content_variables` parses as JSON — not that it equals a particular string, which would re-encode the same mistake.
+
+**Acceptance:**
+- `content_variables` round-trips through `json.loads` in a test.
+- All three send methods work through a Messaging Service.
+- A real send to a live number succeeds, with the message SID recorded in the PR.
+
+---
+
+### 3.6 — Eval regression
+
+Run TC-01–TC-10 via the `eval-runner` subagent, against the criteria reconciled in PR #22. Targets per `.claude/rules/testing.md`: 80%+ objective, 75%+ rubric.
+
+**Acceptance:** at or above target. If the welcome turn regresses session-1 rapport, tune the welcome — do not remove the consent gate, and do not adjust the eval criteria to accommodate it.
 
 ---
 
