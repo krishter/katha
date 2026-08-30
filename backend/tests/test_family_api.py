@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -96,6 +97,12 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
     card_result = MagicMock()
     card_result.scalars.return_value.first.return_value = "cards/x.png"
     card_count_result = _query_result(scalar_one=4)
+    # parent_consent.get_status issues two queries of its own.
+    consent_records_result = MagicMock()
+    consent_records_result.scalars.return_value.all.return_value = []
+    consent_profile_result = _query_result(
+        scalar_one_or_none=SimpleNamespace(parent_consent_asks=0)
+    )
 
     db.execute = AsyncMock(
         side_effect=[
@@ -105,6 +112,8 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
             domain_counts_result,
             card_result,
             card_count_result,
+            consent_records_result,
+            consent_profile_result,
         ]
     )
 
@@ -129,6 +138,9 @@ def test_stats_returns_session_count_and_domain_breakdown(db):
     assert body["latest_card_url"] == "https://signed.example/cards/x.png"
     # Counted for the deletion confirmation copy, which must not invent it.
     assert body["total_memory_cards"] == 4
+    # She has not messaged yet, so the child still has to act.
+    assert body["parent_consent_status"] == "not_asked"
+    assert body["parent_whatsapp_link"].startswith("https://wa.me/")
     assert body["plan"] == "free"
     assert body["session_count"] == 5
     assert body["session_limit"] == 10

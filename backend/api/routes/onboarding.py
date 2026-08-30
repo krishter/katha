@@ -4,11 +4,13 @@ import logging
 import re
 import uuid
 from datetime import datetime, time
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from core import auth
 from core.auth import get_current_user
 from models.consent_record import ConsentRecord
@@ -27,6 +29,14 @@ router = APIRouter()
 # record which wording a given record attests to, so records written against
 # the old text keep saying 1.0. No backfill.
 _CONSENT_VERSION = "1.1"
+
+
+def _wa_me_link() -> str:
+    """Click-to-chat link addressing Katha's sender number."""
+    sender = settings.TWILIO_WHATSAPP_NUMBER.replace("whatsapp:", "").lstrip("+")
+    return f"https://wa.me/{sender}?text={quote('Namaste')}" if sender else ""
+
+
 _E164_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 
 
@@ -171,4 +181,7 @@ async def onboarding_consent(
         "status": "complete",
         "parent_name": profile.name,
         "session_time": session_time_str,
+        # The link the child forwards. Katha cannot open the conversation
+        # (Meta 63049), so nothing happens until the parent taps this.
+        "parent_whatsapp_link": _wa_me_link(),
     }
