@@ -39,6 +39,13 @@ jobs:
       # it a broken service container reports green, which is the failure
       # mode this whole block exists to remove.
       KATHA_REQUIRE_DB: "1"
+      # config.Settings declares these with no default, so importing config
+      # raises without them. backend/conftest.py sets them for pytest, but
+      # `alembic upgrade head` does not load conftest — so the migration
+      # step needs them here. Deliberately fake: nothing in CI calls a paid
+      # API, and a real key in a workflow file would be a leak.
+      SARVAM_API_KEY: ci-not-a-real-key
+      ANTHROPIC_API_KEY: ci-not-a-real-key
 
     steps:
       - uses: actions/checkout@v4
