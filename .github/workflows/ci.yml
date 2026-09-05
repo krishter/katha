@@ -11,6 +11,35 @@ jobs:
     defaults:
       run:
         working-directory: backend
+
+    # tests/integration/ skips itself when no Postgres is reachable, which
+    # was CI's permanent state — so the deletion E2E, failure-injection,
+    # pilot-rehearsal and parent-consent suites, the four that exercise
+    # what Sprint 1 actually fixed, had never run in CI (S4.0c). pgvector
+    # rather than stock postgres: migrations create the vector extension
+    # and story_atoms.embedding, retained unwritten for Phase 2.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: katha
+          POSTGRES_PASSWORD: katha
+          POSTGRES_DB: katha
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U katha"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://katha:katha@localhost:5432/katha
+      # Turns the integration suite's self-skip into a hard failure. Without
+      # it a broken service container reports green, which is the failure
+      # mode this whole block exists to remove.
+      KATHA_REQUIRE_DB: "1"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +53,9 @@ jobs:
 
       - name: Lint
         run: ruff check . && ruff format --check .
+
+      - name: Run migrations
+        run: alembic upgrade head
 
       - name: Test
         run: pytest tests/ -v
