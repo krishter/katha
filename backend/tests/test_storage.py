@@ -1,6 +1,7 @@
 import asyncio
 import time
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 from media.storage import delete_media, generate_presigned_url, upload_media
 
@@ -109,3 +110,39 @@ async def test_upload_media_does_not_block_the_event_loop():
     # ticks would show a gap far larger than the 0.005s sleep between them.
     gaps = [b - a for a, b in zip(ticks, ticks[1:])]
     assert max(gaps) < 0.05
+
+
+async def test_presigned_url_host_carries_the_region():
+    """
+    Regression for the S4.0 presign defect: every presigned URL Katha
+    issued came back 403 SignatureDoesNotMatch, so Twilio could not fetch
+    an outbound voice note and the family dashboard could not load audio
+    or memory cards.
+
+    Cause: under boto3's default addressing_style="auto", the presigner
+    emits the legacy global host <bucket>.s3.amazonaws.com while still
+    signing under the ap-south-1 credential scope, so S3 rebuilds a
+    different canonical request and rejects the signature.
+
+    This test deliberately does NOT patch _s3_client — every other test in
+    this file does, which is precisely why the defect survived. Presigning
+    is a local computation, so the real client can be exercised with dummy
+    credentials and no network.
+    """
+    with patch.multiple(
+        "config.settings",
+        AWS_S3_REGION="ap-south-1",
+        AWS_S3_BUCKET="katha-media-test",
+        AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE",
+        AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    ):
+        url = await generate_presigned_url("audio/x.ogg")
+
+    host = urlparse(url).netloc
+    assert host == "katha-media-test.s3.ap-south-1.amazonaws.com", (
+        f"presigned host {host!r} must carry the region; the global form "
+        "<bucket>.s3.amazonaws.com signs under a region the host does not "
+        "name and yields 403 SignatureDoesNotMatch"
+    )
+    # The signature must be scoped to the same region the host resolves to.
+    assert "%2Fap-south-1%2Fs3%2F" in url

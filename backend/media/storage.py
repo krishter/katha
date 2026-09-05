@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 import boto3
+from botocore.config import Config
 
 from config import settings
 
@@ -11,11 +12,25 @@ logger = logging.getLogger(__name__)
 
 
 def _s3_client():
+    """
+    addressing_style="virtual" is load-bearing, not a preference. Under
+    boto3's default "auto", ordinary API calls go to the regional endpoint
+    (s3.ap-south-1.amazonaws.com) but generate_presigned_url rewrites the
+    host to the legacy global form (<bucket>.s3.amazonaws.com) while the
+    signature scope keeps ap-south-1. The canonical request S3 rebuilds
+    then differs from the one we signed, and every presigned URL comes
+    back 403 SignatureDoesNotMatch — meaning Twilio cannot fetch a single
+    outbound voice note and the family dashboard cannot load audio or
+    memory cards. "virtual" keeps the region in the host
+    (<bucket>.s3.ap-south-1.amazonaws.com), which signs and resolves
+    consistently, and is the addressing form AWS is standardising on.
+    """
     return boto3.client(
         "s3",
         region_name=settings.AWS_S3_REGION,
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        config=Config(s3={"addressing_style": "virtual"}),
     )
 
 
