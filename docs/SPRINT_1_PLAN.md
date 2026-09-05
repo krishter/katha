@@ -411,10 +411,66 @@ Run TC-01–TC-10 via the `eval-runner` subagent, against the criteria reconcile
 ## S4 — Pilot readiness sign-off
 
 **Branch:** `chore/pilot-readiness`
+**Expanded 2026-08-15** from a one-line checklist, after S1–S3 established that the things which break are the things nobody ran.
 
-A single checklist committed to the repo, walked end to end on a clean database: onboard a family, receive the parent welcome, consent, run two sessions, generate a card, view it in the portal, delete everything, verify the deletion by direct inspection.
+---
 
-**Acceptance:** the full walkthrough passes on a clean database, with the result recorded in the PR.
+### 4.0 — Clear the three known blockers first
+
+All three are already logged in `Found during Sprint 1`. None is fixed, and each will stop the walkthrough partway rather than at the start — which is the worst place to find them.
+
+**(a) `JWT_SECRET` is an unsubstituted placeholder.** `backend/.env` still carries the literal `<run: ...>` instruction text, 27 characters. `validate_production_config` rejects secrets under 32, so this passes in dev and fails at the deploy step. It also breaks `source .env`. Generate it with `openssl rand -hex 32`. Local file, nothing to commit — but confirm it in the PR.
+
+**(b) Block Public Access is still unverified.** `GetPublicAccessBlock` returns `AccessDenied` for the IAM user in `backend/.env`. Needs console access or an added IAM permission. This is the last open item from S2.4 and the only DPDP claim in this sprint resting on an assumption rather than a check.
+
+**(c) The integration suite is effectively unrun in CI.** `.github/workflows` runs `pytest tests/ -v`, and `tests/integration/` now holds the deletion E2E, the failure-injection suite, the pilot rehearsal and the parent-consent flow — the four suites that actually exercise the things this sprint fixed. A sign-off resting on a green CI that skips them is not a sign-off. Confirm they run, or make them run.
+
+**Acceptance:** all three resolved or explicitly waived in writing, before 4.1 starts.
+
+---
+
+### 4.1 — Make the walkthrough a script, not a checklist
+
+`backend/scripts/` already holds `verify_whatsapp_sender.py` from S3. Follow that pattern: `backend/scripts/pilot_rehearsal.py`, runnable against a clean database.
+
+A checklist gets walked once, by the person who already knows the answer, and then rots. A script gets re-run before every pilot family — and re-running is the point, because almost everything found in this sprint was found by running something rather than reading it: the fact store that had never populated, the embedding call that killed every turn, error 63049.
+
+The script drives, in order:
+
+1. Create a family account and complete onboarding
+2. Produce the `wa.me` link for the parent's number
+3. Simulate the parent's inbound message
+4. Assert the welcome is sent, states plainly that Katha is an AI, and is in the parent's language
+5. Assert no session opens before consent is recorded
+6. Give consent; assert a `ConsentRecord` with `principal="parent"` and a populated `evidence_ref`
+7. Run two sessions a day apart
+8. Assert session 2's Layer 3 carries facts, significant people and open threads from session 1
+9. Assert a memory card was generated and delivered
+10. Assert the card and stories are visible through the family API
+11. Delete the user via the real endpoint
+12. Verify deletion by direct table and bucket inspection — not by the endpoint's return value
+
+Step 12 matters most and is the one a human checklist skips: the endpoint returned `{"status": "deleted"}` while two objects were still in the bucket during gate 5.5. Assert against the database and S3 directly.
+
+Use the stub WhatsApp adapter. `verify_whatsapp_sender.py` covers the real send separately, and this script should be runnable without spending money or touching a live number.
+
+**Acceptance:**
+- `python scripts/pilot_rehearsal.py` runs green against a clean database.
+- Every assertion above is a real assertion, not a print statement.
+- The script exits non-zero on any failure.
+- Output is pasted into the PR.
+
+---
+
+### 4.2 — Record what is knowingly shipping unfixed
+
+Sprint 1 closed the compliance floor. It did not close everything, and the pilot starts with known gaps that should be written down deliberately rather than discovered by a family.
+
+At minimum: no ops console (F-08), so the pilot runs without visibility into whether any family's sessions are working; TC-11's resurfacing subsystem is fragile; recency retrieval starts thinning Layer 3 around session 5–6; no conversation, schedule or pause settings (F-06).
+
+One short section at the end of this document. Not a new file.
+
+**Acceptance:** the list exists and names an owner or a trigger for each item.
 
 ---
 
@@ -442,8 +498,8 @@ Do not do these in Sprint 1. Several are P0 in the UX review and genuinely matte
 | 1 | S1 — land verification | ✅ done 2026-08-14; WS5 on `main`, tagged `pre-pilot-verified` |
 | 1–2 | S1.5 — remove embedding dependency | ✅ done 2026-08-14; merged to `main` |
 | 2–3 | S2 — deletion is real | Consent audit passes with zero stranded objects; Layer 3 keeps older domains |
-| 3–5 | S3 — parent consent | Parent is asked before session 1; evals at target |
-| 5–6 | S4 — sign-off | Clean-database walkthrough passes |
+| 3–5 | S3 — parent consent | ✅ done 2026-08-15; merged as PR #24 |
+| 5–6 | S4 — sign-off | `scripts/pilot_rehearsal.py` green on a clean database |
 
 S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5 must complete before S3 and S4**, both of which need turns that do not fail. S2 is independent of S1.5 and can be parallelised with it.
 
