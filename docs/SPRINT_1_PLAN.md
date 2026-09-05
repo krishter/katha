@@ -427,6 +427,59 @@ All three are already logged in `Found during Sprint 1`. None is fixed, and each
 
 **Acceptance:** all three resolved or explicitly waived in writing, before 4.1 starts.
 
+#### 4.0 result (run 2026-09-05) — all three cleared
+
+**(a) `JWT_SECRET` — fixed.** Regenerated with `openssl rand -hex 32`; now
+64 characters. `source .env` works again, and `validate_production_config`
+no longer names it. Local file, nothing committed. The validator still
+refuses a production boot on `SES_MOCK`, the stub WhatsApp adapter, empty
+Twilio credentials and the two `http://localhost` base URLs — all correct
+values for a dev machine, none of them S4 blockers.
+
+**(b) Block Public Access — verified in the AWS console by the operator,
+2026-09-05.** Not scriptable: `katha-app` is denied
+`GetPublicAccessBlock`, `GetBucketPolicyStatus`, `GetBucketAcl` and
+`GetBucketOwnershipControls`, and re-probing after the console change
+confirms it still is. So this remains an operator attestation, not a
+machine check, and `pilot_rehearsal.py` cannot assert it.
+
+Independent empirical evidence gathered alongside, which *is* repeatable:
+
+| Probe | Result |
+|---|---|
+| Anonymous bucket `LIST` | 403 Forbidden |
+| Anonymous object `GET` (real object, uploaded then fetched unsigned) | 403 Forbidden |
+| `media/storage.py` upload path | no `ACL` kwarg anywhere |
+| `tests/test_storage.py` | asserts private-by-default is enforced |
+
+Residual risk, recorded rather than resolved: this evidence shows nothing
+is public *now*. Block Public Access additionally prevents a future public
+bucket policy from taking effect, and that guarantee rests on the console
+reading alone. **Trigger:** if `s3:GetBucketPublicAccessBlock` is ever
+added to `katha-app` or to a separate read-only audit principal, fold the
+assertion into `pilot_rehearsal.py` and delete this caveat.
+
+**(c) The integration suite now runs in CI — fixed.** The backend job gets
+a `pgvector/pgvector:pg16` service, a `DATABASE_URL`, and an
+`alembic upgrade head` step. The self-skip is gated behind
+`KATHA_REQUIRE_DB=1`, set in CI, so an unreachable database fails the
+build instead of skipping silently; local runs without Postgres still
+skip. Both directions verified by pointing `DATABASE_URL` at a dead port.
+
+All 14 integration tests pass against real Postgres — they were correct,
+they had simply never been run. Full backend suite: 369 passed.
+
+Two things surfaced while clearing these, both fixed here rather than
+deferred:
+
+- **The local `.env` pointed at `postgresql://postgres:postgres@...`** —
+  wrong credentials for the compose database and no `+asyncpg` driver, so
+  every integration test skipped *locally* too, not just in CI. Same class
+  as (a): a local file that silently disables the verification it is meant
+  to enable.
+- **P0 — every presigned S3 URL returned 403.** Found while probing (b).
+  Detail in `Found during Sprint 1`; fixed in `bd7af6f`.
+
 ---
 
 ### 4.1 — Make the walkthrough a script, not a checklist
@@ -510,6 +563,54 @@ S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5
 ## Found during Sprint 1
 
 <!-- Append anything discovered that is not covered above. Do not fix in-scope. -->
+
+- **(S4.0) P0 — every presigned S3 URL returned 403
+  `SignatureDoesNotMatch`. Fixed in `bd7af6f`.** Found while probing the
+  bucket for blocker (b), not by looking for it.
+
+  `media/storage._s3_client()` used boto3's default
+  `addressing_style="auto"`. Ordinary API calls resolved correctly to the
+  regional endpoint — `get_object` with the same client returned 200 — but
+  `generate_presigned_url` rewrote the host to the legacy global form
+  `<bucket>.s3.amazonaws.com` while still signing under the `ap-south-1`
+  credential scope. S3 rebuilds a canonical request from the host it was
+  actually called on, gets a different string to sign, and rejects it.
+
+  Consequence, had this reached the pilot: **Twilio could not fetch a
+  single outbound voice note, and the family dashboard could not load any
+  audio or any memory card.** Katha would have appeared to send messages
+  that no recipient could ever play. `verify_whatsapp_sender.py` did not
+  catch it because a text send needs no media URL.
+
+  Fixed by pinning `addressing_style="virtual"`, which keeps the region in
+  the host. Verified against the real bucket: presigned GET 200, anonymous
+  GET and anonymous bucket LIST both still 403.
+
+  **The failure class is the one this sprint keeps finding.** Every
+  existing test in `tests/test_storage.py` patches `_s3_client` or
+  `generate_presigned_url` itself, so the mock returned
+  `"https://signed.example/audio/x"` and the real URL was never
+  constructed, let alone fetched. Same shape as the `entity_extractor`
+  fence parse and the `story_atoms` schema gap: an assumption about an
+  external interface that no mocked test can contradict. The regression
+  test added here deliberately does not patch the client — presigning is a
+  local computation, so the real client runs with dummy credentials and no
+  network, and the test fails without the fix.
+
+- **(S4.0) The local `backend/.env` disabled the integration suite it was
+  meant to enable.** `DATABASE_URL` was
+  `postgresql://postgres:postgres@localhost:5432/katha` — wrong
+  credentials for the compose database (`katha:katha`) and missing the
+  `+asyncpg` driver, so `AsyncSessionLocal` raised
+  `InvalidRequestError: The asyncio extension requires an async driver`.
+  `_db_reachable` catches every exception, so all 14 integration tests
+  skipped **locally** as well as in CI. Corrected locally alongside the
+  `JWT_SECRET` fix.
+
+  Worth noting for whoever writes deploy notes: two of S4's three blockers
+  turned out to be an unrun local `.env` line. `.env.example` does not
+  exist in `backend/`, which is how both survived — there is nothing to
+  diff a working `.env` against.
 
 - **(S2.5) The eval harness invents pass criteria `TECH_DESIGN.md` does not
   state, and two rubric cases now fail on them.** The S2.5 regression run
