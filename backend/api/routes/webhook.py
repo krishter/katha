@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_stt
@@ -165,8 +166,6 @@ async def _load_profile_by_number(
     whatsapp_number: str, db: AsyncSession
 ) -> UserProfileModel | None:
     """The parent is known by the number she messages from."""
-    from sqlalchemy import select
-
     result = await db.execute(
         select(UserProfileModel).where(
             UserProfileModel.whatsapp_number == whatsapp_number
@@ -179,10 +178,6 @@ async def _load_user_profile_for_session(
     session_state: session_manager.SessionState, db: AsyncSession
 ) -> UserProfile:
     """Load UserProfile from user_profiles table for the given session."""
-    from sqlalchemy import select
-
-    from models.user_profile import UserProfile as UserProfileModel
-
     result = await db.execute(
         select(UserProfileModel).where(
             UserProfileModel.user_id == session_state.user_id

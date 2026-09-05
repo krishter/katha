@@ -585,3 +585,54 @@ def test_new_message_sid_is_not_treated_as_duplicate():
     assert response.status_code == 200
     mock_find.assert_called_once()
     mock_turn.assert_called_once()
+
+
+async def test_load_user_profile_for_session_actually_runs():
+    """
+    Regression for the S4.1 webhook defect: _load_user_profile_for_session
+    carried a local `from models.user_profile import UserProfile` — a name
+    that does not exist in that module — so it raised ImportError on every
+    voice turn from a parent who had already consented. The webhook's
+    except caught it and sent "Something went wrong on my side", which
+    means Katha could never hold a single conversation. Twelve tests in
+    this file exercise the voice-note path and all twelve patch this
+    function out, which is why nothing noticed.
+
+    So this test calls it for real. No patching of the thing under test.
+    """
+    from api.routes.webhook import _load_user_profile_for_session
+
+    row = MagicMock()
+    row.name = "Subramaniam"
+    row.preferred_language = "ta-IN"
+    row.onboarding_context = "Grew up in Madurai."
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = row
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=result)
+
+    state = MagicMock()
+    state.user_id = "user-1"
+
+    profile = await _load_user_profile_for_session(state, db)
+
+    assert profile.name == "Subramaniam"
+    assert profile.preferred_language == "ta-IN"
+
+
+async def test_load_user_profile_for_session_falls_back_when_absent():
+    """No profile row must degrade to a generic profile, not raise."""
+    from api.routes.webhook import _load_user_profile_for_session
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=result)
+
+    state = MagicMock()
+    state.user_id = "user-missing"
+
+    profile = await _load_user_profile_for_session(state, db)
+
+    assert profile.name == "Friend"

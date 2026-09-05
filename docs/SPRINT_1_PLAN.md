@@ -411,10 +411,151 @@ Run TC-01–TC-10 via the `eval-runner` subagent, against the criteria reconcile
 ## S4 — Pilot readiness sign-off
 
 **Branch:** `chore/pilot-readiness`
+**Expanded 2026-08-15** from a one-line checklist, after S1–S3 established that the things which break are the things nobody ran.
 
-A single checklist committed to the repo, walked end to end on a clean database: onboard a family, receive the parent welcome, consent, run two sessions, generate a card, view it in the portal, delete everything, verify the deletion by direct inspection.
+---
 
-**Acceptance:** the full walkthrough passes on a clean database, with the result recorded in the PR.
+### 4.0 — Clear the three known blockers first
+
+All three are already logged in `Found during Sprint 1`. None is fixed, and each will stop the walkthrough partway rather than at the start — which is the worst place to find them.
+
+**(a) `JWT_SECRET` is an unsubstituted placeholder.** `backend/.env` still carries the literal `<run: ...>` instruction text, 27 characters. `validate_production_config` rejects secrets under 32, so this passes in dev and fails at the deploy step. It also breaks `source .env`. Generate it with `openssl rand -hex 32`. Local file, nothing to commit — but confirm it in the PR.
+
+**(b) Block Public Access is still unverified.** `GetPublicAccessBlock` returns `AccessDenied` for the IAM user in `backend/.env`. Needs console access or an added IAM permission. This is the last open item from S2.4 and the only DPDP claim in this sprint resting on an assumption rather than a check.
+
+**(c) The integration suite is effectively unrun in CI.** `.github/workflows` runs `pytest tests/ -v`, and `tests/integration/` now holds the deletion E2E, the failure-injection suite, the pilot rehearsal and the parent-consent flow — the four suites that actually exercise the things this sprint fixed. A sign-off resting on a green CI that skips them is not a sign-off. Confirm they run, or make them run.
+
+**Acceptance:** all three resolved or explicitly waived in writing, before 4.1 starts.
+
+#### 4.0 result (run 2026-09-05) — all three cleared
+
+**(a) `JWT_SECRET` — fixed.** Regenerated with `openssl rand -hex 32`; now
+64 characters. `source .env` works again, and `validate_production_config`
+no longer names it. Local file, nothing committed. The validator still
+refuses a production boot on `SES_MOCK`, the stub WhatsApp adapter, empty
+Twilio credentials and the two `http://localhost` base URLs — all correct
+values for a dev machine, none of them S4 blockers.
+
+**(b) Block Public Access — verified in the AWS console by the operator,
+2026-09-05.** Not scriptable: `katha-app` is denied
+`GetPublicAccessBlock`, `GetBucketPolicyStatus`, `GetBucketAcl` and
+`GetBucketOwnershipControls`, and re-probing after the console change
+confirms it still is. So this remains an operator attestation, not a
+machine check, and `pilot_rehearsal.py` cannot assert it.
+
+Independent empirical evidence gathered alongside, which *is* repeatable:
+
+| Probe | Result |
+|---|---|
+| Anonymous bucket `LIST` | 403 Forbidden |
+| Anonymous object `GET` (real object, uploaded then fetched unsigned) | 403 Forbidden |
+| `media/storage.py` upload path | no `ACL` kwarg anywhere |
+| `tests/test_storage.py` | asserts private-by-default is enforced |
+
+Residual risk, recorded rather than resolved: this evidence shows nothing
+is public *now*. Block Public Access additionally prevents a future public
+bucket policy from taking effect, and that guarantee rests on the console
+reading alone. **Trigger:** if `s3:GetBucketPublicAccessBlock` is ever
+added to `katha-app` or to a separate read-only audit principal, fold the
+assertion into `pilot_rehearsal.py` and delete this caveat.
+
+**(c) The integration suite now runs in CI — fixed.** The backend job gets
+a `pgvector/pgvector:pg16` service, a `DATABASE_URL`, and an
+`alembic upgrade head` step. The self-skip is gated behind
+`KATHA_REQUIRE_DB=1`, set in CI, so an unreachable database fails the
+build instead of skipping silently; local runs without Postgres still
+skip. Both directions verified by pointing `DATABASE_URL` at a dead port.
+
+All 14 integration tests pass against real Postgres — they were correct,
+they had simply never been run. Full backend suite: 369 passed.
+
+Two things surfaced while clearing these, both fixed here rather than
+deferred:
+
+- **The local `.env` pointed at `postgresql://postgres:postgres@...`** —
+  wrong credentials for the compose database and no `+asyncpg` driver, so
+  every integration test skipped *locally* too, not just in CI. Same class
+  as (a): a local file that silently disables the verification it is meant
+  to enable.
+- **P0 — every presigned S3 URL returned 403.** Found while probing (b).
+  Detail in `Found during Sprint 1`; fixed in `bd7af6f`.
+
+---
+
+### 4.1 — Make the walkthrough a script, not a checklist
+
+`backend/scripts/` already holds `verify_whatsapp_sender.py` from S3. Follow that pattern: `backend/scripts/pilot_rehearsal.py`, runnable against a clean database.
+
+A checklist gets walked once, by the person who already knows the answer, and then rots. A script gets re-run before every pilot family — and re-running is the point, because almost everything found in this sprint was found by running something rather than reading it: the fact store that had never populated, the embedding call that killed every turn, error 63049.
+
+The script drives, in order:
+
+1. Create a family account and complete onboarding
+2. Produce the `wa.me` link for the parent's number
+3. Simulate the parent's inbound message
+4. Assert the welcome is sent, states plainly that Katha is an AI, and is in the parent's language
+5. Assert no session opens before consent is recorded
+6. Give consent; assert a `ConsentRecord` with `principal="parent"` and a populated `evidence_ref`
+7. Run two sessions a day apart
+8. Assert session 2's Layer 3 carries facts, significant people and open threads from session 1
+9. Assert a memory card was generated and delivered
+10. Assert the card and stories are visible through the family API
+11. Delete the user via the real endpoint
+12. Verify deletion by direct table and bucket inspection — not by the endpoint's return value
+
+Step 12 matters most and is the one a human checklist skips: the endpoint returned `{"status": "deleted"}` while two objects were still in the bucket during gate 5.5. Assert against the database and S3 directly.
+
+Use the stub WhatsApp adapter. `verify_whatsapp_sender.py` covers the real send separately, and this script should be runnable without spending money or touching a live number.
+
+**Acceptance:**
+- `python scripts/pilot_rehearsal.py` runs green against a clean database.
+- Every assertion above is a real assertion, not a print statement.
+- The script exits non-zero on any failure.
+- Output is pasted into the PR.
+
+#### 4.1 result (run 2026-09-05) — green
+
+`python scripts/pilot_rehearsal.py` passes end to end on a clean database
+and against the real `ap-south-1` bucket: 13 steps, 75 assertions, exit 0.
+Full output in the PR body.
+
+Three things worth recording about how it was built:
+
+- **It drives the production path, not the orchestrator.** The first draft
+  called `orchestrator.process_voice_turn` directly, the way
+  `tests/integration/test_pilot_rehearsal.py` does. That skips
+  `set_turn_audio_key` and the scheduler's `session_open_audio_s3_key`
+  write — the two keys whose objects were stranded in gate 5.5, and
+  therefore the entire point of step 13. Rewritten so the scheduler opens
+  each session and the parent answers through the webhook. **That rewrite
+  is what found the webhook `ImportError`**; the orchestrator-direct
+  version passed while the product was completely broken.
+- **The bucket half is real.** Seven objects (six voice notes, one card)
+  are written to the real bucket, and their absence after deletion is
+  checked with `head_object`, not inferred. `--skip-s3` exists for running
+  without AWS credentials, and reports INCOMPLETE with exit 1 rather than
+  green — a deletion claim with the storage half unverified is precisely
+  what gate 5.5 disproved.
+- **The failure modes were tested, not assumed.** Verified by injecting a
+  real regression (removing the AI disclosure from the welcome: 2 failed
+  assertions, exit 1) and a mid-run crash (exit 1, and the cleanup leaves
+  zero rows and zero objects behind). The first version of the cleanup
+  leaked card images on a crashed run, because it matched keys on the run
+  id while card keys are session-scoped — the same untracked-object
+  mistake gate 5.5 was about, committed by the cleanup of the script that
+  checks for it.
+
+---
+
+### 4.2 — Record what is knowingly shipping unfixed
+
+Sprint 1 closed the compliance floor. It did not close everything, and the pilot starts with known gaps that should be written down deliberately rather than discovered by a family.
+
+At minimum: no ops console (F-08), so the pilot runs without visibility into whether any family's sessions are working; TC-11's resurfacing subsystem is fragile; recency retrieval starts thinning Layer 3 around session 5–6; no conversation, schedule or pause settings (F-06).
+
+One short section at the end of this document. Not a new file.
+
+**Acceptance:** the list exists and names an owner or a trigger for each item.
 
 ---
 
@@ -442,8 +583,8 @@ Do not do these in Sprint 1. Several are P0 in the UX review and genuinely matte
 | 1 | S1 — land verification | ✅ done 2026-08-14; WS5 on `main`, tagged `pre-pilot-verified` |
 | 1–2 | S1.5 — remove embedding dependency | ✅ done 2026-08-14; merged to `main` |
 | 2–3 | S2 — deletion is real | Consent audit passes with zero stranded objects; Layer 3 keeps older domains |
-| 3–5 | S3 — parent consent | Parent is asked before session 1; evals at target |
-| 5–6 | S4 — sign-off | Clean-database walkthrough passes |
+| 3–5 | S3 — parent consent | ✅ done 2026-08-15; merged as PR #24 |
+| 5–6 | S4 — sign-off | ✅ done 2026-09-05; rehearsal green, 75 assertions |
 
 S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5 must complete before S3 and S4**, both of which need turns that do not fail. S2 is independent of S1.5 and can be parallelised with it.
 
@@ -454,6 +595,88 @@ S1 must complete before S3 — the eval set S3.4 depends on lives in WS5. **S1.5
 ## Found during Sprint 1
 
 <!-- Append anything discovered that is not covered above. Do not fix in-scope. -->
+
+- **(S4.1) P0 — the webhook raised `ImportError` on every conversational
+  turn. Fixed in `def4f7c`.** `_load_user_profile_for_session`
+  (`api/routes/webhook.py`) carried a *local* `from models.user_profile
+  import UserProfile as UserProfileModel`. That module defines
+  `UserProfileModel`; it has never defined `UserProfile`. The correct name
+  was already imported at module level, and the local import shadowed it
+  with one that does not exist.
+
+  So every voice note from a parent who had already consented raised, was
+  swallowed by the webhook's last-resort handler, and was answered with
+  *"Something went wrong on my side. I'll be here tomorrow at our usual
+  time."* **Katha could not hold a single conversation.** The consent flow
+  worked perfectly, which makes it worse: a pilot family would have been
+  welcomed, asked properly, agreed to be recorded — and then hit an
+  apology on every voice note they ever sent.
+
+  Found by `pilot_rehearsal.py` driving the real webhook. Twelve tests in
+  `tests/test_webhook.py` exercise the voice-note path and **all twelve
+  patch `_load_user_profile_for_session` out**, so the entire body of that
+  function was unexecuted by the suite. The two tests added with the fix
+  call it for real.
+
+  This is the fourth P0 in this sprint with the same shape — an assumption
+  about an interface that the tests had mocked away. See the test-shape
+  debt entry in `Knowingly shipping unfixed`.
+
+- **(S4.1) The integration suite leaks `consent_records`.**
+  `tests/integration/conftest.py`'s `_TABLES_IN_DELETE_ORDER` documents why
+  it excludes `family_accounts` but omits `consent_records` without
+  comment, so `test_parent_consent_flow.py` has accumulated 23 `pc-*` rows
+  on the dev database since 2026-08-14. Harmless — they are exactly the
+  rows DPDP says to retain — but they are test residue, not audit trail.
+  Not fixed: out of scope, and recorded under S4.2.
+
+- **(S4.0) P0 — every presigned S3 URL returned 403
+  `SignatureDoesNotMatch`. Fixed in `bd7af6f`.** Found while probing the
+  bucket for blocker (b), not by looking for it.
+
+  `media/storage._s3_client()` used boto3's default
+  `addressing_style="auto"`. Ordinary API calls resolved correctly to the
+  regional endpoint — `get_object` with the same client returned 200 — but
+  `generate_presigned_url` rewrote the host to the legacy global form
+  `<bucket>.s3.amazonaws.com` while still signing under the `ap-south-1`
+  credential scope. S3 rebuilds a canonical request from the host it was
+  actually called on, gets a different string to sign, and rejects it.
+
+  Consequence, had this reached the pilot: **Twilio could not fetch a
+  single outbound voice note, and the family dashboard could not load any
+  audio or any memory card.** Katha would have appeared to send messages
+  that no recipient could ever play. `verify_whatsapp_sender.py` did not
+  catch it because a text send needs no media URL.
+
+  Fixed by pinning `addressing_style="virtual"`, which keeps the region in
+  the host. Verified against the real bucket: presigned GET 200, anonymous
+  GET and anonymous bucket LIST both still 403.
+
+  **The failure class is the one this sprint keeps finding.** Every
+  existing test in `tests/test_storage.py` patches `_s3_client` or
+  `generate_presigned_url` itself, so the mock returned
+  `"https://signed.example/audio/x"` and the real URL was never
+  constructed, let alone fetched. Same shape as the `entity_extractor`
+  fence parse and the `story_atoms` schema gap: an assumption about an
+  external interface that no mocked test can contradict. The regression
+  test added here deliberately does not patch the client — presigning is a
+  local computation, so the real client runs with dummy credentials and no
+  network, and the test fails without the fix.
+
+- **(S4.0) The local `backend/.env` disabled the integration suite it was
+  meant to enable.** `DATABASE_URL` was
+  `postgresql://postgres:postgres@localhost:5432/katha` — wrong
+  credentials for the compose database (`katha:katha`) and missing the
+  `+asyncpg` driver, so `AsyncSessionLocal` raised
+  `InvalidRequestError: The asyncio extension requires an async driver`.
+  `_db_reachable` catches every exception, so all 14 integration tests
+  skipped **locally** as well as in CI. Corrected locally alongside the
+  `JWT_SECRET` fix.
+
+  Worth noting for whoever writes deploy notes: two of S4's three blockers
+  turned out to be an unrun local `.env` line. `.env.example` does not
+  exist in `backend/`, which is how both survived — there is nothing to
+  diff a working `.env` against.
 
 - **(S2.5) The eval harness invents pass criteria `TECH_DESIGN.md` does not
   state, and two rubric cases now fail on them.** The S2.5 regression run
@@ -735,3 +958,67 @@ after the audit; the bucket was empty before it and is empty after.
 the IAM user in `.env`, so Block Public Access cannot be verified with
 these credentials. It needs console access or an added IAM permission —
 worth knowing before S2.4 treats it as a quick check.
+
+---
+
+## Knowingly shipping unfixed (S4.2)
+
+Sprint 1 closed the compliance floor: the parent is asked before she is
+recorded, deletion actually deletes, and the verification that proves both
+now runs. It did not close everything. What follows is what the pilot
+starts with, written down deliberately so it is not discovered by a family.
+
+Each item names a trigger — the thing that should make somebody act — or
+the owner who already holds it.
+
+### Blind spots the pilot runs with
+
+| # | Gap | Why it hurts in the pilot | Trigger |
+|---|---|---|---|
+| **F-08** | **No ops console.** There is no surface that shows whether any family's sessions are working. | The pilot runs blind. Every failure in this sprint was found by running something; in the pilot nobody is running anything, and a family whose turns are failing looks identical to a family who is quiet. This is the largest single gap and it was cut to keep the sprint to the legal floor, not because it is unimportant. | **First thing in Sprint 2.** Before family #2. |
+| **F-09** | **Silence is invisible.** A parent who stops replying triggers nothing. | Disengagement is RISK V1, the P0 risk in the PRD, and the pilot cannot currently observe it. | With F-08 — the same surface answers both. |
+| **F-06** | **Nothing configured at onboarding can be changed.** No conversation, schedule or pause settings. S2 built the settings shell and the deletion control only. | A parent who wants the 10:30 slot moved, or a week off, has no route but asking the operator. At pilot scale that is survivable; it does not scale past it. | First pilot family who asks. |
+| **F-07** | **Freemium gate is a `mailto:`.** | Ten free sessions then a dead end. Irrelevant for a hand-recruited pilot, blocking for anything wider. | Before any acquisition beyond hand-recruited families. |
+
+### Known-fragile subsystems
+
+| # | Gap | State | Trigger |
+|---|---|---|---|
+| **TC-11** | **The resurfacing subsystem is fragile.** `_pick_recall_anchor` takes `significant_people[0]` unconditionally, so a person first mentioned this session outranks an established cross-session one; and the extraction prompt treats a bare unprompted mention as sufficient to flag someone significant, which nearly every first mention satisfies. | Rubric evals fail on it. Filed for a focused branch with its own eval loop — deliberately not fixed as a tail-end change on a compliance PR. | Before the eval rubric is used to gate a prompt change again. |
+| **Layer 3 retrieval** | **Recency thins Layer 3 from around session 5–6.** `top_k=5` ordered purely by recency means a user with atoms across more than five domains loses the oldest domains entirely. Measured, not predicted: `childhood` disappeared completely from a seeded six-domain probe. | Correct at pilot scale for the first fortnight, wrong after. Raising `top_k` is the cheap stopgap; semantic retrieval is the Phase 2 answer (`docs/proposals/embedding-strategy.md`). | **A pilot family reaching roughly session 5**, or open threads visibly repeating. Whichever comes first — this is two weeks into a daily cadence, not far away. |
+| **Eval harness** | **Criteria that `TECH_DESIGN.md` §3.3 does not state.** Reconciled in PR #22, but the harness inventing its own thresholds has now happened twice, both times in TC-05. | An eval gate that fails on invented thresholds cannot decide whether a prompt change is safe. | Any new failing rubric case — check the criterion against §3.3 before believing it. |
+
+### Compliance items resting on attestation rather than a check
+
+| # | Gap | State | Trigger |
+|---|---|---|---|
+| **S2.4(c)** | **Block Public Access is verified by console reading, not by code.** `katha-app` is denied `GetPublicAccessBlock`, `GetBucketPolicyStatus`, `GetBucketAcl` and `GetBucketOwnershipControls`, so `pilot_rehearsal.py` cannot assert it. Independent evidence recorded in 4.0: anonymous bucket LIST and anonymous object GET both 403, no ACL kwarg on the upload path, and a unit test enforcing that. | The empirical evidence covers "nothing is public now". It does not cover "a future public bucket policy would be blocked", which rests on the console reading alone. | Add `s3:GetBucketPublicAccessBlock` to a read-only audit principal, then fold the assertion into `pilot_rehearsal.py` and delete this row. |
+| **DPDP processors** | **The consent copy names no processors.** Not Anthropic, not Sarvam, not Twilio, not AWS. | Independent of the embedding decision, and it predates it. | Before family #2, and certainly before any paid signup. |
+
+### Test-shape debt
+
+The four P0s found in this sprint — the fact-store fence parse, the
+unguarded embedding call, the presigned-URL region, and the webhook's
+`UserProfile` import — share one shape: **an assumption about an external
+interface that the tests had mocked away.** The last of them was caught
+only because `pilot_rehearsal.py` drives the real webhook; twelve existing
+tests exercise that same code path and all twelve patch the broken
+function out.
+
+`pilot_rehearsal.py` is the standing mitigation. It is not sufficient, and
+the pattern is worth naming so the next person does not have to rediscover
+it four times.
+
+**Trigger:** any new test that patches a function belonging to the module
+under test should be treated as suspect.
+
+### Small, recorded, not worth a branch
+
+- `tests/integration/` leaks `consent_records` rows. The conftest's
+  cleanup list deliberately excludes `family_accounts` but omits
+  `consent_records` by oversight, so `test_parent_consent_flow.py` has
+  accumulated 23 `pc-*` rows on the dev database. Harmless; tidy it when
+  next in that file.
+- `backend/.env.example` does not exist. Two of S4's three blockers were
+  an unrun local `.env` line, and there is nothing to diff a working
+  `.env` against.
