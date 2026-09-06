@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_COOKIE_NAME = "katha_token"
 _GENERIC_MESSAGE = "If that email is registered, a login link is on its way."
 
 
@@ -64,14 +63,7 @@ async def verify(token: str, db: AsyncSession = Depends(get_db)) -> RedirectResp
     redirect = RedirectResponse(
         url=f"{settings.APP_BASE_URL}{destination}", status_code=302
     )
-    redirect.set_cookie(
-        key=_COOKIE_NAME,
-        value=jwt_token,
-        httponly=True,
-        secure=settings.ENVIRONMENT == "production",
-        samesite="lax",
-        max_age=60 * 60 * 24 * settings.JWT_EXPIRE_DAYS,
-    )
+    auth.set_session_cookie(redirect, jwt_token)
     return redirect
 
 
@@ -80,5 +72,5 @@ async def logout() -> RedirectResponse:
     redirect = RedirectResponse(
         url=f"{settings.APP_BASE_URL}/family/login", status_code=302
     )
-    redirect.delete_cookie(_COOKIE_NAME)
+    auth.clear_session_cookie(redirect)
     return redirect

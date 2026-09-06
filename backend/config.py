@@ -56,6 +56,23 @@ class Settings(BaseSettings):
     # headers (X-Forwarded-Proto is spoofable without a trusted-host list).
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
+    # The domain the session cookie is scoped to. Empty in development,
+    # where it must stay empty: the browser then makes the cookie
+    # host-only, and localhost:3000 and localhost:8000 share one jar
+    # because cookies ignore port numbers.
+    #
+    # In production the frontend and the API are genuinely different
+    # hostnames — app.katha.life and api.katha.life. The magic-link verify
+    # sets the cookie on api., so a host-only cookie is invisible to app.,
+    # and every /family/* route redirects to /family/login forever, for
+    # everyone. Setting ".katha.life" scopes it to both.
+    #
+    # Set it through core.auth.set_session_cookie / clear_session_cookie
+    # rather than reading it directly: a delete whose domain does not match
+    # the set silently leaves a live session cookie behind, which after
+    # DELETE /user/{user_id} is a DPDP problem, not a cosmetic one.
+    COOKIE_DOMAIN: str = ""
+
 
 settings = Settings()
 
@@ -89,6 +106,12 @@ def validate_production_config(s: Settings = settings) -> None:
             problems.append(f"{name} is empty")
     if not s.APP_BASE_URL.startswith("https://"):
         problems.append(f"APP_BASE_URL is not https:// (got: {s.APP_BASE_URL!r})")
+    if not s.COOKIE_DOMAIN:
+        problems.append(
+            "COOKIE_DOMAIN is empty — the session cookie would be host-only, "
+            "so a cookie set on api. is invisible to app. and every family "
+            "is locked out of the dashboard permanently"
+        )
     if not s.PUBLIC_BASE_URL.startswith("https://"):
         problems.append(
             f"PUBLIC_BASE_URL is not https:// (got: {s.PUBLIC_BASE_URL!r}) — "

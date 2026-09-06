@@ -248,3 +248,87 @@ async def test_send_email_ses_calls_boto3_when_not_mocked():
 
     mock_boto_client.assert_called_once_with("ses", region_name="ap-south-1")
     mock_client.send_email.assert_called_once()
+
+
+# ── Session cookie scope (DEPLOYMENT.md Step 0.1) ────────────────────────────
+#
+# The cookie is set on api.katha.life during the magic-link verify and read on
+# app.katha.life by the dashboard proxy. A host-only cookie is invisible across
+# that boundary, so every /family/* route redirects to /family/login forever.
+# It works locally only because cookies ignore port numbers and localhost:3000
+# and localhost:8000 therefore share one jar — the bug cannot appear until the
+# two are genuinely different hostnames.
+
+
+class _FakeResponse:
+    """Records what was handed to set_cookie/delete_cookie."""
+
+    def __init__(self):
+        self.set_kwargs = None
+        self.delete_args = None
+        self.delete_kwargs = None
+
+    def set_cookie(self, **kwargs):
+        self.set_kwargs = kwargs
+
+    def delete_cookie(self, name, **kwargs):
+        self.delete_args = name
+        self.delete_kwargs = kwargs
+
+
+def test_cookie_carries_the_domain_in_production():
+    from core import auth
+
+    response = _FakeResponse()
+    with patch.multiple(
+        "config.settings", ENVIRONMENT="production", COOKIE_DOMAIN=".katha.life"
+    ):
+        auth.set_session_cookie(response, "jwt-value")
+
+    assert response.set_kwargs["domain"] == ".katha.life"
+    assert response.set_kwargs["secure"] is True
+    assert response.set_kwargs["httponly"] is True
+    assert response.set_kwargs["samesite"] == "lax"
+
+
+def test_cookie_carries_no_domain_in_development():
+    """
+    Empty must mean absent, not domain="". A literal empty-string domain is
+    not the same thing to a browser as omitting the attribute, and localhost
+    cannot be domain-scoped at all.
+    """
+    from core import auth
+
+    response = _FakeResponse()
+    with patch.multiple("config.settings", ENVIRONMENT="development", COOKIE_DOMAIN=""):
+        auth.set_session_cookie(response, "jwt-value")
+
+    assert "domain" not in response.set_kwargs
+    assert response.set_kwargs["secure"] is False
+
+
+@pytest.mark.parametrize("domain", [".katha.life", ""])
+def test_set_and_delete_use_the_same_scope(domain):
+    """
+    A browser matches a deletion on name + domain + path. If these drift, the
+    delete is a no-op against a live cookie — after logout, and after the user
+    asked for all their data to be erased, which is a DPDP problem.
+    """
+    from core import auth
+
+    setter, deleter = _FakeResponse(), _FakeResponse()
+    with patch.multiple("config.settings", COOKIE_DOMAIN=domain):
+        auth.set_session_cookie(setter, "jwt-value")
+        auth.clear_session_cookie(deleter)
+
+    assert deleter.delete_args == setter.set_kwargs["key"]
+    for attribute in ("domain", "path"):
+        assert setter.set_kwargs.get(attribute) == deleter.delete_kwargs.get(attribute)
+
+
+def test_production_config_refuses_an_empty_cookie_domain():
+    """The failure is silent and total, so it belongs in the boot check."""
+    from config import Settings, validate_production_config
+
+    with pytest.raises(RuntimeError, match="COOKIE_DOMAIN"):
+        validate_production_config(Settings(ENVIRONMENT="production", COOKIE_DOMAIN=""))

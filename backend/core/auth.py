@@ -23,6 +23,42 @@ _COOKIE_NAME = "katha_token"
 _MAGIC_LINK_RATE_LIMIT_WINDOW = timedelta(minutes=20)  # ~3/hour, evenly spaced
 
 
+def _cookie_scope() -> dict:
+    """
+    The attributes that must be identical on set and delete.
+
+    A browser matches a deletion against name + domain + path. Get the
+    domain wrong on either side and the delete is a no-op against a cookie
+    that is still live — after logout, and worse, after the user asked for
+    all their data to be erased. Keeping the two callers on one dict is the
+    cheapest way to stop them drifting apart.
+    """
+    scope: dict = {"path": "/"}
+    if settings.COOKIE_DOMAIN:
+        scope["domain"] = settings.COOKIE_DOMAIN
+    return scope
+
+
+def set_session_cookie(response, token: str) -> None:
+    """Attach the session cookie. The only place it is created."""
+    response.set_cookie(
+        key=_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        # app.katha.life and api.katha.life share a registrable domain, so
+        # these are same-site requests and "lax" is correct.
+        samesite="lax",
+        max_age=60 * 60 * 24 * settings.JWT_EXPIRE_DAYS,
+        **_cookie_scope(),
+    )
+
+
+def clear_session_cookie(response) -> None:
+    """Remove the session cookie. The only place it is deleted."""
+    response.delete_cookie(_COOKIE_NAME, **_cookie_scope())
+
+
 def hash_email(email: str) -> str:
     """SHA-256 of a lowercased email — used for consent-record audit trail."""
     return hashlib.sha256(email.lower().encode()).hexdigest()
