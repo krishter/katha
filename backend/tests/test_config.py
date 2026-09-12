@@ -1,3 +1,4 @@
+import pathlib
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +16,7 @@ _SAFE_KWARGS = dict(
     TWILIO_AUTH_TOKEN="realtoken",
     APP_BASE_URL="https://katha.life",
     PUBLIC_BASE_URL="https://api.katha.life",
+    COOKIE_DOMAIN=".katha.life",
 )
 
 
@@ -98,3 +100,40 @@ def test_reports_every_problem_at_once():
     assert "JWT_SECRET" in message
     assert "SES_MOCK" in message
     assert "WHATSAPP_ADAPTER" in message
+
+
+def test_empty_cookie_domain_raises_in_production():
+    """
+    A host-only cookie set on api.katha.life is invisible to
+    app.katha.life, so every family is redirected to the login page
+    forever. The failure is silent and total, which is exactly what this
+    boot check exists to catch (DEPLOYMENT.md Step 0.1).
+    """
+    with pytest.raises(RuntimeError, match="COOKIE_DOMAIN"):
+        validate_production_config(_settings(COOKIE_DOMAIN=""))
+
+
+def test_env_example_documents_every_production_critical_setting():
+    """
+    `.env.example` is what someone copies when standing up a new
+    environment, so a setting missing from it is inherited at its
+    development default — silently. That is precisely how PUBLIC_BASE_URL
+    went missing (DEPLOYMENT.md Step 0.2): the production boot check caught
+    it, but only because somebody had thought to add that check.
+
+    Every name validate_production_config inspects must therefore appear in
+    the example file.
+    """
+    example = (
+        pathlib.Path(__file__).resolve().parent.parent.parent / ".env.example"
+    ).read_text()
+    documented = {
+        line.split("=", 1)[0].strip()
+        for line in example.splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+    }
+
+    missing = sorted(name for name in _SAFE_KWARGS if name not in documented)
+    assert not missing, (
+        f".env.example is missing production-critical settings: {missing}"
+    )

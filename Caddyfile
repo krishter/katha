@@ -1,0 +1,31 @@
+# Caddy terminates TLS for the API and gets certificates automatically.
+#
+# This is why PUBLIC_BASE_URL is https://api.katha.life while the backend
+# itself only ever speaks http on :8000 inside the compose network. Twilio
+# signs the public https URL; request.url inside the container reports the
+# internal http one. The signature check reconstructs from PUBLIC_BASE_URL
+# rather than from request headers, because X-Forwarded-Proto is spoofable
+# without a trusted-host list.
+
+api.katha.life {
+	encode gzip
+
+	reverse_proxy backend:8000 {
+		# Long enough for a full voice turn: Sarvam STT, then the LLM, then
+		# Sarvam TTS, all on the request path. The default 100s cuts off a
+		# slow turn mid-reply and the parent gets silence.
+		transport http {
+			read_timeout 180s
+			write_timeout 180s
+		}
+	}
+
+	# Health checks are noise in an access log that exists to show real
+	# traffic. Everything else is logged.
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}

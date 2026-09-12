@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import auth
 from core.auth import get_current_user
 from media import storage
 from models.consent_record import ConsentRecord
@@ -22,8 +23,6 @@ from models.user_profile import UserProfileModel
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_COOKIE_NAME = "katha_token"
 
 
 @router.delete("/user/{user_id}")
@@ -162,8 +161,10 @@ async def delete_user(
         await db.rollback()
         logger.exception("Failed to delete family_account for user %s", user_id)
 
-    # 11. Clear the session cookie
-    response.delete_cookie(_COOKIE_NAME)
+    # 11. Clear the session cookie. Via the shared helper so the domain
+    # matches the one it was set with — a mismatch leaves the family logged
+    # in with a live cookie immediately after they asked to be erased.
+    auth.clear_session_cookie(response)
 
     logger.info("Data deletion completed for user %s", user_id)
     return {

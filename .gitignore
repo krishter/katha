@@ -31,3 +31,6 @@ venv/
 
 # Logs
 *.log
+
+# Production infrastructure env (see deploy.env.example)
+deploy.env

@@ -1,0 +1,91 @@
+# Production stack for the single Lightsail box in ap-south-1 (Mumbai).
+#
+# Deliberately NOT an override of docker-compose.yml. The dev file mounts
+# the source tree and overrides the container command with --reload; both
+# are wrong here, and an override file that has to *undo* them is one
+# forgotten line away from running a file-watching dev server in front of
+# real families. This file stands alone: `docker compose -f
+# docker-compose.prod.yml up -d`.
+#
+# SINGLE-WORKER CONSTRAINT: the scheduler is in-process (APScheduler — see
+# the comment beside scheduler.start() in backend/main.py). One process,
+# one scheduler. Do not add `deploy.replicas`, do not add --workers, and do
+# not put this behind anything that scales it horizontally: every extra
+# process re-sends every scheduled session, so a family gets duplicate
+# opening voice notes. This is a correctness constraint, not a default.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    # deploy.env, not backend/.env. config.Settings forbids unknown keys, so
+    # a POSTGRES_USER line in backend/.env makes the backend raise a
+    # ValidationError at import and refuse to start. The two files exist
+    # because of that constraint, not by preference.
+    env_file:
+      - ./deploy.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No ports section: the database is reachable only from the compose
+    # network. Publishing 5432 on a box with a public static IP exposes
+    # Postgres to the internet, and the firewall rule is the only thing
+    # standing between that and every story Katha has ever recorded.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    # No command override — the Dockerfile's CMD is the production one
+    # (--workers 1, no --reload). No volume mount: the image is the
+    # artifact, so what runs is what was built, not whatever is on disk.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # certificates and ACME account — losing this
+      - caddy_config:/config  # re-issues certs and can hit rate limits
+    depends_on:
+      - backend
+
+  backup:
+    # Nightly pg_dump to S3. Same image as the database so pg_dump's version
+    # matches the server's; a newer client against an older server is a
+    # restore failure discovered at the worst possible moment.
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    # Both: deploy.env for the Postgres credentials, backend/.env for the
+    # AWS credentials and bucket the dump is shipped to.
+    env_file:
+      - ./deploy.env
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/backup.sh", "--loop"]
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
