@@ -1,10 +1,14 @@
 # Katha — Production cutover (pre-pilot)
 
-**Why this doc exists:** there is no deployed backend today. `katha.life` resolves to Vercel
-and serves the coming-soon waitlist page; `api.katha.life` and `app.katha.life` do not
-resolve at all; `.github/workflows/ci.yml` runs lint and tests and deploys nothing; there is
-no IaC in the repo. The self-trial was written against localhost because localhost is the
-only environment that exists — not because local was the right place to test.
+**Status: Steps 0–5 complete as of 2026-09-20; `api.katha.life/health` live in production.**
+
+**Why this doc exists** *(written 2026-09-06, before the cutover — describes the state it
+started from, not the state today)*: there is no deployed backend today. `katha.life`
+resolves to Vercel and serves the coming-soon waitlist page; `api.katha.life` and
+`app.katha.life` do not resolve at all; `.github/workflows/ci.yml` runs lint and tests and
+deploys nothing; there is no IaC in the repo. The self-trial was written against localhost
+because localhost is the only environment that exists — not because local was the right
+place to test.
 
 That has to change before family #1, and it should change before **your** Stage B run too:
 the point of a self-trial is to be the first real user of the thing families will use.
@@ -96,9 +100,15 @@ cookie change carefully; it is the one that silently locks out every family.
 1. Caddy in front of the backend, `api.katha.life { reverse_proxy backend:8000 }` — automatic
    certificates, and it terminates TLS so `PUBLIC_BASE_URL` is the https URL Twilio signs.
 2. At GoDaddy: **A** `api` → the Lightsail static IP; **CNAME** `app` → Vercel.
-3. **While you're in the DNS panel:** the apex still carries A records pointing at Vercel from
-   an earlier setup. Confirm which are live and remove the orphans — a stale A record on the
-   apex is how a "why is the site down" hour starts.
+3. **Apex — checked 2026-09-12, no orphans.** The earlier suspicion that GoDaddy carried
+   stale Vercel A records at the apex was wrong: there was exactly one, and it was live.
+   It has since been moved to Vercel's current anycast IP (`216.198.79.1`) and `www` to the
+   project CNAME (`a1a73ceb28cba64e.vercel-dns-017.com`), both edited in place rather than
+   added — a second apex A record round-robins traffic into a stale destination, which is the
+   failure this step was originally written to prevent. Apex 308-redirects to `www`.
+4. **Check for CAA records at the apex before Caddy asks for a certificate.** If any exist and
+   none permits `letsencrypt.org`, issuance for `api.katha.life` fails with an error that
+   points nowhere near DNS. No CAA record at all is fine — absence permits any CA.
 
 ## Step 3 — Production `.env`
 
