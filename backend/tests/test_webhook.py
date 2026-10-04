@@ -636,3 +636,46 @@ async def test_load_user_profile_for_session_falls_back_when_absent():
     profile = await _load_user_profile_for_session(state, db)
 
     assert profile.name == "Friend"
+
+
+# ── Webhook acknowledgement (production incident, 2026-09-29..10-02) ─────────
+
+
+def test_ack_is_twiml_with_an_xml_content_type():
+    """
+    The handler used to return Response(content="OK"), which emits no
+    Content-Type header at all. Twilio treats a bodied 200 it cannot parse as
+    TwiML as the text of a reply to send, so the parent received a bare "OK"
+    from Katha after every voice note — visible in the Twilio logs as
+    outbound-api messages with body "OK", one second after each real reply.
+
+    Both halves matter: the body must be TwiML, and the media type is what
+    makes Twilio parse it as TwiML rather than read it as a message.
+    """
+    from api.routes.webhook import _ack
+
+    response = _ack()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+
+    body = response.body.decode()
+    assert "<Response></Response>" in body or "<Response/>" in body
+    assert body.strip().upper() != "OK"
+
+
+def test_ack_body_contains_no_text_a_recipient_could_receive():
+    """
+    Empty TwiML means 'received, send nothing'. Any character data inside
+    <Response> would be sent to the parent, which is the failure mode this
+    replaced — so assert the element really is empty.
+    """
+    import re
+
+    from api.routes.webhook import _ack
+
+    inner = re.search(r"<Response\s*>(.*?)</Response>", _ack().body.decode())
+    assert inner is not None, "no <Response> element in the acknowledgement"
+    assert inner.group(1).strip() == "", (
+        f"TwiML carries text Twilio would send to the parent: {inner.group(1)!r}"
+    )

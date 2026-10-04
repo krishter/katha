@@ -10,12 +10,20 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Load DATABASE_URL from env, falling back to the default for local dev.
-# asyncpg is async-only; swap to psycopg2/pg8000 URL scheme for Alembic's
-# sync engine by replacing the driver prefix.
+# asyncpg is async-only; swap to a sync driver for Alembic's sync engine.
+#
+# The driver is named explicitly rather than left to SQLAlchemy's default
+# for bare `postgresql://`. That default is not stable: SQLAlchemy 2.1
+# changed it from psycopg2 to psycopg (v3), and since requirements only
+# said `sqlalchemy>=2.0`, CI began resolving 2.1 and every `alembic
+# upgrade head` died with ModuleNotFoundError: No module named 'psycopg'
+# — including the one inside scripts/deploy.sh, which would have failed
+# the next production deploy. psycopg2-binary is what this project
+# actually installs, so say so.
 _db_url = os.environ.get(
     "DATABASE_URL",
     "postgresql+asyncpg://katha:katha@localhost:5432/katha",
-).replace("postgresql+asyncpg://", "postgresql://")
+).replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 
 config.set_main_option("sqlalchemy.url", _db_url)
 

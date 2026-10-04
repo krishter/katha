@@ -1,14 +1,25 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic-settings>=2.0
-sqlalchemy>=2.0
+# Upper bound for the same reason as anthropic below: 2.1 changed the default
+# driver for `postgresql://` from psycopg2 to psycopg (v3), which this project
+# does not install. migrations/env.py now names the driver explicitly so the
+# default cannot bite again, but the bound stays until 2.1 is adopted
+# deliberately rather than by whoever next rebuilds the image.
+sqlalchemy>=2.0,<2.1
 asyncpg>=0.29
 greenlet>=3.0
 alembic>=1.13
 psycopg2-binary>=2.9  # sync driver Alembic needs (migrations/env.py swaps in postgresql:// for the sync engine)
 pgvector>=0.3
 httpx>=0.27
-anthropic>=0.40
+# Upper bound is load-bearing, not caution. anthropic 1.x removed `temperature`
+# from messages.create(); with the old `>=0.40` the production image built
+# against 1.7.0 while laptops kept 0.116.0, so every dialogue turn raised
+# TypeError in production and nowhere else. Lifting this bound means adapting
+# adapters/llm.py to the 1.x signature and re-running the eval set, because
+# dropping temperature changes sampling.
+anthropic>=0.40,<1.0
 python-multipart>=0.0.9
 twilio>=9.0
 apscheduler>=3.10

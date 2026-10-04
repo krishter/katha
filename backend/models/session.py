@@ -46,6 +46,14 @@ class Session(Base):
     session_open_audio_s3_key: Mapped[Optional[str]] = mapped_column(
         String, nullable=True
     )
+    # When the 30-minute no-reply nudge was sent, so it is sent once rather
+    # than once per scheduler tick. Without this the follow-up query stayed
+    # true after sending and re-matched every minute: 423 messages in 72
+    # hours on 2026-10-02..04, ~210/day until the 4-hour stale sweep closed
+    # the session. Nullable: NULL means "not yet nudged".
+    followup_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

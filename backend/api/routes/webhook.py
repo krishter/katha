@@ -29,6 +29,25 @@ _TEXT_ONLY_REPLY = (
 )
 _NOT_SCHEDULED_TEXT = "Hi! Your session isn't scheduled yet."
 
+# Twilio POSTs here and interprets whatever comes back. Returning
+# Response(content="OK") sent no Content-Type header at all, and Twilio
+# treats a bodied 200 it cannot parse as TwiML as the text of a reply to
+# send — so the parent received a bare "OK" from Katha after every single
+# voice note (observed in production 2026-09-29..10-02 as outbound-api
+# messages with body "OK", one second after each real reply).
+#
+# Empty TwiML is the documented way to say "received, nothing to send".
+# The media type is what makes it work: with it Twilio parses an empty
+# <Response/> and sends nothing; without it the body becomes a message.
+_TWIML_NO_REPLY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+
+
+def _ack() -> Response:
+    """Acknowledge a Twilio webhook without sending anything back."""
+    return Response(
+        status_code=200, content=_TWIML_NO_REPLY, media_type="application/xml"
+    )
+
 
 async def _handle_parent_consent(
     whatsapp,
@@ -318,7 +337,7 @@ async def whatsapp_incoming(
                     "Duplicate webhook for MessageSid %s — already processed, skipping",
                     message_sid,
                 )
-                return Response(status_code=200, content="OK")
+                return _ack()
 
         # 5. Consent gate (F-02). Before anything else, has this parent
         # agreed? She is the data principal; her child's tick-box is not
@@ -350,7 +369,7 @@ async def whatsapp_incoming(
                 transcript = params.get("Body", "") or ""
 
             await _handle_parent_consent(whatsapp, profile, transcript, turn_id, db=db)
-            return Response(status_code=200, content="OK")
+            return _ack()
 
         # 6. Look up active session by WhatsApp number
         state = await session_manager.get_active_session_by_number(from_number, db)
@@ -359,7 +378,7 @@ async def whatsapp_incoming(
             await _safe_send_text(
                 whatsapp, from_number, _NOT_SCHEDULED_TEXT, stage="no_active_session"
             )
-            return Response(status_code=200, content="OK")
+            return _ack()
 
         # 6. Handle voice note
         if media_url and "audio" in media_type:
@@ -404,4 +423,4 @@ async def whatsapp_incoming(
                 stage="other",
             )
 
-    return Response(status_code=200, content="OK")
+    return _ack()
