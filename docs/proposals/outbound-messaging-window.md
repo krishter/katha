@@ -61,6 +61,30 @@ Marketing to recipients who have never replied. A daily Marketing template
 to the same unengaged recipient invites the same treatment, and at worst
 damages the sender's quality rating.
 
+## Update, 2026-10-04 — on-demand sessions change the stakes
+
+Shipped since this was written: an inbound voice note with no active session
+now **opens one** (`_open_session_on_demand`). Previously the scheduled
+session was abandoned after four hours, so for twenty hours a day a parent
+who reached out was told "your session isn't scheduled yet" — turned away at
+the moment she asked to talk, having never been told a window existed,
+because the 09:30 opener was rejected with 63016.
+
+That makes the product work **today, without resolving any of this**. Her
+own message opens the 24-hour window; everything after it is free-form and
+delivers. The eleven messages that did reach her were all of exactly this
+shape.
+
+What it does not do is restore the outbound premise. Katha still cannot
+start the conversation — she has to think of it. The PRD's bet is that an
+elderly user will not, and that bet is the reason the outbound model exists.
+
+So the decision below is no longer *"is the product usable?"* but *"is it
+the product we designed?"* That is a weaker urgency and a better question to
+take time over. Option B in particular is no longer a capitulation — it is
+roughly what now ships, and the honest choice is between formalising it and
+paying for A or C.
+
 ## Options
 
 ### A — A Utility-category template for the daily open

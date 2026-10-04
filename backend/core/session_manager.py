@@ -5,6 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+import pytz
 from fastapi import HTTPException
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import freemium
 from models.session import Session
 from models.story_atom import StoryAtom
+from models.user_profile import UserProfileModel
 from prompts.domains import get_domain, get_domain_sequence, get_next_domain
 
 logger = logging.getLogger(__name__)
@@ -89,6 +91,25 @@ async def start_session(user_id: str, db: AsyncSession) -> SessionState:
     session_number = await _count_completed_sessions(user_id, db) + 1
     domain = await _select_domain(user_id, db)
 
+    # Stamp the number the session belongs to. get_active_session_by_number
+    # — how every inbound webhook finds its session — filters on this
+    # column, so a session created without it is invisible to the very
+    # lookup that routes replies into it. The scheduler used to be the only
+    # caller and set it afterwards in its own UPDATE, which hid the gap:
+    # any other caller produced an orphaned session, and each new inbound
+    # message opened another one. Setting it here fixes every caller.
+    number_result = await db.execute(
+        select(UserProfileModel.whatsapp_number).where(
+            UserProfileModel.user_id == user_id
+        )
+    )
+    whatsapp_number = number_result.scalar_one_or_none()
+    if whatsapp_number is None:
+        logger.warning(
+            "No user_profile for %s — session will not be reachable by number",
+            user_id,
+        )
+
     session = Session(
         id=uuid.uuid4(),
         user_id=user_id,
@@ -99,6 +120,7 @@ async def start_session(user_id: str, db: AsyncSession) -> SessionState:
         goal_met=False,
         session_end_suggested=False,
         status="active",
+        whatsapp_number=whatsapp_number,
     )
     db.add(session)
     await db.commit()
@@ -111,6 +133,42 @@ async def start_session(user_id: str, db: AsyncSession) -> SessionState:
         domain,
     )
     return _to_state(session)
+
+
+async def completed_session_today(
+    user_id: str, db: AsyncSession, tz_name: str = "Asia/Kolkata"
+) -> bool:
+    """
+    Has this user already finished a conversation today, in their own day?
+
+    Used to decide whether an inbound voice note with no active session
+    should open one. "Today" is the user's local day, not UTC: a message at
+    21:00 IST is 15:30 UTC the same day, but one at 02:00 IST is the
+    previous UTC day, and a UTC comparison would silently treat late-night
+    and early-morning messages differently.
+
+    Only `completed` counts. An `abandoned` session means Katha opened one
+    and the parent never replied — which is precisely the person this is
+    meant to let back in.
+    """
+    try:
+        tz = pytz.timezone(tz_name)
+    except Exception:
+        logger.warning("Unknown timezone %r for user %s — using IST", tz_name, user_id)
+        tz = pytz.timezone("Asia/Kolkata")
+
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    midnight_utc = tz.localize(
+        datetime(now_local.year, now_local.month, now_local.day)
+    ).astimezone(timezone.utc)
+
+    result = await db.execute(
+        select(func.count(Session.id))
+        .where(Session.user_id == user_id)
+        .where(Session.status == "completed")
+        .where(Session.started_at >= midnight_utc)
+    )
+    return result.scalar_one() > 0
 
 
 async def get_session(session_id: str, db: AsyncSession) -> SessionState:

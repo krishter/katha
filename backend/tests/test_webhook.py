@@ -494,7 +494,14 @@ def test_voice_note_passes_background_tasks_to_process_voice_turn():
     assert mock_turn.call_args.kwargs["background_tasks"] is not None
 
 
-def test_no_active_session_sends_not_scheduled():
+def test_unknown_number_gets_not_scheduled():
+    """
+    A number with no user_profile is not a parent Katha knows, so there is
+    nothing to open a session for. (Before on-demand sessions this was the
+    behaviour for *every* inbound message outside the 4-hour window; now it
+    is only the unknown-number case. The mocked db here yields no profile,
+    which is what puts us on that branch.)
+    """
     stub = _make_stub()
     app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
     try:
