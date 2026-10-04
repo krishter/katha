@@ -1,7 +1,12 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic-settings>=2.0
-sqlalchemy>=2.0
+# Upper bound for the same reason as anthropic below: 2.1 changed the default
+# driver for `postgresql://` from psycopg2 to psycopg (v3), which this project
+# does not install. migrations/env.py now names the driver explicitly so the
+# default cannot bite again, but the bound stays until 2.1 is adopted
+# deliberately rather than by whoever next rebuilds the image.
+sqlalchemy>=2.0,<2.1
 asyncpg>=0.29
 greenlet>=3.0
 alembic>=1.13
