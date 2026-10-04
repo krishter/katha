@@ -152,7 +152,22 @@ async def initiate_sessions(db_session_factory) -> None:
 
 
 async def _send_followups(db: AsyncSession, whatsapp) -> None:
-    """Send follow-up text to users who haven't responded in 30 minutes."""
+    """
+    Send the 30-minute no-reply nudge, at most once per session.
+
+    `followup_sent_at` is what makes "at most once" true. This job runs every
+    minute, and the other four predicates stay satisfied for as long as the
+    session is open and unanswered — so without a recorded send the same
+    session matched on every tick. On 2026-10-02..04 that produced 423
+    messages to one number, roughly 210 a day, stopping only when the 4-hour
+    stale sweep closed the session.
+
+    The stamp is written whether or not the send succeeded, and that is
+    deliberate. A nudge is a courtesy, not something to retry: the common
+    failure is Meta rejecting a free-form message outside the 24-hour window
+    (error 63016), which will still be true a minute later and for every
+    minute after. Retrying it is precisely the loop this fixes.
+    """
     from datetime import timedelta
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
@@ -164,10 +179,17 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
         .where(Session.last_user_message_at.is_(None))
         .where(Session.started_at < cutoff)
         .where(Session.status == "active")
+        .where(Session.followup_sent_at.is_(None))
     )
     rows = result.all()
 
     for session_row, profile in rows:
+        # Claim the session before sending. If the send raises, the stamp is
+        # already committed and no retry storm can start.
+        session_row.followup_sent_at = datetime.now(timezone.utc)
+        db.add(session_row)
+        await db.commit()
+
         try:
             followup_text = (
                 f"Hi {profile.name} ji, just checking in — no pressure at all. "
@@ -178,7 +200,9 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
             logger.info("Scheduler: sent 30-min follow-up to user %s", profile.user_id)
         except Exception:
             logger.exception(
-                "Scheduler: failed to send follow-up for user %s", profile.user_id
+                "Scheduler: failed to send follow-up for user %s (not retried — "
+                "the stamp is already set; see _send_followups docstring)",
+                profile.user_id,
             )
 
 
