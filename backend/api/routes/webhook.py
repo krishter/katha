@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -179,6 +187,84 @@ async def _speak(whatsapp, profile: UserProfileModel, text: str, *, stage: str) 
             "Voice failed for %s (stage=%s) — falling back to text", stage, stage
         )
         await _safe_send_text(whatsapp, profile.whatsapp_number, text, stage=stage)
+
+
+_ALREADY_TALKED_TEXT = (
+    "We already had our conversation today — thank you for that. "
+    "I'll be here again tomorrow, and I'm looking forward to it. "
+    "If there's something you want to add, just send it and I'll keep it safe."
+)
+
+
+async def _open_session_on_demand(
+    whatsapp,
+    profile: UserProfileModel | None,
+    from_number: str,
+    db: AsyncSession,
+):
+    """
+    Open a session because the parent sent something and none was active.
+
+    Returns the new SessionState, or None if no session should start — in
+    which case this has already said something appropriate and the caller
+    should just acknowledge the webhook.
+
+    Consent is not re-checked here: step 5 above returns before this point
+    for anyone who has not granted it, so reaching this function means she
+    has agreed.
+    """
+    if profile is None:
+        # A number with no profile — not a parent we know. Nothing to open.
+        logger.info("Inbound from unknown number %s", from_number)
+        await _safe_send_text(
+            whatsapp, from_number, _NOT_SCHEDULED_TEXT, stage="no_active_session"
+        )
+        return None
+
+    # One conversation a day. A second would burn a free-tier session on a
+    # cadence the product does not promise, and the daily rhythm is the
+    # therapeutic design (PRD 5.1), not a rate limit. An abandoned session
+    # does not count — that is the case this whole path exists for.
+    if await session_manager.completed_session_today(
+        profile.user_id, db, profile.timezone or "Asia/Kolkata"
+    ):
+        logger.info(
+            "Inbound from %s but a session already completed today — not opening",
+            profile.user_id,
+        )
+        await _speak(whatsapp, profile, _ALREADY_TALKED_TEXT, stage="already_talked")
+        return None
+
+    try:
+        state = await session_manager.start_session(profile.user_id, db)
+    except HTTPException as exc:
+        # 402 is the freemium limit. start_session has already sent the
+        # upgrade prompt to the family, so say nothing further to her —
+        # being asked to pay is not her transaction.
+        if exc.status_code == 402:
+            logger.info(
+                "On-demand session refused for %s — free limit", profile.user_id
+            )
+            return None
+        raise
+    except Exception:
+        logger.exception("Could not open on-demand session for %s", profile.user_id)
+        await _safe_send_text(
+            whatsapp,
+            from_number,
+            get_fallback_text(FailureStage.OTHER),
+            stage="on_demand_open",
+        )
+        return None
+
+    logger.info(
+        "Opened on-demand session %s for %s (number=%d domain=%s) — she messaged first",
+        state.session_id,
+        profile.user_id,
+        state.session_number,
+        state.domain,
+    )
+    return state
 
 
 async def _load_profile_by_number(
@@ -371,14 +457,24 @@ async def whatsapp_incoming(
             await _handle_parent_consent(whatsapp, profile, transcript, turn_id, db=db)
             return _ack()
 
-        # 6. Look up active session by WhatsApp number
+        # 6. Look up active session, or open one because she just asked.
+        #
+        # The scheduled session is abandoned four hours after it opens, so
+        # for twenty hours a day there is no active session and this branch
+        # used to answer "your session isn't scheduled yet" — turning away
+        # the one person the product exists to listen to, at the moment she
+        # reached out. Worse in practice, because the 09:30 opener is
+        # rejected by Meta outside the 24-hour window (63016,
+        # docs/proposals/outbound-messaging-window.md), so she is never told
+        # a window existed at all.
+        #
+        # An inbound voice note IS the signal the scheduler was trying to
+        # manufacture. Open a session and let her talk.
         state = await session_manager.get_active_session_by_number(from_number, db)
         if state is None:
-            logger.info("No active session for %s", from_number)
-            await _safe_send_text(
-                whatsapp, from_number, _NOT_SCHEDULED_TEXT, stage="no_active_session"
-            )
-            return _ack()
+            state = await _open_session_on_demand(whatsapp, profile, from_number, db)
+            if state is None:
+                return _ack()
 
         # 6. Handle voice note
         if media_url and "audio" in media_type:
