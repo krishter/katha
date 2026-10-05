@@ -55,6 +55,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The production image installs ffmpeg (backend/Dockerfile), and the
+      # audio paths shell out to it. Installing it here lets the tests run
+      # the real binary instead of a mock of it — media/audio_split.py
+      # exists because Sarvam rejects audio over 30s, which no mocked
+      # subprocess could ever have told us.
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
