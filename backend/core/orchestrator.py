@@ -62,7 +62,18 @@ _EMPTY_EXTRACTION: dict = {
 # the prompt. See docs/proposals/embedding-strategy.md.
 _RETRIEVAL_TOP_K = 25
 
-_DIALOGUE_MAX_TOKENS = 300
+# Sized from measurement, not from how long a reply reads in English.
+# A warm 2-4 sentence reply in Devanagari costs 165-300 output tokens
+# (Indic scripts tokenize far more expensively than Latin), and the model
+# sometimes spends another 400-600 thinking out loud first. At the previous
+# value of 300 that put a long Hindi turn over the ceiling roughly 40% of
+# the time, and every such turn reached the parent as either "I lost my
+# train of thought" or a reply cut off mid-word.
+#
+# The cap only costs latency when the model actually generates into it, so
+# headroom here is close to free; what keeps replies short is Layer 5's
+# length instruction, not this number.
+_DIALOGUE_MAX_TOKENS = 1200
 _EXTRACTION_MAX_TOKENS = 2000
 _EXTRACTION_RETRY_INSTRUCTION = (
     "\n\nIMPORTANT: Your previous reply did not match the required format. "
@@ -88,9 +99,22 @@ class TurnResult:
 
 
 def _parse_response_only(raw: str) -> str:
-    """Extract <response> text from the dialogue call's output."""
-    match = _RESPONSE_RE.search(raw)
-    return match.group(1).strip() if match else raw.strip()
+    """
+    Extract <response> text from the dialogue call's output.
+
+    Reasoning blocks are stripped first. Without that, an output with no
+    <response> tags falls through to "return everything", which on a reply
+    that thought out loud means handing back Katha's own English analysis
+    of the user as if it were her reply to them.
+
+    process_voice_turn does not use this — it takes the text
+    conversation_policy.check_post_turn decided on, which also handles
+    truncation. This remains for callers that bypass the policy (the eval
+    runner).
+    """
+    cleaned = conversation_policy.strip_reasoning(raw)
+    match = _RESPONSE_RE.search(cleaned)
+    return match.group(1).strip() if match else cleaned.strip()
 
 
 def _parse_extraction_only(raw: str) -> dict:
@@ -643,14 +667,31 @@ async def process_voice_turn(
     )
 
     # 6. Post-turn policy check (malformed dialogue response)
-    post_check = conversation_policy.check_post_turn(llm_response.content, state)
+    truncated = llm_response.stop_reason == "max_tokens"
+    post_check = conversation_policy.check_post_turn(
+        llm_response.content, state, truncated=truncated
+    )
     if post_check.salvaged_untagged:
         logger.warning(
             "Dialogue reply arrived without its <response> wrapper — salvaged "
             "the bare text rather than discarding it"
         )
+    if post_check.salvaged_truncated:
+        logger.warning(
+            "Dialogue reply for session %s was truncated at max_tokens=%d "
+            "(output_tokens=%d) — sent it trimmed to its last complete "
+            "sentence",
+            session_id,
+            _DIALOGUE_MAX_TOKENS,
+            llm_response.output_tokens,
+        )
     if not post_check.allowed:
-        logger.warning("Post-turn policy blocked: malformed LLM response")
+        logger.warning(
+            "Post-turn policy blocked: unusable LLM response (truncated=%s, "
+            "output_tokens=%d)",
+            truncated,
+            llm_response.output_tokens,
+        )
         return await _send_or_degrade(
             post_check.override_response or "",
             stt_result.language_code,
@@ -660,8 +701,9 @@ async def process_voice_turn(
             crisis_detected=False,
         )
 
-    # 7. Parse the dialogue response
-    response_text = _parse_response_only(llm_response.content)
+    # 7. The dialogue response — as the policy decided it, with any
+    # reasoning block stripped and any truncation trimmed.
+    response_text = post_check.response_text or ""
 
     # 8. Crisis check on Katha's own generated reply — a safety net
     # independent of what the user said.

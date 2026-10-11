@@ -83,6 +83,14 @@ class PolicyResult:
     # True when the dialogue reply was accepted despite arriving without its
     # <response> wrapper. Callers log this so the rate stays observable.
     salvaged_untagged: bool = False
+    # True when the reply was cut off by max_tokens and we sent it trimmed
+    # back to its last complete sentence. Also logged.
+    salvaged_truncated: bool = False
+    # The exact text to speak, when allowed. check_post_turn is the single
+    # place that decides this: it strips reasoning blocks and trims
+    # truncation, and a caller that re-parsed the raw output itself would
+    # undo both. None only when allowed is False.
+    response_text: str | None = None
 
 
 def check_pre_turn(transcript: str, session_state: SessionState) -> PolicyResult:
@@ -120,7 +128,55 @@ def check_response_for_crisis(response_text: str) -> PolicyResult:
     return PolicyResult(allowed=True, override_response=None, crisis_detected=False)
 
 
-def salvage_untagged_response(llm_response: str) -> str | None:
+# The dialogue call is told to return <response> only, and mostly does.
+# But on a long, detailed voice note the model routinely thinks out loud
+# first — measured at roughly a third of calls on an 89-second Hindi note,
+# at 400-600 tokens of English reasoning before the reply even starts.
+# A complete block is simply dropped. An *unterminated* one means
+# generation was cut off inside the reasoning, so there is no reply at all
+# behind it — and that text must never be spoken: it is Katha narrating her
+# own analysis of the user ("The user is sharing beautiful memories... Let
+# me analyze what they've shared") in English, to an elderly person who
+# just told her a story.
+_THINKING_OPEN = "<thinking>"
+_THINKING_RE = re.compile(r"<thinking>.*?</thinking>", re.DOTALL)
+
+# Sentence terminators across the scripts Katha speaks: the Latin full stop
+# (used by Tamil, Telugu, Kannada, Malayalam and English) plus the
+# Devanagari danda and double danda (Hindi, Marathi) and the ellipsis.
+_SENTENCE_END_RE = re.compile(r"[.!?\u0964\u0965\u2026]+(?=\s|$)")
+
+# A trimmed reply shorter than this is not worth sending — the same floor
+# the untagged-salvage path uses.
+_MIN_USABLE_LENGTH = 15
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove any complete <thinking>...</thinking> block."""
+    return _THINKING_RE.sub("", text).strip()
+
+
+def trim_to_last_sentence(text: str) -> str | None:
+    """
+    Cut a truncated reply back to its last complete sentence.
+
+    A reply that lost its final clause to max_tokens is still a good reply
+    — two warm Hindi sentences and a question are a complete conversational
+    turn. Discarding them to say "could you tell me that again?" throws
+    away work the user already did and asks an 80-year-old to repeat a
+    five-minute story. Returns None when there is no sentence boundary to
+    cut at, i.e. the reply was cut off before finishing its first sentence.
+    """
+    matches = list(_SENTENCE_END_RE.finditer(text))
+    if not matches:
+        return None
+    trimmed = text[: matches[-1].end()].strip()
+    return trimmed if len(trimmed) >= _MIN_USABLE_LENGTH else None
+
+
+def salvage_untagged_response(
+    llm_response: str, *, truncated: bool = False
+) -> str | None:
     """
     Decide whether an untagged dialogue output is usable as-is.
 
@@ -132,16 +188,19 @@ def salvage_untagged_response(llm_response: str) -> str | None:
     _MALFORMED_RESPONSE ("could you tell me that again?"), which is the worst
     possible reply to someone who is already disengaging.
 
+    `truncated` says max_tokens cut generation off — the caller gets that
+    from the API's stop_reason rather than guessing it from the text.
+
     Returns the salvaged text, or None if the output is genuinely unusable.
     """
-    text = llm_response.strip()
+    text = strip_reasoning(llm_response)
 
     if not text:
         return None
 
-    # An opening tag with no closing tag means the reply was cut off
-    # mid-sentence (max_tokens). Truncated prose is not safe to send.
-    if "<response>" in text and "</response>" not in text:
+    # An unterminated reasoning block: generation stopped inside Katha's
+    # own analysis, so there is no reply behind it to recover.
+    if _THINKING_OPEN in text:
         return None
 
     # Machinery leaking into the dialogue channel: the extraction block
@@ -151,40 +210,70 @@ def salvage_untagged_response(llm_response: str) -> str | None:
     if text.startswith("{") or text.startswith("["):
         return None
 
+    # An opening <response> with no closing tag means the reply was cut off
+    # inside the block. Recover what completed; the tag itself must not be
+    # spoken aloud.
+    if "<response>" in text and "</response>" not in text:
+        if not truncated:
+            return None
+        return trim_to_last_sentence(text.split("<response>", 1)[1].strip())
+
+    if truncated:
+        return trim_to_last_sentence(text)
+
     # Too short to be a real conversational turn.
-    if len(text) < 15:
+    if len(text) < _MIN_USABLE_LENGTH:
         return None
 
     return text
 
 
-def check_post_turn(llm_response: str, session_state: SessionState) -> PolicyResult:
+def check_post_turn(
+    llm_response: str, session_state: SessionState, *, truncated: bool = False
+) -> PolicyResult:
     """
     Checks after the dialogue LLM call responds:
     1. Accept a well-formed <response> block.
-    2. Otherwise try to salvage a bare, untagged reply.
+    2. Otherwise try to salvage — a bare untagged reply, or a truncated one
+       trimmed back to its last complete sentence.
     3. Only fall back to _MALFORMED_RESPONSE when nothing usable came back.
 
     The dialogue call returns <response> only — extraction is a separate
     call (see check_extraction_response) with its own guard.
 
-    Note the missing-tag path is not a silent pass: callers log it, and the
+    `truncated` is the API's stop_reason == "max_tokens", not a guess from
+    the text. It changes the answer: an unclosed <response> on a complete
+    generation is a malformed reply, while the same text on a truncated one
+    is a good reply missing its tail, and trimming it beats apologising.
+
+    Returns the text to speak in `response_text`. Callers must use that
+    rather than re-parsing the raw output, which would reintroduce both the
+    reasoning block and the truncation this strips.
+
+    Note the salvage paths are not silent passes: callers log them, and the
     crisis safety net in check_response_for_crisis still runs over whatever
     text is ultimately sent, salvaged or not.
     """
-    has_response = bool(
-        re.search(r"<response>\s*.+?\s*</response>", llm_response, re.DOTALL)
-    )
+    cleaned = strip_reasoning(llm_response)
+    match = re.search(r"<response>\s*(.+?)\s*</response>", cleaned, re.DOTALL)
 
-    if has_response:
-        return PolicyResult(allowed=True, override_response=None, crisis_detected=False)
-
-    if salvage_untagged_response(llm_response) is not None:
+    if match:
         return PolicyResult(
             allowed=True,
             override_response=None,
             crisis_detected=False,
-            salvaged_untagged=True,
+            response_text=match.group(1).strip(),
+        )
+
+    salvaged = salvage_untagged_response(llm_response, truncated=truncated)
+    if salvaged is not None:
+        return PolicyResult(
+            allowed=True,
+            override_response=None,
+            crisis_detected=False,
+            salvaged_untagged=not truncated,
+            salvaged_truncated=truncated,
+            response_text=salvaged,
         )
 
     return PolicyResult(

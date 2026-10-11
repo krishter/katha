@@ -339,7 +339,10 @@ def _voice_turn_patches(stack: ExitStack, session_state, llm_content) -> None:
             "core.orchestrator.llm.chat",
             new=AsyncMock(
                 return_value=SimpleNamespace(
-                    content=llm_content, input_tokens=100, output_tokens=50
+                    content=llm_content,
+                    input_tokens=100,
+                    output_tokens=50,
+                    stop_reason="end_turn",
                 )
             ),
         )
@@ -423,7 +426,10 @@ async def test_process_voice_turn_includes_last_turn_in_dialogue_call():
 
     mock_llm = AsyncMock(
         return_value=SimpleNamespace(
-            content=_DIALOGUE_ONLY_LLM, input_tokens=100, output_tokens=50
+            content=_DIALOGUE_ONLY_LLM,
+            input_tokens=100,
+            output_tokens=50,
+            stop_reason="end_turn",
         )
     )
 
@@ -800,7 +806,10 @@ async def test_run_extraction_for_turn_persists_atoms_with_turn_id():
             "core.orchestrator.llm.chat",
             new=AsyncMock(
                 return_value=SimpleNamespace(
-                    content=llm_content, input_tokens=300, output_tokens=150
+                    content=llm_content,
+                    input_tokens=300,
+                    output_tokens=150,
+                    stop_reason="end_turn",
                 )
             ),
         ),
@@ -843,7 +852,10 @@ async def test_run_extraction_for_turn_uses_extraction_max_tokens():
     session_state = _make_session_state()
     mock_llm = AsyncMock(
         return_value=SimpleNamespace(
-            content=_EXTRACTION_LLM_CONTENT, input_tokens=10, output_tokens=5
+            content=_EXTRACTION_LLM_CONTENT,
+            input_tokens=10,
+            output_tokens=5,
+            stop_reason="end_turn",
         )
     )
 
@@ -912,7 +924,10 @@ async def test_long_detailed_story_produces_complete_reply_and_extraction():
                 "core.orchestrator.llm.chat",
                 new=AsyncMock(
                     return_value=SimpleNamespace(
-                        content=_DIALOGUE_ONLY_LLM, input_tokens=500, output_tokens=60
+                        content=_DIALOGUE_ONLY_LLM,
+                        input_tokens=500,
+                        output_tokens=60,
+                        stop_reason="end_turn",
                     )
                 ),
             )
@@ -981,9 +996,17 @@ async def test_run_extraction_for_turn_retries_once_on_malformed_response():
     mock_llm = AsyncMock(
         side_effect=[
             SimpleNamespace(
-                content="not valid at all", input_tokens=10, output_tokens=5
+                content="not valid at all",
+                input_tokens=10,
+                output_tokens=5,
+                stop_reason="end_turn",
             ),
-            SimpleNamespace(content=valid_content, input_tokens=20, output_tokens=10),
+            SimpleNamespace(
+                content=valid_content,
+                input_tokens=20,
+                output_tokens=10,
+                stop_reason="end_turn",
+            ),
         ]
     )
 
@@ -1022,7 +1045,10 @@ async def test_run_extraction_for_turn_gives_up_after_two_malformed_responses():
 
     mock_llm = AsyncMock(
         return_value=SimpleNamespace(
-            content="still not valid", input_tokens=10, output_tokens=5
+            content="still not valid",
+            input_tokens=10,
+            output_tokens=5,
+            stop_reason="end_turn",
         )
     )
 
@@ -1076,7 +1102,10 @@ async def test_run_extraction_for_turn_triggers_close_when_session_should_end():
             "core.orchestrator.llm.chat",
             new=AsyncMock(
                 return_value=SimpleNamespace(
-                    content=llm_content, input_tokens=10, output_tokens=5
+                    content=llm_content,
+                    input_tokens=10,
+                    output_tokens=5,
+                    stop_reason="end_turn",
                 )
             ),
         ),
@@ -1125,7 +1154,10 @@ async def test_run_extraction_for_turn_defers_close_when_goal_just_met():
             "core.orchestrator.llm.chat",
             new=AsyncMock(
                 return_value=SimpleNamespace(
-                    content=_EXTRACTION_LLM_CONTENT, input_tokens=10, output_tokens=5
+                    content=_EXTRACTION_LLM_CONTENT,
+                    input_tokens=10,
+                    output_tokens=5,
+                    stop_reason="end_turn",
                 )
             ),
         ),
@@ -1170,7 +1202,10 @@ async def test_run_extraction_for_turn_closes_when_goal_was_already_met():
             "core.orchestrator.llm.chat",
             new=AsyncMock(
                 return_value=SimpleNamespace(
-                    content=_EXTRACTION_LLM_CONTENT, input_tokens=10, output_tokens=5
+                    content=_EXTRACTION_LLM_CONTENT,
+                    input_tokens=10,
+                    output_tokens=5,
+                    stop_reason="end_turn",
                 )
             ),
         ),
@@ -1214,7 +1249,10 @@ async def test_run_extraction_for_turn_does_not_close_when_session_continues():
             "core.orchestrator.llm.chat",
             new=AsyncMock(
                 return_value=SimpleNamespace(
-                    content=llm_content, input_tokens=10, output_tokens=5
+                    content=llm_content,
+                    input_tokens=10,
+                    output_tokens=5,
+                    stop_reason="end_turn",
                 )
             ),
         ),

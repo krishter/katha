@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from core.orchestrator import TurnResult, process_voice_turn
+from core.orchestrator import (
+    _DIALOGUE_MAX_TOKENS,
+    TurnResult,
+    process_voice_turn,
+)
 from core.session_manager import SessionState
 from prompts.system_prompt import UserProfile
 
@@ -136,7 +140,10 @@ async def test_normal_turn_returns_parsed_response_text():
         "core.orchestrator.llm.chat",
         new=AsyncMock(
             return_value=SimpleNamespace(
-                content=_WELL_FORMED_LLM, input_tokens=200, output_tokens=80
+                content=_WELL_FORMED_LLM,
+                input_tokens=200,
+                output_tokens=80,
+                stop_reason="end_turn",
             )
         ),
     ):
@@ -159,7 +166,10 @@ async def test_normal_turn_returns_placeholder_extraction_json():
         "core.orchestrator.llm.chat",
         new=AsyncMock(
             return_value=SimpleNamespace(
-                content=_WELL_FORMED_LLM, input_tokens=200, output_tokens=80
+                content=_WELL_FORMED_LLM,
+                input_tokens=200,
+                output_tokens=80,
+                stop_reason="end_turn",
             )
         ),
     ):
@@ -174,13 +184,22 @@ async def test_normal_turn_returns_placeholder_extraction_json():
 async def test_normal_turn_calls_llm_with_dialogue_max_tokens():
     mock_llm = AsyncMock(
         return_value=SimpleNamespace(
-            content=_WELL_FORMED_LLM, input_tokens=200, output_tokens=80
+            content=_WELL_FORMED_LLM,
+            input_tokens=200,
+            output_tokens=80,
+            stop_reason="end_turn",
         )
     )
     with patch("core.orchestrator.llm.chat", new=mock_llm):
         await process_voice_turn(b"audio", _SESSION_ID, _USER_PROFILE, _make_db())
 
-    assert mock_llm.call_args.kwargs["max_tokens"] == 300
+    assert mock_llm.call_args.kwargs["max_tokens"] == _DIALOGUE_MAX_TOKENS
+    # Not a free parameter: a warm reply in an Indic script costs 165-300
+    # output tokens on its own, and the model may spend several hundred more
+    # thinking out loud first. A budget near the reply's own cost truncates
+    # routinely, and a truncated reply is what produced "I lost my train of
+    # thought" in production.
+    assert _DIALOGUE_MAX_TOKENS >= 1000
 
 
 async def test_crisis_keyword_skips_llm():
@@ -210,7 +229,10 @@ async def test_session_state_is_updated_after_turn():
         "core.orchestrator.llm.chat",
         new=AsyncMock(
             return_value=SimpleNamespace(
-                content=_WELL_FORMED_LLM, input_tokens=200, output_tokens=80
+                content=_WELL_FORMED_LLM,
+                input_tokens=200,
+                output_tokens=80,
+                stop_reason="end_turn",
             )
         ),
     ):

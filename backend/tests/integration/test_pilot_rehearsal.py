@@ -114,11 +114,16 @@ async def test_full_session_pilot_rehearsal(real_db):
         if system is not None:
             # The dialogue call.
             return SimpleNamespace(
-                content=_DIALOGUE_CONTENT, input_tokens=100, output_tokens=50
+                content=_DIALOGUE_CONTENT,
+                input_tokens=100,
+                output_tokens=50,
+                stop_reason="end_turn",
             )
         # The extraction call — one queued result per turn, in order.
         content = extraction_queue.pop(0)
-        return SimpleNamespace(content=content, input_tokens=50, output_tokens=100)
+        return SimpleNamespace(
+            content=content, input_tokens=50, output_tokens=100, stop_reason="end_turn"
+        )
 
     turn_ids = []
     with (

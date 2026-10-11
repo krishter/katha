@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from core.freemium import (
     FREE_SESSION_LIMIT,
+    get_session_count,
     is_session_allowed,
     send_upgrade_prompt,
 )
@@ -121,3 +122,31 @@ async def test_start_session_raises_402_when_limit_reached():
 
     assert exc_info.value.status_code == 402
     mock_prompt.assert_called_once()
+
+
+# ── what counts as a used free conversation ──────────────────────────────────
+
+
+async def test_get_session_count_excludes_sessions_with_no_exchange():
+    """A session row is created the moment the parent sends anything, even
+    when every message in it then failed to process. A family hit "10
+    conversations completed" on two real exchanges and eight sessions that
+    were nothing but our own errors. exchange_count is incremented only
+    after STT, the dialogue call and the post-turn policy all succeed, so
+    it is the one column that says a turn genuinely happened."""
+    db = AsyncMock()
+    captured = {}
+
+    async def capture(statement):
+        captured["sql"] = str(statement.compile(compile_kwargs={"literal_binds": True}))
+        result = MagicMock()
+        result.scalar_one.return_value = 2
+        return result
+
+    db.execute = AsyncMock(side_effect=capture)
+
+    assert await get_session_count("user-1", db) == 2
+    sql = captured["sql"]
+    assert "exchange_count > 0" in sql
+    # The consent handshake is still not one of the ten.
+    assert "consent" in sql

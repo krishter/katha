@@ -83,6 +83,11 @@ export interface ExportBundle {
 export interface OnboardingStartResponse {
   status: "new" | "existing" | "incomplete";
   message?: string;
+  // False only when the mail transport refused the message. It says
+  // nothing about whether the address is registered, so it is safe to show
+  // the visitor — and showing it is the point: without it the UI claims
+  // "check your email" even when nothing was sent.
+  link_sent: boolean;
 }
 
 export interface OnboardingProfilePayload {

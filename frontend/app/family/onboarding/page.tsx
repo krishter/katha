@@ -62,7 +62,13 @@ export default function OnboardingPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api.startOnboarding(email);
+      const result = await api.startOnboarding(email);
+      if (result.link_sent === false) {
+        setError(
+          "We couldn't send the login email just now. Please try again in a moment.",
+        );
+        return;
+      }
       setStep("verify");
     } catch {
       setError("Something went wrong. Please try again.");

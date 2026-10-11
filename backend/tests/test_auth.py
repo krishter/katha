@@ -12,6 +12,8 @@ from core.auth import (
     _hash_token,
     create_jwt,
     get_current_user,
+    hash_email,
+    normalize_email,
     send_email_ses,
     send_magic_link,
     verify_jwt,
@@ -332,3 +334,86 @@ def test_production_config_refuses_an_empty_cookie_domain():
 
     with pytest.raises(RuntimeError, match="COOKIE_DOMAIN"):
         validate_production_config(Settings(ENVIRONMENT="production", COOKIE_DOMAIN=""))
+
+
+# ── magic link: normalization, rate-limit ordering, send failure ─────────────
+
+
+def test_normalize_email_lowercases_and_trims():
+    assert normalize_email("  Krishnaraj@Hotmail.com ") == "krishnaraj@hotmail.com"
+
+
+def test_hash_email_is_case_insensitive():
+    """The consent audit trail already assumed a canonical address; the
+    account lookup has to agree with it."""
+    assert hash_email("A@katha.life") == hash_email("a@katha.life")
+
+
+async def test_send_magic_link_does_not_stamp_rate_limit_when_send_fails():
+    """One SES rejection used to lock the address out for twenty minutes:
+    the stamp was committed before the send, and the caller is required to
+    report success, so the person saw "a link is on its way" with no way to
+    retry into it."""
+    db = _make_db()
+    account = MagicMock()
+    account.email = _EMAIL
+    account.magic_link_last_requested_at = None
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = account
+    db.execute = AsyncMock(return_value=result)
+
+    with patch(
+        "core.auth.send_email_ses",
+        new=AsyncMock(side_effect=RuntimeError("MessageRejected: not verified")),
+    ):
+        sent = await send_magic_link(_EMAIL, db)
+
+    assert sent is False
+    assert account.magic_link_last_requested_at is None
+
+
+async def test_send_magic_link_stamps_rate_limit_after_a_successful_send():
+    db = _make_db()
+    account = MagicMock()
+    account.email = _EMAIL
+    account.magic_link_last_requested_at = None
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = account
+    db.execute = AsyncMock(return_value=result)
+
+    with patch("core.auth.send_email_ses", new=AsyncMock()):
+        sent = await send_magic_link(_EMAIL, db)
+
+    assert sent is True
+    assert account.magic_link_last_requested_at is not None
+
+
+async def test_send_magic_link_reports_success_for_unknown_email():
+    """The enumeration boundary: an address that was never registered must
+    be indistinguishable from one that was mailed successfully."""
+    db = _make_db()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=result)
+
+    with patch("core.auth.send_email_ses") as mock_send:
+        sent = await send_magic_link("nobody@example.com", db)
+
+    assert sent is True
+    mock_send.assert_not_called()
+
+
+async def test_send_magic_link_reports_success_when_rate_limited():
+    db = _make_db()
+    account = MagicMock()
+    account.email = _EMAIL
+    account.magic_link_last_requested_at = datetime.now(timezone.utc)
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = account
+    db.execute = AsyncMock(return_value=result)
+
+    with patch("core.auth.send_email_ses") as mock_send:
+        sent = await send_magic_link(_EMAIL, db)
+
+    assert sent is True
+    mock_send.assert_not_called()

@@ -22,7 +22,15 @@ export default function LoginPage() {
       // see "check your email" and nothing would ever arrive.
       // /onboarding/start creates the account (and sends the link) for a
       // new email, and still sends a normal login link for an existing one.
-      await api.startOnboarding(email);
+      const result = await api.startOnboarding(email);
+      if (result.link_sent === false) {
+        // Do not say "check your email" when the send itself failed —
+        // the person would wait on an email that is never coming.
+        setError(
+          "We couldn't send the login email just now. Please try again in a moment.",
+        );
+        return;
+      }
       setSubmitted(true);
     } catch {
       setError("Something went wrong. Please try again.");
