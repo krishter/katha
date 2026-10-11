@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from core import parent_consent
+from core import freemium, parent_consent
 from core.auth import get_current_user
 from core.freemium import FREE_SESSION_LIMIT
 from media import storage
@@ -103,10 +103,12 @@ async def get_stats(
         bool(account_row.onboarding_complete) if account_row else False
     )
 
-    session_count_result = await db.execute(
-        select(func.count(Session.id)).where(Session.user_id == user_id)
-    )
-    total_sessions = session_count_result.scalar_one()
+    # The same count the free-tier limit is enforced against — one
+    # definition, so the dashboard can never show a different number from
+    # the one that decides whether the next conversation is allowed. It
+    # counts conversations that actually happened, not session rows (see
+    # freemium.get_session_count).
+    total_sessions = await freemium.get_session_count(user_id, db)
 
     domain_counts_result = await db.execute(
         select(StoryAtom.domain, func.count(StoryAtom.id))

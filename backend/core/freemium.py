@@ -26,12 +26,36 @@ _last_prompt_sent: dict[str, datetime] = {}
 
 
 async def get_session_count(user_id: str, db: AsyncSession) -> int:
-    """Count all sessions for this user."""
+    """
+    How many of the free conversations this user has actually used.
+
+    Counts sessions in which the parent was heard and answered at least
+    once — not session rows. The two came apart badly in production: a
+    session row is created the moment she sends anything, including when
+    every message in it then failed to process, and an inbound message
+    arriving after the four-hour stale window opens yet another one. A
+    family reached "10 conversations completed" on two real exchanges and
+    eight sessions that were nothing but our own errors, and was asked to
+    pay.
+
+    exchange_count is the right gate because of where it is incremented:
+    session_manager.record_turn runs only after STT, the dialogue call and
+    the post-turn policy have all succeeded. Every failure path in
+    process_voice_turn returns before it. So exchange_count > 0 means a
+    turn genuinely happened, and a session full of failures counts for
+    nothing — which is correct, because the product delivered nothing.
+
+    Deliberately not keyed on status == 'completed': a session she talked
+    through for six exchanges but never formally closed is a conversation
+    she had, and the stale sweep marking it 'abandoned' four hours later
+    does not undo that.
+    """
     result = await db.execute(
         select(func.count(Session.id))
         .where(Session.user_id == user_id)
         # The consent handshake is not one of the free conversations.
         .where(Session.status != session_manager.CONSENT_SESSION_STATUS)
+        .where(Session.exchange_count > 0)
     )
     return result.scalar_one()
 

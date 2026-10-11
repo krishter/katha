@@ -450,6 +450,13 @@ Respond in exactly this format and no other:
 This is what will be spoken aloud.]
 </response>
 
+Keep it to two to four sentences — this is a voice note an elderly person \
+listens to, not a letter they read. End on a single question, unless you are \
+closing the session, which ends warmly instead.
+
+Begin your output with <response>. No reasoning, planning or preamble before \
+it, in <thinking> tags or otherwise.
+
 Return only the <response> block above. Structured extraction is handled by a \
 separate pass — do not include JSON or any other tags or commentary here."""
 

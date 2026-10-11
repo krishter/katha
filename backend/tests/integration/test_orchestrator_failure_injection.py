@@ -77,7 +77,12 @@ _stt_ok = AsyncMock(
 
 
 async def _llm_ok(messages, system=None, max_tokens=500):
-    return SimpleNamespace(content=_DIALOGUE_CONTENT, input_tokens=10, output_tokens=10)
+    return SimpleNamespace(
+        content=_DIALOGUE_CONTENT,
+        input_tokens=10,
+        output_tokens=10,
+        stop_reason="end_turn",
+    )
 
 
 _tts_ok = AsyncMock(return_value=_FAKE_WAV)

@@ -62,34 +62,46 @@ async def onboarding_start(
     email: str = Form(...), db: AsyncSession = Depends(get_db)
 ) -> dict:
     """
-    Step 1 of onboarding: email registration. No auth required — this is
-    the entry point. Always returns 200.
+    Step 1 of onboarding: email registration, and the universal email
+    entry point — the login page posts here too, because this is the only
+    endpoint that handles a first-time visitor and a returning one alike.
+    No auth required. Always returns 200.
     """
-    result = await db.execute(select(FamilyAccount).where(FamilyAccount.email == email))
-    account = result.scalar_one_or_none()
+    account = await auth.find_account_by_email(email, db)
 
-    if account is not None and account.onboarding_complete:
-        await auth.send_magic_link(email, db)
-        return {
-            "status": "existing",
-            "message": "Account already set up. Check your email for a login link.",
-        }
-
-    if account is not None and not account.onboarding_complete:
-        return {"status": "incomplete"}
-
-    user_id = f"user_{uuid.uuid4().hex}"
-    db.add(
-        FamilyAccount(
-            email=email,
-            user_id=user_id,
-            plan="free",
-            onboarding_complete=False,
+    if account is None:
+        db.add(
+            FamilyAccount(
+                email=auth.normalize_email(email),
+                user_id=f"user_{uuid.uuid4().hex}",
+                plan="free",
+                onboarding_complete=False,
+            )
         )
-    )
-    await db.commit()
-    await auth.send_magic_link(email, db)
-    return {"status": "new"}
+        await db.commit()
+        status = "new"
+    else:
+        status = "existing" if account.onboarding_complete else "incomplete"
+
+    # Every one of the three cases needs a link in the inbox, including
+    # "incomplete". That case used to return here without sending one, and
+    # both callers of this endpoint tell the visitor a link is on its way
+    # regardless of status — so a family that got as far as registering
+    # their parent and then stopped before the consent step was locked out
+    # permanently, looking at "check your email" with nothing ever
+    # arriving. Resuming an abandoned wizard needs exactly the same
+    # authenticated session as logging in, so it needs the same link.
+    sent = await auth.send_magic_link(email, db)
+
+    return {
+        "status": status,
+        # False only when the mail transport itself refused the message.
+        # It reveals nothing about whether the address is registered —
+        # send_magic_link returns True for every silent no-op — so the UI
+        # can safely say "we could not send it" instead of claiming a
+        # delivery that did not happen.
+        "link_sent": sent,
+    }
 
 
 @router.post("/onboarding/profile")

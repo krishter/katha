@@ -44,7 +44,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import delete  # noqa: E402
 
-from core import orchestrator, session_manager  # noqa: E402
+from core import conversation_policy, orchestrator, session_manager  # noqa: E402
 from extraction import entity_extractor, story_extractor  # noqa: E402
 from memory import fact_store  # noqa: E402
 from models.db import AsyncSessionLocal, engine  # noqa: E402
@@ -165,7 +165,19 @@ async def real_turn(
     llm_response = await orchestrator.llm.chat(
         messages, system=dialogue_prompt, max_tokens=orchestrator._DIALOGUE_MAX_TOKENS
     )
-    response_text = orchestrator._parse_response_only(llm_response.content)
+    # Through the post-turn policy, exactly as production does, rather
+    # than parsing the raw output directly. The policy is what strips a
+    # reasoning preamble and what trims a reply truncated at max_tokens —
+    # a harness that skips it scores text no parent would ever receive,
+    # and would have scored Katha's own English analysis of the user as
+    # her reply to them. When the policy rejects an output outright, the
+    # parent gets _MALFORMED_RESPONSE, so that is what the case must see.
+    post_check = conversation_policy.check_post_turn(
+        llm_response.content,
+        state,
+        truncated=llm_response.stop_reason == "max_tokens",
+    )
+    response_text = post_check.response_text or post_check.override_response or ""
 
     state = await session_manager.record_turn(session_id, db)
     turn = await orchestrator._persist_turn(

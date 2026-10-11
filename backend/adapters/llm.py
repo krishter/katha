@@ -29,6 +29,12 @@ class LLMResponse:
     content: str
     input_tokens: int
     output_tokens: int
+    # Why the model stopped. "max_tokens" means the reply was cut off
+    # mid-generation, which callers must know rather than infer from the
+    # shape of the text: a reply truncated before its closing </response>
+    # used to be indistinguishable from a reply the model never tagged,
+    # and the two need opposite handling (see conversation_policy).
+    stop_reason: str = "end_turn"
 
 
 async def chat(
@@ -61,8 +67,17 @@ async def chat(
     except APIError as exc:
         raise RuntimeError(f"Anthropic API error: {exc}") from exc
 
+    if response.stop_reason == "max_tokens":
+        logger.warning(
+            "LLM reply hit max_tokens=%d (output_tokens=%d) — the text is "
+            "cut off mid-generation",
+            max_tokens,
+            response.usage.output_tokens,
+        )
+
     return LLMResponse(
         content=response.content[0].text,
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
+        stop_reason=response.stop_reason or "end_turn",
     )

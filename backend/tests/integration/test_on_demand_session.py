@@ -100,7 +100,12 @@ class _Harness:
                 if system is not None
                 else "<extraction>{}</extraction>"
             )
-            return SimpleNamespace(content=content, input_tokens=10, output_tokens=5)
+            return SimpleNamespace(
+                content=content,
+                input_tokens=10,
+                output_tokens=5,
+                stop_reason="end_turn",
+            )
 
         self._patches = [
             patch(

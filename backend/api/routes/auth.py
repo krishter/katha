@@ -24,11 +24,15 @@ async def request_magic_link(
     email: str = Form(...), db: AsyncSession = Depends(get_db)
 ) -> dict:
     """Always returns 200 — never reveals whether the email is registered."""
+    sent = True
     try:
-        await auth.send_magic_link(email, db)
+        sent = await auth.send_magic_link(email, db)
     except Exception:
         logger.exception("Error sending magic link")
-    return {"message": _GENERIC_MESSAGE}
+        sent = False
+    # See onboarding_start: this says only whether the mail transport
+    # accepted the message, never whether the address is registered.
+    return {"message": _GENERIC_MESSAGE, "link_sent": sent}
 
 
 @router.get("/auth/verify")

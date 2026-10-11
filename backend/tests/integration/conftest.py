@@ -8,6 +8,8 @@ from sqlalchemy import delete, text
 from models.crisis_event import CrisisEvent
 from models.db import AsyncSessionLocal, engine
 from models.fact import Fact
+from models.family_account import FamilyAccount
+from models.magic_link_token import MagicLinkToken
 from models.memory_card import MemoryCard
 from models.session import Session
 from models.story_atom import StoryAtom
@@ -15,9 +17,10 @@ from models.turn import Turn
 from models.user_profile import UserProfileModel
 
 # Deletion order matters for FK constraints (children before parents).
-# Deliberately excludes family_accounts — these tests create their own
-# user_profiles/sessions rows but never a family account, so there's no
-# reason to touch that table.
+# family_accounts and magic_link_tokens are included because
+# test_magic_link_lookup.py creates them: family_accounts.email is unique,
+# so a row left behind makes the second run of that test fail on a
+# collision rather than on anything real.
 _TABLES_IN_DELETE_ORDER = [
     CrisisEvent,
     MemoryCard,
@@ -26,6 +29,8 @@ _TABLES_IN_DELETE_ORDER = [
     Fact,
     Session,
     UserProfileModel,
+    MagicLinkToken,
+    FamilyAccount,
 ]
 
 

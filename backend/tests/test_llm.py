@@ -5,10 +5,13 @@ import pytest
 from adapters.llm import LLMResponse, Message, chat
 
 
-def _make_mock_response(text: str = "Hello! How can I help you?") -> MagicMock:
+def _make_mock_response(
+    text: str = "Hello! How can I help you?", stop_reason: str = "end_turn"
+) -> MagicMock:
     response = MagicMock()
     response.content = [MagicMock(text=text)]
     response.usage = MagicMock(input_tokens=10, output_tokens=8)
+    response.stop_reason = stop_reason
     return response
 
 
@@ -170,3 +173,25 @@ def test_installed_anthropic_major_version_is_pinned_below_1():
         "removed in 1.x). Update llm.py and re-run the eval set before lifting "
         "the pin in requirements.txt."
     )
+
+
+async def test_chat_surfaces_stop_reason():
+    """Callers need truncation as a fact from the API, not an inference from
+    the shape of the text: an unclosed <response> on a complete generation
+    is a malformed reply, while the same text on a truncated one is a good
+    reply missing its tail (see conversation_policy.check_post_turn)."""
+    mock_client = _mock_client(response=_make_mock_response(stop_reason="max_tokens"))
+
+    with patch("adapters.llm._client", mock_client):
+        result = await chat([Message(role="user", content="Hello")])
+
+    assert result.stop_reason == "max_tokens"
+
+
+async def test_chat_defaults_stop_reason_when_api_omits_it():
+    mock_client = _mock_client(response=_make_mock_response(stop_reason=None))
+
+    with patch("adapters.llm._client", mock_client):
+        result = await chat([Message(role="user", content="Hello")])
+
+    assert result.stop_reason == "end_turn"

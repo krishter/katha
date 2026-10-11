@@ -93,16 +93,42 @@ def test_onboarding_start_existing_complete_account_returns_existing(db):
     mock_send.assert_called_once()
 
 
-def test_onboarding_start_existing_incomplete_account_returns_incomplete(db):
+def test_onboarding_start_existing_incomplete_account_still_sends_a_link(db):
+    """A family that registered their parent and stopped before the consent
+    step has to be able to get back in. This case used to return without
+    sending anything while both callers told the visitor to check their
+    email, which locked the account out permanently."""
     account = MagicMock()
     account.onboarding_complete = False
     db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=account))
 
-    response = client.post("/onboarding/start", data={"email": "mid@katha.life"})
+    with patch(
+        "api.routes.onboarding.auth.send_magic_link", new=AsyncMock(return_value=True)
+    ) as mock_send:
+        response = client.post("/onboarding/start", data={"email": "mid@katha.life"})
 
     assert response.status_code == 200
     assert response.json()["status"] == "incomplete"
+    assert response.json()["link_sent"] is True
+    mock_send.assert_called_once()
+    # Still must not create a second account for an address that has one.
     db.add.assert_not_called()
+
+
+def test_onboarding_start_reports_a_failed_send(db):
+    """The visitor must not be told to check their email when the mail
+    transport refused the message."""
+    account = MagicMock()
+    account.onboarding_complete = True
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=account))
+
+    with patch(
+        "api.routes.onboarding.auth.send_magic_link", new=AsyncMock(return_value=False)
+    ):
+        response = client.post("/onboarding/start", data={"email": "x@katha.life"})
+
+    assert response.status_code == 200
+    assert response.json()["link_sent"] is False
 
 
 # ── /onboarding/profile ──────────────────────────────────────────────────────
