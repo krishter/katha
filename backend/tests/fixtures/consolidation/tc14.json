@@ -1,0 +1,79 @@
+{
+  "id": "TC-14",
+  "description": "A thin turn invites invention; the final body must contain none.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "We were in Thrissur. I was young then, maybe eighteen.",
+          "response_text": "Where were you living?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "The elephant got loose during the pooram.",
+          "response_text": "What happened that day?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-3",
+          "session_number": 1,
+          "turn_number": 3,
+          "transcript": "My brother pulled me behind the wall. That is all I remember of it.",
+          "response_text": "What did you do?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "Living in Thrissur, around eighteen years old.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "historical_events",
+          "narrative": "An elephant got loose during the pooram.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-3",
+          "turn_id": "t1-3",
+          "domain": "historical_events",
+          "narrative": "His brother pulled him behind a wall.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [],
+  "expect": {
+    "stories": 1,
+    "zero_unsupported_in_final": true,
+    "must_not_contain": [
+      "screamed",
+      "terrified",
+      "panic",
+      "trumpeting",
+      "crowd roared"
+    ]
+  }
+}

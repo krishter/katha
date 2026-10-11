@@ -1,0 +1,126 @@
+{
+  "id": "TC-16",
+  "description": "Session 1 gives setting+event; session 3 gives turn+resolution.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "We were near the river at Kumbakonam, I was about ten.",
+          "response_text": "Where did you grow up?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "The water came into the house one night in the floods.",
+          "response_text": "What do you remember of that place?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "Lived near the river at Kumbakonam, aged ten.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "childhood",
+          "narrative": "Flood water entered the house at night.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    },
+    {
+      "session_number": 2,
+      "turns": [
+        {
+          "id": "t2-1",
+          "session_number": 2,
+          "turn_number": 1,
+          "transcript": "My school was two streets away. I walked there with my sister.",
+          "response_text": "Tell me about school.",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-3",
+          "turn_id": "t2-1",
+          "domain": "education",
+          "narrative": "Walked to a nearby school with his sister.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    },
+    {
+      "session_number": 3,
+      "turns": [
+        {
+          "id": "t3-1",
+          "session_number": 3,
+          "turn_number": 1,
+          "transcript": "About that night in the flood — my father carried my grandmother out on his back, all the way to the temple steps.",
+          "response_text": "Is there more you remember about the flood?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t3-2",
+          "session_number": 3,
+          "turn_number": 2,
+          "transcript": "After that he never let us build on the low side of the land again. Not once.",
+          "response_text": "And afterwards?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-4",
+          "turn_id": "t3-1",
+          "domain": "childhood",
+          "narrative": "Father carried grandmother to the temple steps.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-5",
+          "turn_id": "t3-2",
+          "domain": "childhood",
+          "narrative": "Never built on the low side again.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [],
+  "expect": {
+    "promoted_in_session": 3,
+    "stories": 1,
+    "body_uses_turns_from_sessions": [
+      1,
+      3
+    ]
+  }
+}

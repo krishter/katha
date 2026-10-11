@@ -1,0 +1,83 @@
+{
+  "id": "TC-17",
+  "description": "Code-mixed Tamil-English; quote kept verbatim, native terms kept.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "அந்த வீட்டில் ஒரு பெரிய திண்ணை இருந்தது — we used to sit there every evening. I was maybe eight at the time.",
+          "response_text": "Tell me about the house.",
+          "detected_language": "ta-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "One day a snake came up onto the thinnai. எல்லோரும் ஓடிவிட்டார்கள்.",
+          "response_text": "What happened there?",
+          "detected_language": "ta-IN"
+        },
+        {
+          "id": "t1-3",
+          "session_number": 1,
+          "turn_number": 3,
+          "transcript": "My grandmother, ammachi, she took a broom and pushed it off herself. அவள் பயப்படவே இல்லை. After that everyone called her the brave one.",
+          "response_text": "What did your family do?",
+          "detected_language": "ta-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "Describes the thinnai of the family house.",
+          "who": [],
+          "when_approx": "age eight",
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "childhood",
+          "narrative": "A snake came onto the thinnai and everyone ran.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-3",
+          "turn_id": "t1-3",
+          "domain": "childhood",
+          "narrative": "His grandmother pushed the snake off with a broom.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [
+    {
+      "name": "Ammachi",
+      "relationship": "grandmother"
+    }
+  ],
+  "expect": {
+    "stories": 1,
+    "quote_original_script": "ta",
+    "body_should_contain_any": [
+      "thinnai",
+      "ammachi",
+      "Ammachi",
+      "Thinnai"
+    ]
+  }
+}

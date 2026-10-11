@@ -1,0 +1,91 @@
+{
+  "id": "TC-13",
+  "description": "Two incidents interleaved in one session; must not cross-contaminate.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "When I was twelve we had the fire in the market. The whole row of shops near the bus stand caught.",
+          "response_text": "Tell me about your childhood.",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "My first job was at the mill in Coimbatore, I was twenty-two. I travelled there alone with one trunk.",
+          "response_text": "And later, your work?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-3",
+          "session_number": 1,
+          "turn_number": 3,
+          "transcript": "In the fire, my uncle ran in and pulled out the cash box. Everyone said he was mad. He had burns on his arm for years after.",
+          "response_text": "What happened at the market?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-4",
+          "session_number": 1,
+          "turn_number": 4,
+          "transcript": "At the mill the foreman shouted at me the first day for threading the machine wrong. But by the end of that year he made me a supervisor.",
+          "response_text": "How did the mill work out?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "A fire in the market when he was twelve.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "career_work",
+          "narrative": "First job at a mill in Coimbatore at twenty-two.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-3",
+          "turn_id": "t1-3",
+          "domain": "childhood",
+          "narrative": "His uncle ran into the fire to save the cash box.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-4",
+          "turn_id": "t1-4",
+          "domain": "career_work",
+          "narrative": "Scolded by the foreman, later promoted to supervisor.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [],
+  "expect": {
+    "incidents": 2,
+    "stories": 2,
+    "no_shared_turn_ids": true
+  }
+}

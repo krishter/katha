@@ -34,3 +34,8 @@ venv/
 
 # Production infrastructure env (see deploy.env.example)
 deploy.env
+
+# Phase A consolidation reports — these contain verbatim pilot
+# transcripts and composed first-person stories, i.e. the most
+# identifying material Katha holds. Never committed.
+consolidation_reports/
