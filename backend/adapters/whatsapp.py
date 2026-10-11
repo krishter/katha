@@ -9,6 +9,7 @@ import httpx
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client as TwilioClient
 
+from config import settings
 from media import storage
 
 if TYPE_CHECKING:
@@ -27,10 +28,24 @@ class WhatsAppAdapter(Protocol):
         the key so the object can be found and deleted later."""
         ...
 
-    async def send_image(self, to_number: str, s3_key: str, caption: str = "") -> str:
+    async def send_image(
+        self,
+        to_number: str,
+        s3_key: str,
+        caption: str = "",
+        template_sid: str | None = None,
+        template_variables: dict | None = None,
+        media_variable: str = "1",
+    ) -> str:
         """
         Send Twilio a short-lived presigned URL for an image ALREADY in S3.
         Returns MessageSid.
+
+        `template_sid` makes this an approved-template send. That is not
+        optional for the memory card: the adult child never messages
+        Katha's number, so no 24-hour window is ever open for them and a
+        free-form media message is rejected by Meta with 63016. Without a
+        template the card is accepted by Twilio and then silently dropped.
 
         Takes a key rather than bytes deliberately. This used to accept
         bytes and upload them itself, which meant every memory card was
@@ -90,6 +105,20 @@ class TwilioWhatsAppAdapter:
             return {"messaging_service_sid": self._messaging_service_sid}
         return {"from_": self._from}
 
+    def _status_callback(self) -> dict:
+        """
+        Where Twilio reports what became of the message.
+
+        Twilio accepts a WhatsApp message and returns a SID immediately;
+        whether Meta actually delivered it arrives later, out of band. With
+        nothing listening, a message rejected with 63016 is indistinguish-
+        able from one that arrived, which is how every memory card could
+        fail for weeks while the database recorded them as delivered.
+        """
+        if not settings.PUBLIC_BASE_URL:
+            return {}
+        return {"status_callback": f"{settings.PUBLIC_BASE_URL}/webhook/twilio/status"}
+
     async def send_voice_note(
         self, to_number: str, audio_bytes: bytes, mime_type: str = "audio/ogg"
     ) -> tuple[str, str]:
@@ -103,20 +132,48 @@ class TwilioWhatsAppAdapter:
             **self._sender(),
             to=f"whatsapp:{to_number}",
             media_url=[presigned_url],
+            **self._status_callback(),
         )
         logger.info("Sent voice note to %s: %s", to_number, msg.sid)
         return msg.sid, s3_key
 
-    async def send_image(self, to_number: str, s3_key: str, caption: str = "") -> str:
+    async def send_image(
+        self,
+        to_number: str,
+        s3_key: str,
+        caption: str = "",
+        template_sid: str | None = None,
+        template_variables: dict | None = None,
+        media_variable: str = "1",
+    ) -> str:
         presigned_url = await storage.generate_presigned_url(s3_key)
-        msg = await asyncio.to_thread(
-            self._client.messages.create,
+        kwargs: dict = {
             **self._sender(),
-            to=f"whatsapp:{to_number}",
-            media_url=[presigned_url],
-            body=caption,
+            "to": f"whatsapp:{to_number}",
+            **self._status_callback(),
+        }
+        if template_sid:
+            # The template carries the copy; the image rides in as a
+            # variable because the card differs every day. `media_variable`
+            # is which numbered placeholder the approved template puts the
+            # media URL in.
+            variables = dict(template_variables or {})
+            variables[media_variable] = presigned_url
+            kwargs["content_sid"] = template_sid
+            # JSON, not str(): a Python repr with single quotes is not
+            # parsed by Twilio and the template silently substitutes
+            # nothing (same trap as send_text).
+            kwargs["content_variables"] = json.dumps(variables)
+        else:
+            kwargs["media_url"] = [presigned_url]
+            kwargs["body"] = caption
+        msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
+        logger.info(
+            "Sent image to %s: %s (template=%s)",
+            to_number,
+            msg.sid,
+            template_sid or "none — free-form, needs an open 24h window",
         )
-        logger.info("Sent image to %s: %s", to_number, msg.sid)
         return msg.sid
 
     async def send_text(
@@ -130,6 +187,7 @@ class TwilioWhatsAppAdapter:
         kwargs: dict = {
             **self._sender(),
             "to": f"whatsapp:{to_number}",
+            **self._status_callback(),
         }
         if template_sid:
             kwargs["content_sid"] = template_sid

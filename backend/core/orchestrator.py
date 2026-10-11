@@ -5,7 +5,6 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import BackgroundTasks
@@ -14,6 +13,7 @@ from sqlalchemy import select
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
+from config import settings
 from core import conversation_policy, session_manager
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
@@ -318,7 +318,13 @@ async def save_memory_card(
         verbatim_quote=card_result.verbatim_quote,
         domain=card_result.domain,
         image_s3_key=s3_key,
-        delivered_at=datetime.now(timezone.utc) if message_sid else None,
+        # Not delivered_at. Twilio returning a SID means Twilio accepted
+        # the message, which for WhatsApp says nothing about whether it
+        # arrived — one outside the 24-hour window is accepted, given a
+        # SID, then rejected by Meta asynchronously. delivered_at is set
+        # by the status callback (core/delivery.py) and only for a status
+        # that means the handset got it.
+        delivery_status="queued" if message_sid else None,
         twilio_message_sid=message_sid,
     )
     db.add(card)
@@ -359,12 +365,36 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
 
     caption = f"A memory from today's conversation with {user_profile.name} \U0001f338"
     whatsapp = get_whatsapp_adapter()
+
+    # The adult child never messages Katha's number — they use the web
+    # dashboard — so no 24-hour customer-service window is ever open for
+    # them and a free-form media message is rejected by Meta with 63016.
+    # The approved template is the only delivery path that works.
+    #
+    # Variable mapping, which the registered template must match:
+    #   {{1}} media (the card image URL, injected by the adapter)
+    #   {{2}} the parent's name
+    #   {{3}} the life domain the memory came from
+    template_sid = settings.TWILIO_TEMPLATE_MEMORY_CARD
+    if not template_sid:
+        logger.warning(
+            "TWILIO_TEMPLATE_MEMORY_CARD is unset — sending the card free-form, "
+            "which Meta rejects (63016) unless %s has messaged us in the last "
+            "24 hours",
+            user_profile.family_whatsapp_number,
+        )
+
     # Hand over the key just uploaded rather than the bytes — the adapter
     # presigns it instead of uploading a second, untracked copy (S2.4b).
     message_sid = await whatsapp.send_image(
         to_number=user_profile.family_whatsapp_number,
         s3_key=s3_key,
         caption=caption,
+        template_sid=template_sid or None,
+        template_variables={
+            "2": user_profile.name,
+            "3": card_result.domain,
+        },
     )
 
     await save_memory_card(

@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     # real approved template. Set them in .env — see .env.example.
     TWILIO_TEMPLATE_SESSION_OPEN: str = ""
     TWILIO_TEMPLATE_FOLLOWUP: str = ""
+    # The memory-card template is not optional in production. The adult
+    # child never messages Katha's number, so no 24-hour customer-service
+    # window is ever open for them, and a free-form media message is
+    # accepted by Twilio and then rejected by Meta with 63016 — silently,
+    # since the rejection arrives out of band.
+    #
+    # The registered template must use this variable mapping, which
+    # orchestrator._generate_and_deliver_memory_card relies on:
+    #   {{1}}  media — the card image URL (injected by the adapter)
+    #   {{2}}  the parent's name
+    #   {{3}}  the life domain the memory came from
     TWILIO_TEMPLATE_MEMORY_CARD: str = ""
     TWILIO_TEMPLATE_PARENT_WELCOME: str = ""
     TWILIO_TEMPLATE_PARENT_WELCOME_FOLLOWUP: str = ""
