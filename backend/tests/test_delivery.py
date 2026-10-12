@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from adapters.whatsapp import TemplateMediaHostMismatch
+from config import settings
 from core.delivery import record_card_delivery
 from main import app
 from models.db import get_db
@@ -38,9 +40,12 @@ def _adapter():
 
 async def test_send_image_uses_content_sid_when_a_template_is_given():
     adapter = _adapter()
-    with patch(
-        "adapters.whatsapp.storage.generate_presigned_url",
-        new=AsyncMock(return_value="https://s3/card.png"),
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value=_SIGNED),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", _HOST),
     ):
         await adapter.send_image(
             "+919876543210",
@@ -56,13 +61,21 @@ async def test_send_image_uses_content_sid_when_a_template_is_given():
     assert "body" not in kwargs
 
 
-async def test_the_card_image_rides_in_as_a_template_variable():
-    """The card differs every day, so the media cannot be baked into the
-    approved template — it has to be a variable."""
+_HOST = "katha-media.s3.ap-south-1.amazonaws.com"
+_SIGNED = f"https://{_HOST}/cards/x.png?X-Amz-Signature=abc&X-Amz-Expires=900"
+
+
+async def test_only_the_part_after_the_host_goes_into_the_media_variable():
+    """Twilio only allows a variable in a template media URL after a fixed
+    domain, so the template holds "https://<host>/{{1}}" and {{1}} is the
+    key plus signing query."""
     adapter = _adapter()
-    with patch(
-        "adapters.whatsapp.storage.generate_presigned_url",
-        new=AsyncMock(return_value="https://s3/card.png"),
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value=_SIGNED),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", _HOST),
     ):
         await adapter.send_image(
             "+919876543210",
@@ -73,17 +86,86 @@ async def test_the_card_image_rides_in_as_a_template_variable():
     variables = json.loads(
         adapter._client.messages.create.call_args.kwargs["content_variables"]
     )
-    assert variables["1"] == "https://s3/card.png"
+    assert variables["1"] == "cards/x.png?X-Amz-Signature=abc&X-Amz-Expires=900"
+    assert not variables["1"].startswith("/")
+    assert _HOST not in variables["1"]
     assert variables["2"] == "Lakshmi"
+
+
+async def test_the_signing_query_is_kept():
+    """Strip it and the object is private again: Meta's fetcher gets a 403
+    and the card silently never arrives."""
+    adapter = _adapter()
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value=_SIGNED),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", _HOST),
+    ):
+        await adapter.send_image("+91", "k", template_sid="HX")
+    variables = json.loads(
+        adapter._client.messages.create.call_args.kwargs["content_variables"]
+    )
+    assert "X-Amz-Signature=abc" in variables["1"]
+
+
+async def test_a_host_mismatch_refuses_to_send():
+    """The template would assemble a URL we never signed; Meta's fetch
+    would fail with nothing in our logs, so this is caught before send."""
+    adapter = _adapter()
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(
+                return_value="https://other-bucket.s3.amazonaws.com/x.png?s=1"
+            ),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", _HOST),
+        pytest.raises(TemplateMediaHostMismatch),
+    ):
+        await adapter.send_image("+91", "k", template_sid="HX")
+    adapter._client.messages.create.assert_not_called()
+
+
+async def test_an_unset_media_host_refuses_to_send_on_the_template_path():
+    adapter = _adapter()
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value=_SIGNED),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", ""),
+        pytest.raises(TemplateMediaHostMismatch),
+    ):
+        await adapter.send_image("+91", "k", template_sid="HX")
+
+
+async def test_the_free_form_path_is_unaffected_by_the_media_host():
+    """Dev and sandbox send the whole URL as media_url and never touch the
+    template's host contract."""
+    adapter = _adapter()
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value=_SIGNED),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", ""),
+    ):
+        await adapter.send_image("+91", "k", caption="hi")
+    assert adapter._client.messages.create.call_args.kwargs["media_url"] == [_SIGNED]
 
 
 async def test_content_variables_are_json_not_a_python_repr():
     """str() on a dict gives {'1': 'x'}, which Twilio does not parse and
     silently substitutes nothing — the same trap send_text documents."""
     adapter = _adapter()
-    with patch(
-        "adapters.whatsapp.storage.generate_presigned_url",
-        new=AsyncMock(return_value="https://s3/card.png"),
+    with (
+        patch(
+            "adapters.whatsapp.storage.generate_presigned_url",
+            new=AsyncMock(return_value=_SIGNED),
+        ),
+        patch.object(settings, "TWILIO_TEMPLATE_MEDIA_HOST", _HOST),
     ):
         await adapter.send_image(
             "+91", "k", template_sid="HX", template_variables={"2": "Lakshmi"}

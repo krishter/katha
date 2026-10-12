@@ -210,3 +210,18 @@ async def test_a_second_card_is_not_made_for_the_same_session():
 
     mock_whatsapp.send_image.assert_not_called()
     mock_save.assert_not_called()
+
+
+async def test_the_template_gets_the_chapter_name_not_the_domain_id():
+    """{{3}} lands inside a sentence the family reads — 'a memory from the
+    chapter "Childhood & Home"' — so it must be the label, not 'childhood'."""
+    db = _make_db()
+    profile = _make_profile()
+
+    with _patched(profile, _CARD_RESULT) as (mock_whatsapp, _):
+        await close_and_process_session(_SESSION_ID, db)
+
+    variables = mock_whatsapp.send_image.call_args.kwargs["template_variables"]
+    assert variables["2"] == profile.name
+    assert variables["3"] == "Childhood & Home"
+    assert variables["3"] != _CARD_RESULT.domain
