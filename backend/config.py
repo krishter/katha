@@ -43,6 +43,25 @@ class Settings(BaseSettings):
     #   {{2}}  the parent's name
     #   {{3}}  the life domain the memory came from
     TWILIO_TEMPLATE_MEMORY_CARD: str = ""
+    # The host baked into that template's media URL.
+    #
+    # Twilio only allows a variable in a template's media URL after a fixed
+    # domain, so the approved template holds
+    # "https://<this host>/{{1}}" and we pass only the key and query
+    # string as {{1}}. That makes the host a contract between the template
+    # registered at Meta and the bucket we presign against: if they ever
+    # diverge, every card 404s at Meta's fetcher with nothing in our logs,
+    # so the adapter refuses to send rather than guess.
+    #
+    # Derive it, do not type it from memory: it is
+    # <AWS_S3_BUCKET>.s3.<AWS_S3_REGION>.amazonaws.com, which follows from
+    # the virtual addressing media/storage.py pins deliberately. For the
+    # current production bucket that is
+    # katha-media-500923064555-ap-south-1-an.s3.ap-south-1.amazonaws.com
+    # — note the bucket is NOT plain "katha-media"; deploy_bkp.txt says it
+    # is and is wrong, which is exactly the mistake this setting exists to
+    # turn into a loud failure instead of a silent one.
+    TWILIO_TEMPLATE_MEDIA_HOST: str = ""
     TWILIO_TEMPLATE_PARENT_WELCOME: str = ""
     TWILIO_TEMPLATE_PARENT_WELCOME_FOLLOWUP: str = ""
 
@@ -122,6 +141,12 @@ def validate_production_config(s: Settings = settings) -> None:
             "COOKIE_DOMAIN is empty — the session cookie would be host-only, "
             "so a cookie set on api. is invisible to app. and every family "
             "is locked out of the dashboard permanently"
+        )
+    if s.TWILIO_TEMPLATE_MEMORY_CARD and not s.TWILIO_TEMPLATE_MEDIA_HOST:
+        problems.append(
+            "TWILIO_TEMPLATE_MEMORY_CARD is set but TWILIO_TEMPLATE_MEDIA_HOST "
+            "is empty — the card's media URL is assembled by the approved "
+            "template from that host, so without it no card can be sent"
         )
     if not s.PUBLIC_BASE_URL.startswith("https://"):
         problems.append(

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from urllib.parse import urlsplit
 
 import httpx
 from twilio.request_validator import RequestValidator
@@ -16,6 +17,57 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+class TemplateMediaHostMismatch(RuntimeError):
+    """
+    A presigned URL does not sit on the host the approved template builds
+    its media URL from.
+
+    Raised rather than worked around. The template holds
+    "https://<fixed host>/{{1}}" and we supply only the tail, so a
+    mismatch means the URL Meta assembles points at a host we did not sign
+    for. That fetch fails at Meta, which tells us nothing — the message is
+    simply never delivered — so the only place this can be caught is here,
+    before sending.
+    """
+
+
+def _template_media_suffix(presigned_url: str) -> str:
+    """
+    The part of a presigned URL that goes into the template's media
+    variable: everything after the host, with no leading slash.
+
+    Twilio only permits a variable in a template media URL after a fixed
+    domain, so the approved template is
+    "https://<TWILIO_TEMPLATE_MEDIA_HOST>/{{1}}" and {{1}} is the key plus
+    the signing query string. The query string is not optional — strip it
+    and the object is private, so Meta's fetcher gets a 403 and the card
+    silently never arrives.
+
+    Raises TemplateMediaHostMismatch if the URL is not on the configured
+    host, because the template would then assemble a URL we never signed.
+    """
+    if not settings.TWILIO_TEMPLATE_MEDIA_HOST:
+        raise TemplateMediaHostMismatch(
+            "TWILIO_TEMPLATE_MEDIA_HOST is not set, so the host half of the "
+            "template's media URL is unknown and cannot be checked against "
+            f"the presigned URL ({urlsplit(presigned_url).netloc})"
+        )
+
+    parts = urlsplit(presigned_url)
+    if parts.netloc != settings.TWILIO_TEMPLATE_MEDIA_HOST:
+        raise TemplateMediaHostMismatch(
+            f"presigned URL host {parts.netloc!r} does not match the host the "
+            f"approved template builds its media URL from "
+            f"({settings.TWILIO_TEMPLATE_MEDIA_HOST!r}). Meta would fetch "
+            "https://"
+            f"{settings.TWILIO_TEMPLATE_MEDIA_HOST}/<this object>, which is "
+            "not where it lives, and the card would never arrive."
+        )
+
+    suffix = parts.path.lstrip("/")
+    return f"{suffix}?{parts.query}" if parts.query else suffix
 
 
 @runtime_checkable
@@ -158,7 +210,7 @@ class TwilioWhatsAppAdapter:
             # is which numbered placeholder the approved template puts the
             # media URL in.
             variables = dict(template_variables or {})
-            variables[media_variable] = presigned_url
+            variables[media_variable] = _template_media_suffix(presigned_url)
             kwargs["content_sid"] = template_sid
             # JSON, not str(): a Python repr with single quotes is not
             # parsed by Twilio and the template silently substitutes

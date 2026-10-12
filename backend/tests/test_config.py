@@ -17,6 +17,11 @@ _SAFE_KWARGS = dict(
     APP_BASE_URL="https://katha.life",
     PUBLIC_BASE_URL="https://api.katha.life",
     COOKIE_DOMAIN=".katha.life",
+    # A deployment with no approved card template is still safe to boot —
+    # the free-form path works in sandbox — so the safe baseline leaves
+    # both unset and the pairing is asserted separately below.
+    TWILIO_TEMPLATE_MEMORY_CARD="",
+    TWILIO_TEMPLATE_MEDIA_HOST="",
 )
 
 
@@ -136,4 +141,21 @@ def test_env_example_documents_every_production_critical_setting():
     missing = sorted(name for name in _SAFE_KWARGS if name not in documented)
     assert not missing, (
         f".env.example is missing production-critical settings: {missing}"
+    )
+
+
+def test_a_card_template_without_its_media_host_raises_in_production():
+    """The template builds its media URL as https://<host>/{{1}}. With the
+    host unset the adapter cannot assemble or check that URL, so every
+    card would fail at Meta's fetcher with nothing in our logs."""
+    with pytest.raises(RuntimeError, match="TWILIO_TEMPLATE_MEDIA_HOST"):
+        validate_production_config(_settings(TWILIO_TEMPLATE_MEMORY_CARD="HXabc"))
+
+
+def test_a_card_template_with_its_media_host_is_fine():
+    validate_production_config(
+        _settings(
+            TWILIO_TEMPLATE_MEMORY_CARD="HXabc",
+            TWILIO_TEMPLATE_MEDIA_HOST="katha-media.s3.ap-south-1.amazonaws.com",
+        )
     )
