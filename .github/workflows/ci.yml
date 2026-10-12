@@ -63,8 +63,29 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
+      # libraqm is what shapes Indic text (HarfBuzz + FriBidi). Pillow
+      # links it at BUILD time, so the wheel on PyPI does not have it and
+      # installing the library alone changes nothing — hence --no-binary
+      # below, matching backend/Dockerfile. Without this the memory-card
+      # shaping tests skip, and a card that renders Malayalam as tofu
+      # boxes would pass CI green.
+      - name: Install libraqm (Pillow complex text layout)
+        run: >
+          sudo apt-get install -y -qq
+          libraqm-dev libfreetype6-dev libharfbuzz-dev libfribidi-dev
+          libjpeg-dev zlib1g-dev
+
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install --no-binary Pillow -r requirements.txt
+
+      # A skipped shaping test is indistinguishable from a passing one in
+      # the summary line, and the whole failure being fixed here was
+      # invisible-by-default. Fail the job instead.
+      - name: Verify Pillow has libraqm
+        run: >
+          python -c "from PIL import features;
+          assert features.check('raqm'),
+          'Pillow built without libraqm — the card shaping tests would skip'"
 
       - name: Lint
         run: ruff check . && ruff format --check .
