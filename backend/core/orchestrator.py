@@ -338,6 +338,18 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
     no usable quote or no family_whatsapp_number on file — not every session
     produces a card-worthy quote.
     """
+    # One card per session. Both close paths can in principle reach this
+    # for the same session — the extraction-triggered close races the stale
+    # sweep — and the family should never get the same memory twice.
+    existing = await db.execute(
+        select(MemoryCard.id).where(MemoryCard.session_id == uuid.UUID(session_id))
+    )
+    if existing.scalar_one_or_none() is not None:
+        logger.info(
+            "Session %s already has a memory card — not making another", session_id
+        )
+        return
+
     user_profile = await get_user_profile(user_id, db)
     if user_profile is None:
         logger.warning("No user_profile found for %s — skipping memory card", user_id)
@@ -408,16 +420,44 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
     logger.info("Memory card delivered for session %s: %s", session_id, message_sid)
 
 
+async def produce_session_outputs(session_id: str, user_id: str, db) -> None:
+    """
+    Everything a finished session owes the family: entity extraction over
+    the whole transcript, then the memory card.
+
+    Shared by both ways a session can end. A conversation that simply
+    stops — the normal way people end a chat — used to reach none of this,
+    because the stale sweep only flipped a status column. PRD §7.3 promises
+    a card after each session and Risk V1 makes that the headline
+    mitigation for the P0 engagement risk, so "she talked for twenty
+    minutes and never said goodbye" cannot be the case that silently gets
+    nothing.
+
+    Each half is wrapped separately: a failed entity extraction must not
+    cost the card, and neither can raise into a caller that has already
+    done the thing it was called for.
+    """
+    try:
+        await run_post_session(session_id, user_id, db)
+    except Exception:
+        logger.exception("Post-session processing failed for session %s", session_id)
+
+    try:
+        await _generate_and_deliver_memory_card(session_id, user_id, db)
+    except Exception:
+        logger.exception(
+            "Memory card generation/delivery failed for session %s", session_id
+        )
+
+
 async def close_and_process_session(
     session_id: str,
     db,
 ) -> None:
     """
-    Called when a session ends. This is the single entry point for session
-    close — marks the session completed, runs post-session entity
-    extraction, then generates and delivers a memory card. Triggered from
-    run_extraction_for_turn, since that's what learns
-    session_end_suggested/goal_met.
+    Called when a session ends cleanly. Marks it completed, then produces
+    the session's outputs. Triggered from run_extraction_for_turn, since
+    that is what learns session_end_suggested/goal_met.
     """
     try:
         state = await session_manager.get_session(session_id, db)
@@ -429,18 +469,38 @@ async def close_and_process_session(
             else "manual"
         )
         await session_manager.close_session(session_id, ended_reason, db)
-        await run_post_session(session_id, state.user_id, db)
-        logger.info("Session %s closed and processed", session_id)
+        logger.info("Session %s closed", session_id)
     except Exception:
         logger.exception("close_and_process_session failed for session %s", session_id)
         return
 
-    try:
-        await _generate_and_deliver_memory_card(session_id, state.user_id, db)
-    except Exception:
-        logger.exception(
-            "Memory card generation/delivery failed for session %s", session_id
+    await produce_session_outputs(session_id, state.user_id, db)
+
+
+async def process_abandoned_sessions(
+    abandoned: list[session_manager.AbandonedSession], db
+) -> int:
+    """
+    Produce outputs for sessions the stale sweep just abandoned. Returns
+    how many were processed.
+
+    A session with no exchanges is skipped: Katha opened it, nobody
+    replied, and there is no conversation to make a card from. Those are
+    the only truly empty ones — exchange_count is incremented only after a
+    turn fully succeeds.
+    """
+    processed = 0
+    for session in abandoned:
+        if session.exchange_count == 0:
+            continue
+        logger.info(
+            "Producing outputs for abandoned session %s (%d exchange(s))",
+            session.session_id,
+            session.exchange_count,
         )
+        await produce_session_outputs(session.session_id, session.user_id, db)
+        processed += 1
+    return processed
 
 
 async def _persist_turn(

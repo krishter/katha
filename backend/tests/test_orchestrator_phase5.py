@@ -46,9 +46,15 @@ def _make_profile(family_number="+919876543210"):
     return profile
 
 
-def _make_db():
+def _make_db(existing_card_id=None):
     db = AsyncMock()
     db.add = MagicMock()  # real SQLAlchemy .add() is sync, not a coroutine
+    # The one-card-per-session guard queries memory_cards first. A bare
+    # AsyncMock would answer that with a truthy mock, i.e. "this session
+    # already has a card", and silently skip everything under test.
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = existing_card_id
+    db.execute = AsyncMock(return_value=result)
     return db
 
 
@@ -190,3 +196,17 @@ async def test_close_and_process_session_does_not_generate_card_when_extraction_
         await close_and_process_session(_SESSION_ID, db)
 
     mock_generate_card.assert_not_called()
+
+
+async def test_a_second_card_is_not_made_for_the_same_session():
+    """Both close paths can reach this for one session — the
+    extraction-triggered close races the stale sweep — and the family must
+    never get the same memory twice."""
+    db = _make_db(existing_card_id=uuid.uuid4())
+    profile = _make_profile()
+
+    with _patched(profile, _CARD_RESULT) as (mock_whatsapp, mock_save):
+        await close_and_process_session(_SESSION_ID, db)
+
+    mock_whatsapp.send_image.assert_not_called()
+    mock_save.assert_not_called()
