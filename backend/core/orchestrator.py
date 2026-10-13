@@ -5,7 +5,6 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import BackgroundTasks
@@ -14,6 +13,7 @@ from sqlalchemy import select
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
+from config import settings
 from core import conversation_policy, session_manager
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
@@ -27,6 +27,7 @@ from models.crisis_event import CrisisEvent
 from models.memory_card import MemoryCard
 from models.turn import Turn
 from models.user_profile import UserProfileModel
+from prompts.domains import get_domain
 from prompts.system_prompt import (
     PriorContext,
     UserProfile,
@@ -318,11 +319,36 @@ async def save_memory_card(
         verbatim_quote=card_result.verbatim_quote,
         domain=card_result.domain,
         image_s3_key=s3_key,
-        delivered_at=datetime.now(timezone.utc) if message_sid else None,
+        # Not delivered_at. Twilio returning a SID means Twilio accepted
+        # the message, which for WhatsApp says nothing about whether it
+        # arrived — one outside the 24-hour window is accepted, given a
+        # SID, then rejected by Meta asynchronously. delivered_at is set
+        # by the status callback (core/delivery.py) and only for a status
+        # that means the handset got it.
+        delivery_status="queued" if message_sid else None,
         twilio_message_sid=message_sid,
     )
     db.add(card)
     await db.commit()
+
+
+def _domain_label(domain_id: str) -> str:
+    """
+    The chapter name a person would recognise ("Childhood & Home"), not
+    the internal id ("childhood").
+
+    The template reads "...a memory from the chapter \"{{3}}\"", so this
+    is a sentence the family reads. Falls back to the raw id rather than
+    raising: an unknown domain string should cost a slightly ugly word in
+    one message, not the whole card.
+    """
+    try:
+        return get_domain(domain_id).name
+    except (ValueError, KeyError):
+        logger.warning(
+            "Unknown domain %r on a memory card — using the raw id", domain_id
+        )
+        return domain_id
 
 
 async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -> None:
@@ -332,6 +358,18 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
     no usable quote or no family_whatsapp_number on file — not every session
     produces a card-worthy quote.
     """
+    # One card per session. Both close paths can in principle reach this
+    # for the same session — the extraction-triggered close races the stale
+    # sweep — and the family should never get the same memory twice.
+    existing = await db.execute(
+        select(MemoryCard.id).where(MemoryCard.session_id == uuid.UUID(session_id))
+    )
+    if existing.scalar_one_or_none() is not None:
+        logger.info(
+            "Session %s already has a memory card — not making another", session_id
+        )
+        return
+
     user_profile = await get_user_profile(user_id, db)
     if user_profile is None:
         logger.warning("No user_profile found for %s — skipping memory card", user_id)
@@ -359,12 +397,37 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
 
     caption = f"A memory from today's conversation with {user_profile.name} \U0001f338"
     whatsapp = get_whatsapp_adapter()
+
+    # The adult child never messages Katha's number — they use the web
+    # dashboard — so no 24-hour customer-service window is ever open for
+    # them and a free-form media message is rejected by Meta with 63016.
+    # The approved template is the only delivery path that works.
+    #
+    # Variable mapping, which the registered template must match:
+    #   {{1}} the presigned object's key and query string; the template
+    #         supplies the host (see TWILIO_TEMPLATE_MEDIA_HOST)
+    #   {{2}} the parent's name
+    #   {{3}} the life chapter, as a person would say it
+    template_sid = settings.TWILIO_TEMPLATE_MEMORY_CARD
+    if not template_sid:
+        logger.warning(
+            "TWILIO_TEMPLATE_MEMORY_CARD is unset — sending the card free-form, "
+            "which Meta rejects (63016) unless %s has messaged us in the last "
+            "24 hours",
+            user_profile.family_whatsapp_number,
+        )
+
     # Hand over the key just uploaded rather than the bytes — the adapter
     # presigns it instead of uploading a second, untracked copy (S2.4b).
     message_sid = await whatsapp.send_image(
         to_number=user_profile.family_whatsapp_number,
         s3_key=s3_key,
         caption=caption,
+        template_sid=template_sid or None,
+        template_variables={
+            "2": user_profile.name,
+            "3": _domain_label(card_result.domain),
+        },
     )
 
     await save_memory_card(
@@ -378,16 +441,44 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
     logger.info("Memory card delivered for session %s: %s", session_id, message_sid)
 
 
+async def produce_session_outputs(session_id: str, user_id: str, db) -> None:
+    """
+    Everything a finished session owes the family: entity extraction over
+    the whole transcript, then the memory card.
+
+    Shared by both ways a session can end. A conversation that simply
+    stops — the normal way people end a chat — used to reach none of this,
+    because the stale sweep only flipped a status column. PRD §7.3 promises
+    a card after each session and Risk V1 makes that the headline
+    mitigation for the P0 engagement risk, so "she talked for twenty
+    minutes and never said goodbye" cannot be the case that silently gets
+    nothing.
+
+    Each half is wrapped separately: a failed entity extraction must not
+    cost the card, and neither can raise into a caller that has already
+    done the thing it was called for.
+    """
+    try:
+        await run_post_session(session_id, user_id, db)
+    except Exception:
+        logger.exception("Post-session processing failed for session %s", session_id)
+
+    try:
+        await _generate_and_deliver_memory_card(session_id, user_id, db)
+    except Exception:
+        logger.exception(
+            "Memory card generation/delivery failed for session %s", session_id
+        )
+
+
 async def close_and_process_session(
     session_id: str,
     db,
 ) -> None:
     """
-    Called when a session ends. This is the single entry point for session
-    close — marks the session completed, runs post-session entity
-    extraction, then generates and delivers a memory card. Triggered from
-    run_extraction_for_turn, since that's what learns
-    session_end_suggested/goal_met.
+    Called when a session ends cleanly. Marks it completed, then produces
+    the session's outputs. Triggered from run_extraction_for_turn, since
+    that is what learns session_end_suggested/goal_met.
     """
     try:
         state = await session_manager.get_session(session_id, db)
@@ -399,18 +490,38 @@ async def close_and_process_session(
             else "manual"
         )
         await session_manager.close_session(session_id, ended_reason, db)
-        await run_post_session(session_id, state.user_id, db)
-        logger.info("Session %s closed and processed", session_id)
+        logger.info("Session %s closed", session_id)
     except Exception:
         logger.exception("close_and_process_session failed for session %s", session_id)
         return
 
-    try:
-        await _generate_and_deliver_memory_card(session_id, state.user_id, db)
-    except Exception:
-        logger.exception(
-            "Memory card generation/delivery failed for session %s", session_id
+    await produce_session_outputs(session_id, state.user_id, db)
+
+
+async def process_abandoned_sessions(
+    abandoned: list[session_manager.AbandonedSession], db
+) -> int:
+    """
+    Produce outputs for sessions the stale sweep just abandoned. Returns
+    how many were processed.
+
+    A session with no exchanges is skipped: Katha opened it, nobody
+    replied, and there is no conversation to make a card from. Those are
+    the only truly empty ones — exchange_count is incremented only after a
+    turn fully succeeds.
+    """
+    processed = 0
+    for session in abandoned:
+        if session.exchange_count == 0:
+            continue
+        logger.info(
+            "Producing outputs for abandoned session %s (%d exchange(s))",
+            session.session_id,
+            session.exchange_count,
         )
+        await produce_session_outputs(session.session_id, session.user_id, db)
+        processed += 1
+    return processed
 
 
 async def _persist_turn(

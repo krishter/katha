@@ -37,13 +37,23 @@ class StubWhatsAppAdapter:
         )
         return sid, s3_key
 
-    async def send_image(self, to_number: str, s3_key: str, caption: str = "") -> str:
+    async def send_image(
+        self,
+        to_number: str,
+        s3_key: str,
+        caption: str = "",
+        template_sid: str | None = None,
+        template_variables: dict | None = None,
+        media_variable: str = "1",
+    ) -> str:
         sid = self._fake_sid()
         logger.info(
-            "[STUB] send_image to=%s key=%s caption=%r sid=%s",
+            "[STUB] send_image to=%s key=%s caption=%r template=%s vars=%s sid=%s",
             to_number,
             s3_key,
             caption[:80],
+            template_sid,
+            template_variables,
             sid,
         )
         return sid

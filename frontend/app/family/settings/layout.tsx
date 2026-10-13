@@ -6,13 +6,18 @@ import { usePathname } from "next/navigation";
 /**
  * Settings shell.
  *
- * Sprint 1 ships Privacy & Data only. Conversation schedule, language and
- * pause (D1/D2, closing F-06) are real gaps but not compliance blockers,
- * so the section list below is deliberately built to take a second entry
- * without restructuring — add to SECTIONS and create the route.
+ * Sprint 1 shipped Privacy & Data only, with the section list built to
+ * take a second entry without restructuring. Storyteller is that entry.
+ * Conversation schedule, language and pause (D1/D2, closing F-06) are
+ * still gaps and go here the same way.
  */
 
 const SECTIONS = [
+  {
+    href: "/family/settings/storyteller",
+    label: "Storyteller",
+    description: "How Katha speaks to them",
+  },
   {
     href: "/family/settings/privacy",
     label: "Privacy & Data",
