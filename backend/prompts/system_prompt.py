@@ -41,6 +41,10 @@ class UserProfile:
     name: str
     preferred_language: str  # BCP-47
     onboarding_context: str
+    # "she/her", "he/him", "they/them", or whatever the family wrote.
+    # Empty means not stated — see _layer1_persona, which then tells the
+    # model to avoid gendered forms rather than infer them.
+    pronouns: str = ""
 
 
 @dataclass
@@ -62,6 +66,48 @@ def _language_name(bcp47: str) -> str:
     return _LANGUAGE_NAMES.get(bcp47, bcp47)
 
 
+def _pronoun_line(pronouns: str) -> str:
+    """
+    How to refer to the storyteller — in Layer 1, not Layer 3.
+
+    Layer 3 is conditional: it renders the family's onboarding notes only
+    while nothing else is known, so anything about the person that lived
+    there survived exactly one turn. Pronouns cannot be conditional on how
+    much Katha has learned, so they belong in the persona, which is
+    rendered on every turn of every session.
+
+    The empty case matters as much as the stated one, and is weaker than
+    it reads. Measured on Hindi at session 7 with a transcript carrying no
+    gender marking of its own: with "she/her" the reply was feminine 5/5
+    and with "he/him" masculine 5/5, never the opposite — the stated path
+    is solid. With nothing recorded it still gender-marked the listener,
+    4 feminine and 1 masculine across 5 runs.
+
+    That is a limit of the language more than of the instruction. Hindi
+    agrees the verb with the person addressed — "aap gaye the" against
+    "aap gayi thin" — so a great many ordinary sentences cannot decline to
+    choose, and the model chooses differently run to run. The instruction
+    below reduces how often it commits; it cannot make Hindi genderless.
+
+    So an unrecorded value is a degraded fallback, not a safe default, and
+    the real mitigation is upstream: the onboarding wizard asks for this
+    explicitly rather than letting it be skipped by inattention. Existing
+    profiles predate the field and are all empty.
+    """
+    if pronouns.strip():
+        return (
+            f"\nTheir pronouns are {pronouns.strip()} — use them, including "
+            "the matching gendered verb and honorific forms in languages "
+            "that mark gender."
+        )
+    return (
+        "\nTheir pronouns are not recorded. Do not guess, and never infer "
+        'them from their name. Address them as "you", use their name, and '
+        "where a language forces a gendered verb or honorific, choose the "
+        "neutral or plural-respectful form."
+    )
+
+
 def _layer1_persona(user_profile: UserProfile) -> str:
     lang = _language_name(user_profile.preferred_language)
     return f"""LAYER 1 — PERSONA & TONE
@@ -69,7 +115,8 @@ You are Katha, a warm and curious companion for {user_profile.name}. \
 You are patient, unhurried, genuinely interested, and never judgmental. \
 You speak in a mix of English and {lang} as feels natural. \
 You have the manner of a respectful younger person listening to an elder \
-— curious, deferential, and deeply engaged."""
+— curious, deferential, and deeply engaged.\
+{_pronoun_line(user_profile.pronouns)}"""
 
 
 def _layer2_therapeutic() -> str:
@@ -131,8 +178,7 @@ def _layer3_life_context(
     if not has_prior_context:
         context_block = (
             f"This is an early session. You don't yet know much about "
-            f"{user_profile.name} beyond what their family shared: "
-            f"{user_profile.onboarding_context or 'No context provided.'}"
+            f"{user_profile.name} beyond what their family shared below."
         )
     elif not prior_context.facts:
         context_block = (
@@ -145,6 +191,21 @@ def _layer3_life_context(
         )
         context_block = (
             f"What you already know about {user_profile.name}:\n{facts_formatted}"
+        )
+
+    # What the family wrote at onboarding, on every turn.
+    #
+    # This used to appear only in the branch above — i.e. only while
+    # nothing else was known — so the moment the first fact or open thread
+    # was extracted it vanished from the prompt for good. Everything the
+    # family took the trouble to tell us about their parent survived
+    # roughly one turn. It is durable background, not a placeholder for
+    # the absence of facts, so it is rendered unconditionally.
+    family_block = ""
+    if user_profile.onboarding_context:
+        family_block = (
+            f"\nWhat {user_profile.name}'s family told us at the start:\n"
+            f"  {user_profile.onboarding_context}"
         )
 
     threads = ""
@@ -191,7 +252,7 @@ def _layer3_life_context(
         entry_line = f"\nDomain entry question: {domain.entry_prompt}"
 
     return f"""LAYER 3 — LIFE CONTEXT
-{context_block}{threads}{significant_block}
+{context_block}{family_block}{threads}{significant_block}
 
 Today's focus domain: {domain.name}{entry_line}"""
 

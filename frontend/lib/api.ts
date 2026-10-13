@@ -97,6 +97,9 @@ export interface OnboardingProfilePayload {
   family_whatsapp_number: string;
   preferred_language: string;
   session_time: string;
+  // "" means not stated. The backend stores that as-is and the prompt then
+  // avoids gendered wording rather than inferring any.
+  pronouns: string;
   onboarding_context: string;
 }
 

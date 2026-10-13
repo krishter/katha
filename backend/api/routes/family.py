@@ -340,6 +340,9 @@ async def export_data(
         "profile": {
             "name": profile.name if profile else None,
             "preferred_language": profile.preferred_language if profile else None,
+            # Personal data about the storyteller, so it belongs in their
+            # export (PRD 13.1 point 1).
+            "pronouns": profile.pronouns if profile else None,
             "onboarding_context": profile.onboarding_context if profile else None,
         },
         "sessions": [
