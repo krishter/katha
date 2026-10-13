@@ -342,11 +342,25 @@ async def get_or_create_consent_session(
     return row
 
 
-async def abandon_stale_sessions(db: AsyncSession) -> int:
+@dataclass(frozen=True)
+class AbandonedSession:
+    session_id: str
+    user_id: str
+    exchange_count: int
+
+
+async def abandon_stale_sessions(db: AsyncSession) -> list[AbandonedSession]:
     """
     Mark any session that has been 'active' for longer than the stale
     threshold as 'abandoned', so it stops blocking the next day's
-    conversation. Returns the number of sessions abandoned.
+    conversation.
+
+    Returns what was abandoned, rather than how many. Most conversations
+    end this way — someone puts the phone down, which is how people end a
+    chat — so this is not an error path, it is the ordinary one, and the
+    caller owes those sessions the same post-session work a cleanly closed
+    one gets (PRD §7.3: a memory card after each session). Returning only
+    a count is what made that impossible and left the sweep a dead end.
     """
     cutoff = datetime.now(timezone.utc) - _STALE_SESSION_AGE
     result = await db.execute(
@@ -358,11 +372,16 @@ async def abandon_stale_sessions(db: AsyncSession) -> int:
             ended_at=datetime.now(timezone.utc),
             ended_reason="timeout",
         )
+        .returning(Session.id, Session.user_id, Session.exchange_count)
     )
+    rows = result.all()
     await db.commit()
-    if result.rowcount:
-        logger.info("Abandoned %d stale session(s)", result.rowcount)
-    return result.rowcount
+    if rows:
+        logger.info("Abandoned %d stale session(s)", len(rows))
+    return [
+        AbandonedSession(session_id=str(row[0]), user_id=row[1], exchange_count=row[2])
+        for row in rows
+    ]
 
 
 async def get_active_session_by_number(
