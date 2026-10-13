@@ -1,0 +1,96 @@
+{
+  "id": "TC-12",
+  "description": "One incident told across 4 turns with an unrelated detour in turn 2.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "We were living in Kumbakonam then, near the river. I must have been about ten years old. It was a small house, my father had built it himself.",
+          "response_text": "Where did you grow up?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "My mother made the best rasam. Even now when I smell curry leaves I think of her kitchen. She would never tell anyone the recipe.",
+          "response_text": "What do you remember about your mother?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-3",
+          "session_number": 1,
+          "turn_number": 3,
+          "transcript": "That year the water came into the house in the night. We woke up and the water was already at the step. Everyone was shouting.",
+          "response_text": "Tell me more about the house near the river.",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-4",
+          "session_number": 1,
+          "turn_number": 4,
+          "transcript": "My father carried my grandmother on his back all the way to the temple steps. She could not walk, you see. After that he never let us build anything on the low side again.",
+          "response_text": "What happened then?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "Describes the house in Kumbakonam near the river.",
+          "who": [],
+          "when_approx": "around age ten",
+          "where_approx": "Kumbakonam",
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "childhood",
+          "narrative": "Describes his mother's cooking and her kitchen.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-3",
+          "turn_id": "t1-3",
+          "domain": "childhood",
+          "narrative": "The river flooded and water entered the house at night.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-4",
+          "turn_id": "t1-4",
+          "domain": "childhood",
+          "narrative": "His father carried his grandmother to the temple steps.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [],
+  "expect": {
+    "incidents": 1,
+    "stories": 1,
+    "detour_atom_excluded": "a-2",
+    "arc_required": [
+      "setting",
+      "event",
+      "turn"
+    ]
+  }
+}

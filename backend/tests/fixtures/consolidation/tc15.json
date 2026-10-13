@@ -1,0 +1,65 @@
+{
+  "id": "TC-15",
+  "description": "A real incident with setting and event, but the session ends before the peak; must stay a thread with `turn` missing.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "We were living in Palakkad in those days, in the quarters behind the school where my father taught. I must have been about fourteen.",
+          "response_text": "Where were you living then?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "One night the house across from ours caught fire. The tailor's family lived there.",
+          "response_text": "What do you remember from that time?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-3",
+          "session_number": 1,
+          "turn_number": 3,
+          "transcript": "I am a little tired now. Another day I will tell you.",
+          "response_text": "What happened next?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "Lived in school quarters in Palakkad, aged about fourteen.",
+          "who": [],
+          "when_approx": "around age fourteen",
+          "where_approx": "Palakkad",
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "childhood",
+          "narrative": "The house across the road, where the tailor's family lived, caught fire one night.",
+          "who": [
+            "tailor's family"
+          ],
+          "when_approx": null,
+          "where_approx": "Palakkad",
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [],
+  "expect": {
+    "stories": 0,
+    "threads": 1,
+    "missing_includes": "turn"
+  }
+}

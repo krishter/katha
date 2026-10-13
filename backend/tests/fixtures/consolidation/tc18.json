@@ -1,0 +1,81 @@
+{
+  "id": "TC-18",
+  "description": "A hedged date must not be tidied into a confident one.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "turns": [
+        {
+          "id": "t1-1",
+          "session_number": 1,
+          "turn_number": 1,
+          "transcript": "We moved to Madras in 1962, or maybe it was '63, I am not fully sure now. We were living in a rented portion in Mylapore.",
+          "response_text": "When did you move?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-2",
+          "session_number": 1,
+          "turn_number": 2,
+          "transcript": "The week we arrived there was a big storm and the roof tiles came off.",
+          "response_text": "What do you remember of arriving?",
+          "detected_language": "en-IN"
+        },
+        {
+          "id": "t1-3",
+          "session_number": 1,
+          "turn_number": 3,
+          "transcript": "My father climbed up himself in the rain and tied a tarpaulin over it. He would not wait for anyone to come and help.",
+          "response_text": "What did you do?",
+          "detected_language": "en-IN"
+        }
+      ],
+      "atoms": [
+        {
+          "id": "a-1",
+          "turn_id": "t1-1",
+          "domain": "childhood",
+          "narrative": "Moved to Madras around 1962 or 1963, living in Mylapore.",
+          "who": [],
+          "when_approx": "1962 or 1963",
+          "where_approx": "Mylapore, Madras",
+          "completeness_score": 3
+        },
+        {
+          "id": "a-2",
+          "turn_id": "t1-2",
+          "domain": "childhood",
+          "narrative": "A storm took the roof tiles off the week they arrived.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        },
+        {
+          "id": "a-3",
+          "turn_id": "t1-3",
+          "domain": "childhood",
+          "narrative": "Father climbed up in the rain and tied a tarpaulin.",
+          "who": [],
+          "when_approx": null,
+          "where_approx": null,
+          "completeness_score": 3
+        }
+      ]
+    }
+  ],
+  "significant_people": [],
+  "expect": {
+    "stories": 1,
+    "hedge_markers": [
+      "or maybe",
+      "not fully sure",
+      "'63",
+      "1963"
+    ],
+    "must_not_contain_exact": [
+      "In 1962, we moved",
+      "In 1962 we moved"
+    ]
+  }
+}
