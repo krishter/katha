@@ -25,6 +25,17 @@ class UserProfileModel(Base):
     preferred_language: Mapped[str] = mapped_column(
         String, nullable=False, default="hi-IN"
     )
+    # How the storyteller is referred to, e.g. "she/her". Free text rather
+    # than an enum: the wizard offers the three common sets and an "other"
+    # box, and a person's own words about themselves should not be forced
+    # into a closed list.
+    #
+    # Empty means NOT STATED, which is different from unknown-and-guessable.
+    # Layer 1 is explicit that an empty value means avoid gendered forms
+    # rather than infer from the name — guessing from a name is exactly the
+    # mistake that misgenders someone, and the name is the one signal that
+    # looks reliable and is not.
+    pronouns: Mapped[str] = mapped_column(String, nullable=False, server_default="")
     onboarding_context: Mapped[str] = mapped_column(Text, nullable=False, default="")
     family_whatsapp_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     scheduled_time: Mapped[time] = mapped_column(Time, nullable=False)

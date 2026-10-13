@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_tts
 from adapters.whatsapp_stub import get_whatsapp_adapter
-from core import freemium, parent_consent, session_manager
+from core import freemium, orchestrator, parent_consent, session_manager
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
 from prompts.domains import get_domain
@@ -40,7 +40,11 @@ async def initiate_sessions(db_session_factory) -> None:
     async with db_session_factory() as db:
         # 0. A session left active with no reply must never block tomorrow's
         # conversation — sweep it to 'abandoned' before looking up who's due.
-        await session_manager.abandon_stale_sessions(db)
+        # What it swept is processed at the end of this run, not here: those
+        # sessions owe an entity-extraction pass and a memory card, and
+        # doing that work before the due-user lookup would push a slow
+        # extraction into the next cron minute.
+        abandoned = await session_manager.abandon_stale_sessions(db)
 
         # 1. Find users scheduled for this minute
         result = await db.execute(
@@ -149,6 +153,22 @@ async def initiate_sessions(db_session_factory) -> None:
 
         # 3. 30-minute no-response follow-up
         await _send_followups(db, whatsapp)
+
+        # 4. Outputs for the sessions swept at step 0. A conversation that
+        # simply stopped is still a conversation the family is owed a card
+        # for (PRD §7.3); before this the sweep was a dead end and those
+        # sessions produced nothing at all. Wrapped because this runs every
+        # minute and must never take the scheduler down.
+        if abandoned:
+            try:
+                processed = await orchestrator.process_abandoned_sessions(abandoned, db)
+                logger.info(
+                    "Scheduler: produced outputs for %d of %d abandoned session(s)",
+                    processed,
+                    len(abandoned),
+                )
+            except Exception:
+                logger.exception("Scheduler: failed processing abandoned sessions")
 
 
 async def _send_followups(db: AsyncSession, whatsapp) -> None:

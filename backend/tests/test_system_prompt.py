@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from core.session_manager import SessionState
 from prompts.system_prompt import (
     PriorContext,
     UserProfile,
@@ -55,9 +56,25 @@ def test_prompt_contains_icall_crisis_number():
     assert "9152987821" in prompt
 
 
-def test_prompt_length_under_4500_chars():
+def test_prompt_length_stays_bounded():
+    """
+    A tripwire against unbounded prompt growth, not a limit derived from
+    any model constraint — the fixture below is a fixed yardstick, and a
+    real prompt with a long family note and many facts runs longer.
+
+    Raised from 4500 to 5000 when pronouns moved into Layer 1 and the
+    family's onboarding note stopped being dropped after the first turn.
+    Both are instructions the prompt is now wrong without: the first stops
+    Katha guessing an elderly woman's gender from her name, and the second
+    is the only reason anything the family wrote survives past turn one.
+    Compressing them further would have been trimming the fix to fit the
+    measurement.
+
+    Raise it again only for something equally load-bearing, and say what
+    in here.
+    """
     prompt = _build()
-    assert len(prompt) < 4500, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 5000, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():
@@ -572,3 +589,98 @@ def test_extraction_does_not_offer_bare_mention_as_a_significance_signal():
     lowered = prompt.lower()
     assert "not by itself a signal" in lowered
     assert "most turns should add nobody" in lowered
+
+
+# ── pronouns (Layer 1) ───────────────────────────────────────────────────────
+
+
+def _profile(
+    pronouns: str = "", context: str = "Amma. Grew up in Thrissur."
+) -> UserProfile:
+    return UserProfile(
+        name="Lakshmi",
+        preferred_language="ml-IN",
+        onboarding_context=context,
+        pronouns=pronouns,
+    )
+
+
+def _pronoun_state(session_number: int, exchange_count: int) -> SessionState:
+    return SessionState(
+        session_id="s",
+        user_id="u",
+        session_number=session_number,
+        domain="childhood",
+        exchange_count=exchange_count,
+        energy_signal="high",
+        goal_met=False,
+        session_end_suggested=False,
+    )
+
+
+_LATER_CONTEXT = PriorContext(
+    facts={"birth_place": "Thrissur"}, open_threads=["the name of her school"]
+)
+
+
+def test_stated_pronouns_reach_the_prompt():
+    prompt = build_system_prompt(
+        _profile("she/her"), _pronoun_state(1, 0), PriorContext()
+    )
+    assert "she/her" in prompt
+
+
+def test_pronouns_survive_once_facts_exist():
+    """The actual bug. Pronouns written into the family's free-text note
+    reached the model for exactly one turn, because Layer 3 renders that
+    note only while nothing else is known. The moment the first fact or
+    open thread was extracted it vanished for good, and Katha was left
+    inferring gender — which it got wrong, every session, for a real
+    person telling it her life story."""
+    for state in (_pronoun_state(1, 2), _pronoun_state(7, 3), _pronoun_state(40, 1)):
+        prompt = build_system_prompt(_profile("she/her"), state, _LATER_CONTEXT)
+        assert "she/her" in prompt, f"lost by session {state.session_number}"
+
+
+def test_pronouns_are_in_layer_1_not_layer_3():
+    """Layer 3 is conditional on what Katha has learned; pronouns must not
+    be. Keeping them in the persona is what makes the test above hold."""
+    prompt = build_system_prompt(
+        _profile("she/her"), _pronoun_state(7, 3), _LATER_CONTEXT
+    )
+    layer1 = prompt.split("LAYER 2")[0]
+    assert "she/her" in layer1
+
+
+def test_unstated_pronouns_tell_the_model_not_to_guess():
+    """A blank is not an invitation to infer. The name is the signal the
+    model would otherwise reach for, and it is the wrong one."""
+    prompt = build_system_prompt(_profile(""), _pronoun_state(3, 2), _LATER_CONTEXT)
+    lowered = prompt.lower()
+    assert "not recorded" in lowered
+    assert "never infer" in lowered
+    assert "their name" in lowered
+
+
+def test_free_text_pronouns_are_passed_through_verbatim():
+    assert "she/they" in build_system_prompt(
+        _profile("she/they"), _pronoun_state(1, 0), PriorContext()
+    )
+
+
+# ── the family's note (Layer 3) ──────────────────────────────────────────────
+
+
+def test_the_family_note_survives_once_facts_exist():
+    """Same defect, quieter half: everything the family took the trouble to
+    write about their parent also lasted one turn."""
+    for state in (_pronoun_state(1, 0), _pronoun_state(1, 2), _pronoun_state(12, 4)):
+        prompt = build_system_prompt(_profile("she/her"), state, _LATER_CONTEXT)
+        assert "Thrissur" in prompt, f"lost by session {state.session_number}"
+
+
+def test_no_family_block_when_nothing_was_provided():
+    prompt = build_system_prompt(
+        _profile("she/her", context=""), _pronoun_state(5, 2), _LATER_CONTEXT
+    )
+    assert "family told us" not in prompt

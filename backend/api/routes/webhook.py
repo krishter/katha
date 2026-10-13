@@ -18,6 +18,7 @@ from adapters import sarvam_stt
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
 from core import orchestrator, parent_consent, session_manager
+from core.delivery import record_card_delivery
 from core.fallback_audio import FailureStage, get_fallback_text
 from models.db import get_db
 from models.user_profile import UserProfileModel
@@ -294,11 +295,15 @@ async def _load_user_profile_for_session(
             name="Friend",
             preferred_language="hi-IN",
             onboarding_context="",
+            # No row, so nothing is known — Layer 1 then tells the model
+            # not to guess rather than letting it infer from the name.
+            pronouns="",
         )
     return UserProfile(
         name=row.name,
         preferred_language=row.preferred_language,
         onboarding_context=row.onboarding_context or "",
+        pronouns=row.pronouns or "",
     )
 
 
@@ -346,6 +351,81 @@ async def _deliver_turn_result(
             exc_info=True,
         )
         await _safe_send_text(whatsapp, to_number, result.response_text, stage="send")
+
+
+# Twilio's own vocabulary for what became of a message. "delivered" and
+# "read" are the only two that mean it reached the handset; "sent" only
+# means Meta accepted it from Twilio, which is precisely the distinction
+# that hid the memory-card failure.
+_DELIVERED_STATUSES = {"delivered", "read"}
+_FAILED_STATUSES = {"failed", "undelivered"}
+
+# Meta: free-form message outside the 24-hour customer-service window.
+# Called out by name because it is the expected failure for any message to
+# the family number, who never messages Katha and so never opens one.
+_OUTSIDE_WINDOW_ERROR = "63016"
+
+
+@router.post("/webhook/twilio/status")
+async def twilio_status_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    whatsapp=Depends(get_whatsapp_adapter),
+) -> Response:
+    """
+    Twilio's out-of-band report on a message we sent.
+
+    Twilio accepts a WhatsApp message and returns a SID straight away;
+    whether Meta delivered it arrives here, seconds to minutes later. With
+    no one listening, a card rejected with 63016 looked exactly like a card
+    that arrived, and memory_cards.delivered_at was stamped on acceptance —
+    so the dashboard reported delivery for messages that never left.
+
+    Always 200, like the inbound webhook: Twilio retries non-200 and there
+    is nothing a retry would fix here.
+    """
+    try:
+        form = await request.form()
+        params = dict(form)
+
+        signature = request.headers.get("X-Twilio-Signature", "")
+        url = f"{settings.PUBLIC_BASE_URL}{request.url.path}"
+        if request.url.query:
+            url = f"{url}?{request.url.query}"
+        if not whatsapp.validate_signature(url, params, signature):
+            logger.warning("Invalid Twilio signature on status callback")
+            return Response(status_code=403, content="Forbidden")
+
+        message_sid = params.get("MessageSid") or params.get("SmsSid")
+        status = (params.get("MessageStatus") or "").lower()
+        error_code = params.get("ErrorCode") or None
+
+        if not message_sid or not status:
+            return _ack()
+
+        if status in _FAILED_STATUSES:
+            # Logged at error, with the code spelled out, because this is
+            # the signal that was missing entirely. A 63016 here means the
+            # recipient has no open window and the send needed an approved
+            # template.
+            logger.error(
+                "Message %s %s (ErrorCode=%s)%s",
+                message_sid,
+                status,
+                error_code,
+                " — outside the 24-hour window; this send needed an approved template"
+                if error_code == _OUTSIDE_WINDOW_ERROR
+                else "",
+            )
+        else:
+            logger.info("Message %s -> %s", message_sid, status)
+
+        await record_card_delivery(message_sid, status, error_code, db)
+
+    except Exception:
+        logger.error("Status callback processing error", exc_info=True)
+
+    return _ack()
 
 
 @router.get("/webhook/whatsapp")

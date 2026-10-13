@@ -214,7 +214,14 @@ async def test_full_session_pilot_rehearsal(real_db):
     )
     cards = cards_result.scalars().all()
     assert len(cards) == 1
-    assert cards[0].delivered_at is not None
+    # Queued, not delivered. This used to assert delivered_at was set the
+    # moment Twilio accepted the send, which is what let every memory card
+    # be recorded as delivered while Meta was rejecting all of them with
+    # 63016. delivered_at is now written only by the status callback, and
+    # only for a status that means the handset got it.
+    assert cards[0].delivery_status == "queued"
+    assert cards[0].delivered_at is None
+    assert cards[0].twilio_message_sid
 
     # ── Session completed with ended_reason set ───────────────────────────
     session_result = await db.execute(

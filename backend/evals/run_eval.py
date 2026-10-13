@@ -96,6 +96,7 @@ def to_prompt_profile(row: UserProfileModel) -> UserProfile:
         name=row.name,
         preferred_language=row.preferred_language,
         onboarding_context=row.onboarding_context,
+        pronouns=row.pronouns or "",
     )
 
 

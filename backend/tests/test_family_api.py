@@ -352,3 +352,80 @@ def test_export_empty_account_still_returns_valid_shape(db):
     assert body["stories"] == []
     assert body["sessions"] == []
     assert body["memory_cards"] == []
+
+
+# ── PATCH /family/profile (pronouns) ─────────────────────────────────────────
+
+
+def _profile_row(pronouns: str = ""):
+    profile = MagicMock()
+    profile.pronouns = pronouns
+    return profile
+
+
+def test_pronouns_can_be_set(db):
+    """The only writable field on the family API. It has to be writable:
+    every profile created before the column existed has it empty, and an
+    empty value is a degraded fallback, not a safe default."""
+    profile = _profile_row()
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=profile))
+
+    response = client.patch("/family/profile", data={"pronouns": "she/her"})
+
+    assert response.status_code == 200
+    assert profile.pronouns == "she/her"
+    assert response.json()["pronouns"] == "she/her"
+    db.commit.assert_awaited()
+
+
+def test_pronouns_are_trimmed(db):
+    profile = _profile_row()
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=profile))
+
+    client.patch("/family/profile", data={"pronouns": "  they/them  "})
+
+    assert profile.pronouns == "they/them"
+
+
+def test_empty_pronouns_are_a_legitimate_value(db):
+    """ "Prefer not to say" is a real answer and is stored as such, not
+    rejected — a blank is a safer record than a guess."""
+    profile = _profile_row("she/her")
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=profile))
+
+    response = client.patch("/family/profile", data={"pronouns": ""})
+
+    assert response.status_code == 200
+    assert profile.pronouns == ""
+
+
+def test_overlong_pronouns_are_rejected(db):
+    """The field must not become a second notes box inside the prompt."""
+    profile = _profile_row()
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=profile))
+
+    response = client.patch("/family/profile", data={"pronouns": "x" * 200})
+
+    assert response.status_code == 422
+    db.commit.assert_not_awaited()
+
+
+def test_pronouns_update_404s_without_a_profile(db):
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=None))
+
+    response = client.patch("/family/profile", data={"pronouns": "she/her"})
+
+    assert response.status_code == 404
+
+
+def test_omitting_pronouns_entirely_also_means_prefer_not_to_say(db):
+    """An empty form value is dropped by some clients, so the field is
+    defaulted rather than required — otherwise the one answer that most
+    needs to be settable is the one that 422s."""
+    profile = _profile_row("he/him")
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=profile))
+
+    response = client.patch("/family/profile", data={})
+
+    assert response.status_code == 200
+    assert profile.pronouns == ""

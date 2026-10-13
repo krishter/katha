@@ -438,22 +438,49 @@ async def test_close_session_sets_completed_status_and_reason():
 
 
 async def test_abandon_stale_sessions_marks_old_active_sessions():
+    import uuid as _uuid
+
     from core.session_manager import abandon_stale_sessions
 
+    first, second = _uuid.uuid4(), _uuid.uuid4()
     db = AsyncMock()
     result = MagicMock()
-    result.rowcount = 2
+    result.all.return_value = [(first, "user-1", 4), (second, "user-2", 0)]
     db.execute = AsyncMock(return_value=result)
     db.commit = AsyncMock()
 
-    count = await abandon_stale_sessions(db)
+    abandoned = await abandon_stale_sessions(db)
 
-    assert count == 2
+    assert len(abandoned) == 2
     db.commit.assert_called_once()
     stmt = db.execute.call_args.args[0]
     compiled = str(stmt)
     assert "sessions" in compiled.lower()
     assert "UPDATE" in compiled.upper()
+    # RETURNING is what makes the sweep more than a dead end: the caller
+    # needs the ids to produce each session's outputs (PRD 7.3).
+    assert "RETURNING" in compiled.upper()
+
+
+async def test_abandon_stale_sessions_reports_what_it_abandoned():
+    """Not just how many. The caller owes these sessions a memory card,
+    which it cannot do from a count."""
+    import uuid as _uuid
+
+    from core.session_manager import abandon_stale_sessions
+
+    session_id = _uuid.uuid4()
+    db = AsyncMock()
+    result = MagicMock()
+    result.all.return_value = [(session_id, "user-1", 6)]
+    db.execute = AsyncMock(return_value=result)
+    db.commit = AsyncMock()
+
+    abandoned = await abandon_stale_sessions(db)
+
+    assert abandoned[0].session_id == str(session_id)
+    assert abandoned[0].user_id == "user-1"
+    assert abandoned[0].exchange_count == 6
 
 
 # ── get_active_session_by_number ──────────────────────────────────────────────
