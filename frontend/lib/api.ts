@@ -25,6 +25,9 @@ export interface Stats {
   domain_breakdown: DomainBreakdownEntry[];
   latest_card_url: string | null;
   plan: string;
+  // "" means not stated. Editable from settings because every profile
+  // created before the field existed has it empty.
+  pronouns: string;
   session_count: number;
   session_limit: number;
   onboarding_complete: boolean;
@@ -193,6 +196,13 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ email }),
+    }),
+
+  updatePronouns: (pronouns: string) =>
+    apiFetch<{ status: string; pronouns: string }>("/family/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ pronouns }),
     }),
 
   submitProfile: (payload: OnboardingProfilePayload) =>

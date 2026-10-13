@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,10 @@ from models.session import Session
 from models.story_atom import StoryAtom
 from models.user_profile import UserProfileModel
 from prompts.domains import get_domain, get_domain_sequence
+
+# Long enough for "she/her", "they/them" or a short free-text answer, short
+# enough that the field cannot become a second notes box inside the prompt.
+_MAX_PRONOUNS_LENGTH = 40
 
 router = APIRouter()
 
@@ -178,6 +182,7 @@ async def get_stats(
         # nothing they do not already hold.
         "user_id": user_id,
         "user_name": user_name,
+        "pronouns": profile.pronouns if profile else "",
         "total_sessions": total_sessions,
         "total_story_atoms": total_story_atoms,
         "total_memory_cards": total_memory_cards,
@@ -189,6 +194,49 @@ async def get_stats(
         "session_limit": FREE_SESSION_LIMIT,
         "onboarding_complete": onboarding_complete,
     }
+
+
+# Pronouns are the one piece of the parent's profile the family can change
+# after setup, and it has to be changeable: every profile created before
+# the field existed has it empty, and an empty value is a degraded
+# fallback rather than a safe default — in Hindi and similar languages the
+# verb agrees with the person addressed, so Katha ends up choosing a
+# gender anyway, inconsistently (see prompts.system_prompt._pronoun_line).
+#
+# Deliberately the only writable field here. The dashboard is read-only
+# over the archive itself (PRD 7.4), and that stays true: a Story belongs
+# to the storyteller, not to the family reading it.
+@router.patch("/family/profile")
+async def update_family_profile(
+    # Defaulted, not required. "Prefer not to say" sends an empty value,
+    # and an empty form field is dropped by some clients entirely — so a
+    # required field rejects the one answer that most needs to be settable
+    # with a 422. Omitted and empty both mean the same thing here.
+    pronouns: str = Form(default=""),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    user_id = current_user["user_id"]
+    result = await db.execute(
+        select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+    )
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    cleaned = pronouns.strip()
+    if len(cleaned) > _MAX_PRONOUNS_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"pronouns must be {_MAX_PRONOUNS_LENGTH} characters or fewer",
+        )
+
+    # An empty string is a legitimate value — "prefer not to say" — and is
+    # stored as such rather than rejected.
+    profile.pronouns = cleaned
+    db.add(profile)
+    await db.commit()
+    return {"status": "ok", "pronouns": profile.pronouns}
 
 
 @router.get("/family/stories")
