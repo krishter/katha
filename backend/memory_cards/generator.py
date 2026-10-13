@@ -9,7 +9,7 @@ from datetime import date
 from functools import lru_cache
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, features
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,23 +29,58 @@ _WORDMARK_COLOR = "#C8956C"
 
 _FONTS_DIR = __file__.rsplit("/", 1)[0] + "/fonts"
 
+
 # Katha's users speak and code-mix across Indian scripts (see PRD 2.3 / TC-06),
 # so quotes routinely contain Devanagari or Tamil text mid-sentence. A single
 # Latin-only face like base Noto Serif renders those runs as tofu boxes, which
 # would break the product's signature "see your parent's own words" moment.
 # We resolve a font per word by its dominant Unicode script and fall back to
 # the Latin face for everything else (English, digits, punctuation).
+def _noto(family: str, prefix: str = "NotoSerif") -> dict:
+    return {
+        "regular": f"{prefix}{family}-Regular.ttf",
+        "bold": f"{prefix}{family}-Bold.ttf",
+    }
+
+
+# One entry per script Katha can be spoken in. Anything missing here fell
+# through to the Latin face, which has no Indic glyphs — so a Malayalam
+# quote rendered as a row of tofu boxes while the card around it looked
+# perfect. That was eight of the twelve supported languages.
 _FONT_FILES = {
-    "latin": {"regular": "NotoSerif-Regular.ttf", "bold": "NotoSerif-Bold.ttf"},
-    "devanagari": {
-        "regular": "NotoSerifDevanagari-Regular.ttf",
-        "bold": "NotoSerifDevanagari-Bold.ttf",
-    },
-    "tamil": {
-        "regular": "NotoSerifTamil-Regular.ttf",
-        "bold": "NotoSerifTamil-Bold.ttf",
-    },
+    "latin": _noto(""),
+    "devanagari": _noto("Devanagari"),
+    "tamil": _noto("Tamil"),
+    "telugu": _noto("Telugu"),
+    "kannada": _noto("Kannada"),
+    "malayalam": _noto("Malayalam"),
+    "bengali": _noto("Bengali"),
+    "gujarati": _noto("Gujarati"),
+    "gurmukhi": _noto("Gurmukhi"),
+    "oriya": _noto("Oriya"),
+    # Urdu is set in Nastaliq, not a serif Naskh. Urdu readers expect it,
+    # and it is what Noto ships for the language.
+    "arabic": _noto("Urdu", prefix="NotoNastaliq"),
 }
+
+# Unicode blocks, in codepoint order. A table rather than an if-chain
+# because the next script to add should be one line, and because the
+# ranges are easier to check against the standard when they sit together.
+_SCRIPT_RANGES: tuple[tuple[int, int, str], ...] = (
+    (0x0600, 0x06FF, "arabic"),  # Arabic, which Urdu is written in
+    (0x0750, 0x077F, "arabic"),  # Arabic Supplement
+    (0x0900, 0x097F, "devanagari"),  # Hindi, Marathi
+    (0x0980, 0x09FF, "bengali"),
+    (0x0A00, 0x0A7F, "gurmukhi"),  # Punjabi
+    (0x0A80, 0x0AFF, "gujarati"),
+    (0x0B00, 0x0B7F, "oriya"),
+    (0x0B80, 0x0BFF, "tamil"),
+    (0x0C00, 0x0C7F, "telugu"),
+    (0x0C80, 0x0CFF, "kannada"),
+    (0x0D00, 0x0D7F, "malayalam"),
+    (0xFB50, 0xFDFF, "arabic"),  # Arabic Presentation Forms-A
+    (0xFE70, 0xFEFF, "arabic"),  # Arabic Presentation Forms-B
+)
 
 _QUOTE_FONT_SIZE_DEFAULT = 44
 _QUOTE_FONT_SIZE_LONG = 36
@@ -93,12 +128,16 @@ def _quote_text(atom: dict) -> str:
 def _script_for_char(ch: str) -> Optional[str]:
     """Return the script bucket for a character, or None if script-neutral
     (whitespace, digits, punctuation) — callers should ignore neutral chars
-    when deciding a word's dominant script."""
+    when deciding a word's dominant script.
+
+    The `isalpha()` fallback to Latin is why a missing range was invisible:
+    Malayalam letters are alphabetic, so they were confidently routed to a
+    font with no glyph for them rather than failing in any way a developer
+    would notice."""
     codepoint = ord(ch)
-    if 0x0900 <= codepoint <= 0x097F:
-        return "devanagari"
-    if 0x0B80 <= codepoint <= 0x0BFF:
-        return "tamil"
+    for start, end, script in _SCRIPT_RANGES:
+        if start <= codepoint <= end:
+            return script
     if ch.isalpha():
         return "latin"
     return None
@@ -116,10 +155,33 @@ def _script_for_word(word: str) -> str:
     return max(counts, key=lambda s: counts[s])
 
 
+# Complex text layout. Indic scripts need the font's GSUB/GPOS tables
+# applied — conjuncts formed, pre-base vowel signs moved in front of the
+# consonant they follow in memory — and Pillow only does that when it was
+# built against libraqm (HarfBuzz + FriBidi). Without it a pre-base matra
+# is drawn after its consonant, Tamil vowel signs render as dotted
+# circles, and Urdu is not reordered right-to-left at all.
+#
+# Devanagari is the trap here: Noto's i-matra glyph overhangs to the left,
+# so simple Hindi strings LOOK correct without shaping and only break on
+# conjuncts. The objective check is that "कि" renders identically to "िक"
+# — see tests/test_card_shaping.py.
+_HAS_RAQM = features.check("raqm")
+_LAYOUT = ImageFont.Layout.RAQM if _HAS_RAQM else ImageFont.Layout.BASIC
+
+if not _HAS_RAQM:
+    logger.error(
+        "Pillow has no libraqm, so Indic text on memory cards will not be "
+        "shaped: conjuncts stay unformed and vowel signs sit in the wrong "
+        "place. The production image installs it (backend/Dockerfile); a "
+        "plain `pip install Pillow` wheel does not."
+    )
+
+
 @lru_cache(maxsize=32)
 def _load_font(script: str, weight: str, size: int) -> ImageFont.FreeTypeFont:
     filename = _FONT_FILES.get(script, _FONT_FILES["latin"])[weight]
-    return ImageFont.truetype(f"{_FONTS_DIR}/{filename}", size)
+    return ImageFont.truetype(f"{_FONTS_DIR}/{filename}", size, layout_engine=_LAYOUT)
 
 
 def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
