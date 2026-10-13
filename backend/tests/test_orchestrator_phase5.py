@@ -190,3 +190,18 @@ async def test_close_and_process_session_does_not_generate_card_when_extraction_
         await close_and_process_session(_SESSION_ID, db)
 
     mock_generate_card.assert_not_called()
+
+
+async def test_the_template_gets_the_chapter_name_not_the_domain_id():
+    """{{3}} lands inside a sentence the family reads — 'a memory from the
+    chapter "Childhood & Home"' — so it must be the label, not 'childhood'."""
+    db = _make_db()
+    profile = _make_profile()
+
+    with _patched(profile, _CARD_RESULT) as (mock_whatsapp, _):
+        await close_and_process_session(_SESSION_ID, db)
+
+    variables = mock_whatsapp.send_image.call_args.kwargs["template_variables"]
+    assert variables["2"] == profile.name
+    assert variables["3"] == "Childhood & Home"
+    assert variables["3"] != _CARD_RESULT.domain
