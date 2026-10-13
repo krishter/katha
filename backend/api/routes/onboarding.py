@@ -111,6 +111,7 @@ async def onboarding_profile(
     family_whatsapp_number: str = Form(...),
     preferred_language: str = Form(...),
     session_time: str = Form(...),
+    pronouns: str = Form(default=""),
     onboarding_context: str = Form(default=""),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -135,6 +136,10 @@ async def onboarding_profile(
     profile.family_whatsapp_number = family_whatsapp_number
     profile.preferred_language = preferred_language
     profile.scheduled_time = scheduled_time
+    # Optional on purpose. An empty value means "not stated", which the
+    # prompt handles by not using gendered forms at all — a blank is a
+    # safer record than a guess, so nothing here coerces a choice.
+    profile.pronouns = pronouns.strip()
     profile.onboarding_context = onboarding_context
 
     await db.commit()

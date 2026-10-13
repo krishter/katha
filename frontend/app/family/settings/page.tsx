@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation";
 
 /**
- * Privacy & Data is the only section this sprint, so /family/settings has
- * nothing of its own to show. Redirect rather than render an empty shell —
- * when a second section lands, this becomes a real index or keeps
- * redirecting to whichever section should open by default.
+ * /family/settings has nothing of its own to show, so it opens the first
+ * section rather than rendering an empty shell.
  */
 export default function SettingsIndexPage() {
-  redirect("/family/settings/privacy");
+  redirect("/family/settings/storyteller");
 }

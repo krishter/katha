@@ -38,6 +38,15 @@ export default function OnboardingPage() {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [familyWhatsappNumber, setFamilyWhatsappNumber] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState("hi-IN");
+  // "" means not stated, which the backend records as-is: Katha then
+  // avoids gendered forms rather than inferring any. The free-text box
+  // exists because a closed list is the wrong shape for this.
+  // Starts unselected so the family makes an actual choice. Leaving it
+  // skippable by inattention is the failure mode that matters: measured on
+  // Hindi, an unrecorded value still gets gender-marked, inconsistently,
+  // because the language agrees the verb with the person addressed.
+  const [pronouns, setPronouns] = useState("unset");
+  const [pronounsOther, setPronounsOther] = useState("");
   const [sessionTime, setSessionTime] = useState("09:30");
   const [onboardingContext, setOnboardingContext] = useState("");
 
@@ -88,6 +97,14 @@ export default function OnboardingPage() {
         family_whatsapp_number: familyWhatsappNumber,
         preferred_language: preferredLanguage,
         session_time: sessionTime,
+        // "unset" is the unchosen placeholder and never reaches the API;
+        // "" is a deliberate "prefer not to say" and does.
+        pronouns:
+          pronouns === "other"
+            ? pronounsOther
+            : pronouns === "unset"
+              ? ""
+              : pronouns,
         onboarding_context: onboardingContext,
       });
       setStep("consent");
@@ -240,6 +257,44 @@ export default function OnboardingPage() {
                 onChange={(e) => setSessionTime(e.target.value)}
                 className={INPUT_CLASS}
               />
+            </div>
+            <div>
+              <label htmlFor="pronouns" className={LABEL_CLASS}>
+                How should Katha refer to them?
+              </label>
+              <select
+                id="pronouns"
+                required
+                value={pronouns}
+                onChange={(e) => setPronouns(e.target.value)}
+                className={INPUT_CLASS}
+              >
+                <option value="unset" disabled>
+                  Please choose…
+                </option>
+                <option value="she/her">she / her</option>
+                <option value="he/him">he / him</option>
+                <option value="they/them">they / them</option>
+                <option value="other">Something else</option>
+                <option value="">Prefer not to say</option>
+              </select>
+              {pronouns === "other" && (
+                <input
+                  type="text"
+                  value={pronounsOther}
+                  onChange={(e) => setPronounsOther(e.target.value)}
+                  placeholder="e.g. she/they"
+                  maxLength={40}
+                  className={`${INPUT_CLASS} mt-2`}
+                />
+              )}
+              <p className="mt-1 text-xs text-ink-mid">
+                Many Indian languages change the verb depending on gender, so
+                Katha needs this to speak to them correctly. If you prefer not
+                to say, she will avoid gendered wording where the language
+                allows it — though in Hindi and similar languages some
+                sentences cannot avoid it.
+              </p>
             </div>
             <div>
               <label htmlFor="onboarding_context" className={LABEL_CLASS}>

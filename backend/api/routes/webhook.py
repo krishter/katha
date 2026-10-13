@@ -295,11 +295,15 @@ async def _load_user_profile_for_session(
             name="Friend",
             preferred_language="hi-IN",
             onboarding_context="",
+            # No row, so nothing is known — Layer 1 then tells the model
+            # not to guess rather than letting it infer from the name.
+            pronouns="",
         )
     return UserProfile(
         name=row.name,
         preferred_language=row.preferred_language,
         onboarding_context=row.onboarding_context or "",
+        pronouns=row.pronouns or "",
     )
 
 
