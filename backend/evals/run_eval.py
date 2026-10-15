@@ -216,6 +216,11 @@ async def real_turn(
         # mentioned moments ago — the exact behaviour TC-03 exists to test.
         # The harness silently stopped mirroring the production path.
         session_number=state.session_number,
+        # Same reason as session_number above: production passes the
+        # session's domain as the fallback for an unrecognised one, and
+        # a harness that does not would store domains production never
+        # would.
+        session_domain=state.domain,
     )
     new_state = await session_manager.apply_extraction(session_id, extraction_json, db)
 

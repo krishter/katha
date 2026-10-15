@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from memory import fact_store
 from models.story_atom import StoryAtom
+from prompts.domains import (
+    get_domain,
+    get_domain_sequence,
+    is_known_domain,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +74,57 @@ def compute_completeness(atom: dict) -> int:
     return score
 
 
+def coerce_domain(raw_domain: object, session_domain: Optional[str]) -> str:
+    """
+    Settle on a domain id the rest of the system can actually look up.
+
+    What the model emits used to be stored verbatim, with "unknown" as the
+    default when it emitted nothing at all. Neither is in the registry, and
+    one such row returned a 500 for the whole of GET /family/stories.
+    Display is now defensive (prompts.domains.domain_label), but storing a
+    value nothing recognises is still wrong at the source: it breaks the
+    domain filter, the coverage count, and the next session's choice of
+    topic, all of which match on the id.
+
+    Tries, in order: the id as given; a loosened match on the id or on the
+    domain's display name; then the session's own domain, which is
+    canonical by construction because start_session picked it from the
+    registry. Falling back to the session is a better guess than a
+    placeholder — an atom extracted during a childhood session is far more
+    likely to be about childhood than about nothing.
+    """
+    candidate = raw_domain if isinstance(raw_domain, str) else ""
+    candidate = candidate.strip()
+
+    if is_known_domain(candidate):
+        return candidate
+
+    if candidate:
+        loose = candidate.lower().replace(" ", "_").replace("-", "_")
+        if is_known_domain(loose):
+            return loose
+        for domain_id in get_domain_sequence():
+            domain = get_domain(domain_id)
+            if loose == domain_id or loose == domain.name.lower().replace(" ", "_"):
+                return domain_id
+
+    if session_domain and is_known_domain(session_domain):
+        logger.warning(
+            "Extraction returned domain %r, which is not a known id — "
+            "storing the session's own domain %r instead",
+            raw_domain,
+            session_domain,
+        )
+        return session_domain
+
+    logger.warning(
+        "Extraction returned domain %r and the session's domain is also "
+        "unusable — storing it as-is",
+        raw_domain,
+    )
+    return candidate or "unknown"
+
+
 async def process_extraction(
     extraction_json: dict,
     session_id: str,
@@ -76,6 +132,7 @@ async def process_extraction(
     db: AsyncSession,
     turn_id: Optional[uuid.UUID] = None,
     session_number: Optional[int] = None,
+    session_domain: Optional[str] = None,
 ) -> ExtractionResult:
     """
     1. Skip entirely if atoms already exist for this turn_id (idempotency —
@@ -124,7 +181,7 @@ async def process_extraction(
             session_id=session_uuid,
             turn_id=turn_id,
             user_id=user_id,
-            domain=raw.get("domain", "unknown"),
+            domain=coerce_domain(raw.get("domain"), session_domain),
             title=raw.get("title"),
             narrative=raw.get("narrative", ""),
             who=raw.get("who") or [],
