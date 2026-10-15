@@ -125,13 +125,20 @@ async def get_stats(
     )
     counts_by_domain = dict(domain_counts_result.all())
 
+    # Every atom the user has, not just those in the eight canonical
+    # buckets. Summing the buckets meant an atom whose domain the registry
+    # does not recognise was invisible here — absent from the count, from
+    # domains_covered and from the breakdown — while still existing in the
+    # database and (once the stories list stopped 500ing on it) visible in
+    # the list. The dashboard header and the list it sits above would then
+    # disagree, and PRD 11.1's "stories captured per month" under-reported.
+    total_story_atoms = sum(counts_by_domain.values())
+
     domain_breakdown = []
     domains_covered = 0
-    total_story_atoms = 0
     for domain_id in get_domain_sequence():
         domain = get_domain(domain_id)
         story_count = counts_by_domain.get(domain_id, 0)
-        total_story_atoms += story_count
         if story_count > 0:
             domains_covered += 1
         domain_breakdown.append(
@@ -140,6 +147,29 @@ async def get_stats(
                 "domain_label": domain.name,
                 "story_count": story_count,
                 "target": domain.target_story_atoms,
+            }
+        )
+
+    # Atoms whose domain the registry does not recognise, shown only when
+    # some exist. New ones should not appear — extraction coerces the
+    # domain on write — so this row is for rows written before that, and
+    # retires itself once they are gone or corrected.
+    #
+    # Deliberately NOT counted in domains_covered: that metric is "6+ of 8
+    # life chapters" (PRD 11.1), and a bucket for uncategorised material is
+    # not a ninth chapter. target is 0 for the same reason — there is
+    # nothing to aim for here.
+    known = set(get_domain_sequence())
+    uncategorised = sum(
+        count for domain_id, count in counts_by_domain.items() if domain_id not in known
+    )
+    if uncategorised:
+        domain_breakdown.append(
+            {
+                "domain_id": "other",
+                "domain_label": "Other",
+                "story_count": uncategorised,
+                "target": 0,
             }
         )
 
