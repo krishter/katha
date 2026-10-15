@@ -484,3 +484,75 @@ def test_an_empty_domain_is_labelled_rather_than_raising(db):
 
     assert response.status_code == 200
     assert response.json()["stories"][0]["domain_label"] == "Other"
+
+
+# ── stats must count every atom, not just the canonical buckets ──────────────
+
+
+def _stats_db(db, counts: list[tuple[str, int]]):
+    """Wire the queries the stats endpoint issues, with the domain
+    group-by returning `counts`. Mirrors
+    test_stats_returns_session_count_and_domain_breakdown above."""
+    domain_counts = MagicMock()
+    domain_counts.all.return_value = counts
+    card_result = MagicMock()
+    card_result.scalars.return_value.first.return_value = None
+    consent_records = MagicMock()
+    consent_records.scalars.return_value.all.return_value = []
+
+    db.execute = AsyncMock(
+        side_effect=[
+            _query_result(scalar_one_or_none=_make_profile()),
+            _query_result(first=MagicMock(plan="free", onboarding_complete=True)),
+            _query_result(scalar_one=3),
+            domain_counts,
+            card_result,
+            _query_result(scalar_one=1),
+            consent_records,
+            _query_result(scalar_one_or_none=SimpleNamespace(parent_consent_asks=0)),
+        ]
+    )
+
+
+def test_stats_counts_atoms_outside_the_eight_chapters(db):
+    """Summing only the canonical buckets made an atom with an
+    unrecognised domain invisible: absent from the count, from
+    domains_covered and from the breakdown, while still sitting in the
+    database and showing up in the stories list."""
+    _stats_db(db, [("childhood", 2), ("education_coming_of_age", 1)])
+
+    body = client.get("/family/stats").json()
+
+    assert body["total_story_atoms"] == 3
+
+
+def test_uncategorised_atoms_get_their_own_row(db):
+    _stats_db(db, [("childhood", 2), ("education_coming_of_age", 1)])
+
+    breakdown = client.get("/family/stats").json()["domain_breakdown"]
+    rows = {d["domain_id"]: d for d in breakdown}
+
+    assert rows["other"]["story_count"] == 1
+    assert rows["other"]["domain_label"] == "Other"
+    # No target: there is nothing to aim for in a bucket for material whose
+    # chapter was never recognised.
+    assert rows["other"]["target"] == 0
+
+
+def test_the_other_row_is_absent_when_everything_is_categorised(db):
+    """It retires itself. Extraction now coerces the domain on write, so
+    this row exists only for rows written before that."""
+    _stats_db(db, [("childhood", 2)])
+
+    breakdown = client.get("/family/stats").json()["domain_breakdown"]
+    ids = [d["domain_id"] for d in breakdown]
+
+    assert "other" not in ids
+
+
+def test_uncategorised_atoms_do_not_count_as_a_covered_chapter(db):
+    """domains_covered is "6+ of 8 life chapters" (PRD 11.1). A bucket for
+    uncategorised material is not a ninth chapter."""
+    _stats_db(db, [("childhood", 2), ("education_coming_of_age", 5)])
+
+    assert client.get("/family/stats").json()["domains_covered"] == 1
