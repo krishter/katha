@@ -1,5 +1,8 @@
+import logging
 from dataclasses import dataclass
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -176,6 +179,37 @@ def get_domain(domain_id: str) -> Domain:
         return _DOMAIN_MAP[domain_id]
     except KeyError:
         raise ValueError(f"Unknown domain ID: {domain_id!r}") from None
+
+
+def is_known_domain(domain_id: str) -> bool:
+    return domain_id in _DOMAIN_MAP
+
+
+def domain_label(domain_id: str) -> str:
+    """
+    A display name for a domain id that never raises.
+
+    get_domain raises on anything it does not recognise, and story atoms
+    routinely carry ids it does not: extraction writes whatever the model
+    emitted, and the model is not given the list. One such row used to
+    return a 500 for the whole of GET /family/stories — not just that
+    story, the entire page — because the response mapper called
+    get_domain(...).name straight.
+
+    Every surface that shows a label to a person goes through here. The
+    export path had grown its own inline guard and the stories path had
+    not, which is exactly the drift a single helper prevents.
+
+    Unknown ids are humanised rather than hidden: "education_coming_of_age"
+    reads as "Education Coming Of Age", which is honest about being
+    uncurated while staying readable to a family.
+    """
+    try:
+        return get_domain(domain_id).name
+    except ValueError:
+        logger.warning("Unknown domain id %r — showing a humanised label", domain_id)
+        cleaned = (domain_id or "").replace("_", " ").strip()
+        return cleaned.title() if cleaned else "Other"
 
 
 def get_next_domain(covered_domains: list[str]) -> Domain:

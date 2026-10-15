@@ -1081,6 +1081,10 @@ async def test_run_extraction_for_turn_gives_up_after_two_malformed_responses():
         db,
         turn_id=turn_id,
         session_number=session_state.session_number,
+        # The fallback for a domain the registry does not recognise. Pinned
+        # here because the eval harness must pass it too — a harness that
+        # drifts from this call stores domains production never would.
+        session_domain=session_state.domain,
     )
 
 

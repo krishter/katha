@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
-from prompts.domains import get_domain
+from prompts.domains import get_domain, get_domain_sequence
 
 if TYPE_CHECKING:
     from core.session_manager import SessionState
@@ -542,6 +542,19 @@ def build_system_prompt(
     return "\n\n".join(layers)
 
 
+# The eight ids, rendered into the extraction prompt. The prompt used to
+# name the field and give one example ("e.g. childhood") without ever
+# listing the valid values, so the model invented plausible ones —
+# "education_coming_of_age" for "education". Those went straight into
+# story_atoms.domain, and an id the registry does not know breaks the
+# domain filter, the coverage count and the next session's topic choice,
+# all of which match on it. One such row also returned a 500 for the whole
+# of GET /family/stories until domain_label() was made total.
+_DOMAIN_ID_LIST = "\n".join(
+    f"  - {d.id} ({d.name})" for d in (get_domain(i) for i in get_domain_sequence())
+)
+
+
 def build_extraction_prompt(
     user_profile: UserProfile,
     session_state: SessionState,
@@ -582,6 +595,11 @@ included only for context.
 
 Today's focus domain: {domain.name} ({domain.id}).{known_people_block}{goal_met_note}
 
+Every story atom's "domain" must be one of these exact ids, copied \
+character for character. A story often belongs to a different chapter than \
+today's focus — use whichever fits what they actually described:
+{_DOMAIN_ID_LIST}
+
 User said: {user_transcript}
 Katha replied: {assistant_response}
 
@@ -591,7 +609,7 @@ Respond in exactly this format and no other:
 {{
   "story_atoms": [
     {{
-      "domain": "string — the life domain this belongs to, e.g. childhood",
+      "domain": "string — EXACTLY ONE of the ids listed above, nothing else",
       "title": "string — a short label for this story",
       "narrative": "string — a 1-3 sentence summary of what was said",
       "who": ["string", "..."],

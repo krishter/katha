@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from extraction.story_extractor import (
     ExtractionResult,
+    coerce_domain,
     compute_completeness,
     process_extraction,
 )
@@ -262,3 +263,41 @@ async def test_does_not_resolve_when_the_atom_is_incomplete():
         await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
 
     mock_resolve.assert_not_called()
+
+
+# ── domain coercion ──────────────────────────────────────────────────────────
+
+
+def test_a_known_domain_is_kept():
+    assert coerce_domain("childhood", "career") == "childhood"
+
+
+def test_a_display_name_is_matched_back_to_its_id():
+    assert coerce_domain("Childhood & Home", "career") == "childhood"
+
+
+def test_casing_and_spacing_are_tolerated():
+    assert coerce_domain("Family Ancestors", "career") == "family_ancestors"
+
+
+def test_an_unknown_domain_falls_back_to_the_session_domain():
+    """Not to a placeholder. An atom extracted during a childhood session
+    is far more likely to be about childhood than about nothing, and
+    "unknown" is an id nothing in the system can look up."""
+    assert coerce_domain("education_coming_of_age", "childhood") == "childhood"
+
+
+def test_a_missing_domain_falls_back_to_the_session_domain():
+    assert coerce_domain(None, "childhood") == "childhood"
+    assert coerce_domain("", "childhood") == "childhood"
+
+
+def test_a_non_string_domain_does_not_raise():
+    assert coerce_domain({"nested": "object"}, "career") == "career"
+
+
+def test_everything_unusable_still_returns_a_string():
+    """Never raises: this runs inside background extraction, where an
+    exception costs the whole turn's atoms."""
+    assert coerce_domain("nonsense", None) == "nonsense"
+    assert coerce_domain(None, None) == "unknown"

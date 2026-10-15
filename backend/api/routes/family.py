@@ -22,7 +22,7 @@ from models.memory_card import MemoryCard
 from models.session import Session
 from models.story_atom import StoryAtom
 from models.user_profile import UserProfileModel
-from prompts.domains import get_domain, get_domain_sequence
+from prompts.domains import domain_label, get_domain, get_domain_sequence
 
 # Long enough for "she/her", "they/them" or a short free-text answer, short
 # enough that the field cannot become a second notes box inside the prompt.
@@ -69,7 +69,11 @@ def _to_story_response(atom: StoryAtom) -> StoryAtomResponse:
     return StoryAtomResponse(
         id=str(atom.id),
         domain=atom.domain,
-        domain_label=get_domain(atom.domain).name,
+        # Never get_domain(...).name here. An atom carrying a domain the
+        # registry does not know raised ValueError, and with no handler on
+        # the route that was a 500 for the whole stories list rather than
+        # one odd label on one card.
+        domain_label=domain_label(atom.domain),
         title=atom.title,
         narrative=atom.narrative,
         who=list(atom.who or []),
@@ -407,9 +411,7 @@ async def export_data(
         "stories": [
             {
                 "domain": a.domain,
-                "domain_label": get_domain(a.domain).name
-                if a.domain in get_domain_sequence()
-                else a.domain,
+                "domain_label": domain_label(a.domain),
                 "title": a.title,
                 "narrative": a.narrative,
                 "who": a.who,

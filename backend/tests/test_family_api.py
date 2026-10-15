@@ -429,3 +429,58 @@ def test_omitting_pronouns_entirely_also_means_prefer_not_to_say(db):
 
     assert response.status_code == 200
     assert profile.pronouns == ""
+
+
+# ── an unknown domain must not take down the stories list ────────────────────
+
+
+def _atom(domain: str):
+    atom = MagicMock()
+    atom.id = uuid.uuid4()
+    atom.domain = domain
+    atom.title = "A title"
+    atom.narrative = "Something was said."
+    atom.who = []
+    atom.what = None
+    atom.when_approx = None
+    atom.where_approx = None
+    atom.why = None
+    atom.completeness_score = 3
+    atom.verbatim_quote = None
+    atom.created_at = datetime(2026, 10, 14, tzinfo=timezone.utc)
+    return atom
+
+
+def test_one_atom_with_an_unknown_domain_does_not_500_the_list(db):
+    """The reported failure: GET /family/stories returned 500 — the whole
+    page, not one row — because the response mapper called
+    get_domain(...).name, which raises on anything the registry does not
+    know. Extraction writes whatever the model emitted, so such rows
+    exist."""
+    rows = MagicMock()
+    rows.scalars.return_value.all.return_value = [
+        _atom("childhood"),
+        _atom("education_coming_of_age"),
+    ]
+    db.execute = AsyncMock(side_effect=[_query_result(scalar_one=2), rows])
+
+    response = client.get("/family/stories")
+
+    assert response.status_code == 200
+    stories = response.json()["stories"]
+    assert len(stories) == 2
+    assert stories[0]["domain_label"] == "Childhood & Home"
+    # Humanised, not hidden and not a crash.
+    assert stories[1]["domain_label"] == "Education Coming Of Age"
+    assert stories[1]["domain"] == "education_coming_of_age"
+
+
+def test_an_empty_domain_is_labelled_rather_than_raising(db):
+    rows = MagicMock()
+    rows.scalars.return_value.all.return_value = [_atom("")]
+    db.execute = AsyncMock(side_effect=[_query_result(scalar_one=1), rows])
+
+    response = client.get("/family/stories")
+
+    assert response.status_code == 200
+    assert response.json()["stories"][0]["domain_label"] == "Other"

@@ -27,7 +27,7 @@ from models.crisis_event import CrisisEvent
 from models.memory_card import MemoryCard
 from models.turn import Turn
 from models.user_profile import UserProfileModel
-from prompts.domains import get_domain
+from prompts.domains import domain_label
 from prompts.system_prompt import (
     PriorContext,
     UserProfile,
@@ -332,25 +332,6 @@ async def save_memory_card(
     await db.commit()
 
 
-def _domain_label(domain_id: str) -> str:
-    """
-    The chapter name a person would recognise ("Childhood & Home"), not
-    the internal id ("childhood").
-
-    The template reads "...a memory from the chapter \"{{3}}\"", so this
-    is a sentence the family reads. Falls back to the raw id rather than
-    raising: an unknown domain string should cost a slightly ugly word in
-    one message, not the whole card.
-    """
-    try:
-        return get_domain(domain_id).name
-    except (ValueError, KeyError):
-        logger.warning(
-            "Unknown domain %r on a memory card — using the raw id", domain_id
-        )
-        return domain_id
-
-
 async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -> None:
     """
     Generate a memory card from the session's best story atom and deliver
@@ -426,7 +407,7 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
         template_sid=template_sid or None,
         template_variables={
             "2": user_profile.name,
-            "3": _domain_label(card_result.domain),
+            "3": domain_label(card_result.domain),
         },
     )
 
@@ -952,6 +933,10 @@ async def run_extraction_for_turn(
             db,
             turn_id=turn_id,
             session_number=session_state.session_number,
+            # The fallback when the model returns a domain the registry
+            # does not know. Canonical by construction — start_session
+            # picks it from the registry.
+            session_domain=session_state.domain,
         )
 
         turn_result = await db.execute(select(Turn).where(Turn.id == turn_id))
