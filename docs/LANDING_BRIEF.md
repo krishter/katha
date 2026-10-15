@@ -67,6 +67,15 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
 1. **Hero** (full screen). A faint waveform pulses. Line: *"Amma has told the Bombay Diwali story a dozen times. Nobody has written it down."* Below it, a small line: *Katha keeps your parent's stories, in their own voice.* A scroll cue at the bottom.
    *Motion:* the waveform breathes slowly. On scroll, it stretches into the thread line that leads down the page.
 2. **Pinned, three lines in sequence:** *You call on Sundays. / She says she's fine. / There are questions you've never thought to ask.* Abstract art: two clocks in different time zones, and a phone with the call ended.
+3. **What fades** *(the bridge: why this matters).* Opening line: *"And the answers live in one place."* Then, pinned, one detail per scroll step, each fading as the next appears:
+   *The name of the village. / Why they left it. / The song she hummed while cooking. / How Appa really proposed.*
+   Closing line, on its own: *"Stories don't vanish all at once. They fade a detail at a time — not because no one cares, but because no one asked."*
+   *Motion:* as each line fades, its letters break into dots that drift down and gather at the bottom of the screen.
+   *Tone:* gentle, never fear-based. No "before it's too late", no mention of illness or death, and no guilt aimed at the child. The fault is "no one asked", not "you didn't".
+4. **Katha, introduced** *(the dawn starts here).* The drifting dots gather into the voice waveform, and the Katha mark (க/क) appears.
+   *"Katha asks."*
+   *"A warm voice on WhatsApp that talks with your parent most days, in their language — and keeps every story they tell."*
+   A small line under it, *"Here's how it works,"* leads into Act II. The indigo background starts warming here.
 
 ### Act II — The beginning *(dawn → parchment, Paper-cut; a phone mockup pinned on the right on desktop)*
 3. **You set it up in about five minutes.** Her name, the time she likes to talk, her language, a few hints ("Appa grew up in Madurai"). *Art:* the child at a window, phone in hand.
@@ -82,7 +91,7 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
 9. **Full-screen moment:** *"She reads it first. Nothing reaches the family until she says yes. And no one edits it. It's her story. It stays hers."* Just type, with one small paper-cut detail: her glasses resting on the page.
 
 ### Act V — The archive *(darkening to indigo, Abstract)*
-10. **Eight chapters fill in** as you scroll: Childhood, Family, Education, Work, Love & marriage, Places, Beliefs, Wisdom. Book spines rise on a shelf; each spine lights up as its label appears. Take the exact chapter names from the dashboard / `TECH_DESIGN.md` §2.2. Don't invent new ones.
+10. **Eight chapters fill in** as you scroll. Use the eight life domains from `TECH_DESIGN.md` §2.2: Childhood & Home · Family & Ancestors · Education & Coming of Age · Career & Work Life · Love, Marriage & Family · Historical Events Witnessed · Hobbies, Passions & Talents · Wisdom & Life Lessons. If the dashboard uses shorter labels, use those instead. Book spines rise on a shelf; each spine lights up as its label appears.
 11. **Bookend:** years later, the grandchild presses play and her voice plays. Silence, then one line: *"Their voice. Their words. Yours to keep."*
 
 ### Act VI — Invitation *(parchment, type-led)*

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="She talks to the phone on her table; above her, a remembered house by a river, and an old transistor radio on the shelf">
+  <defs><clipPath id="s6-cut"><path d="M50 130 C 110 30, 430 15, 565 95 C 645 145, 635 420, 565 500 C 475 590, 135 600, 65 500 C 5 420, 5 210, 50 130Z"/></clipPath></defs>
+  <g clip-path="url(#s6-cut)">
+  <rect width="640" height="600" fill="#F7E3BF"/>
+
+  <!-- shelf with an old transistor radio -->
+  <g filter="url(#pc-shadow)"><rect x="390" y="212" width="190" height="10" rx="2" fill="#B5703E"/></g>
+  <path d="M500 160 L 540 108" stroke="#241D5C" stroke-width="3" stroke-linecap="round"/>
+  <g filter="url(#pc-shadow)"><rect x="420" y="160" width="104" height="52" rx="9" fill="#D0566E"/></g>
+  <circle cx="448" cy="186" r="16" fill="#9E3E54"/>
+  <g fill="#F7E3BF" opacity="0.7"><circle cx="442" cy="180" r="2"/><circle cx="454" cy="180" r="2"/><circle cx="442" cy="192" r="2"/><circle cx="454" cy="192" r="2"/><circle cx="448" cy="186" r="2"/></g>
+  <rect x="476" y="176" width="34" height="8" rx="3" fill="#FBF4E6"/>
+  <circle cx="500" cy="198" r="5" fill="#FBF4E6"/>
+
+  <!-- what she remembers: the river house -->
+  <g filter="url(#pc-shadow)"><rect x="80" y="44" width="232" height="140" rx="26" fill="#FBF4E6"/></g>
+  <path d="M96 150 C 140 138, 180 160, 224 148 C 262 138, 286 150, 300 146 V 172 H 96 Z" fill="#C9CCE0"/>
+  <path d="M96 160 C 140 150, 180 170, 224 160 C 262 152, 286 162, 300 158" stroke="#FBF4E6" stroke-width="3" fill="none"/>
+  <rect x="150" y="96" width="62" height="46" fill="#E8822F"/>
+  <path d="M142 98 L 181 70 L 220 98 Z" fill="#B5703E"/>
+  <rect x="174" y="116" width="14" height="26" fill="#8E5530"/>
+  <rect x="236" y="112" width="6" height="34" fill="#8E5530"/>
+  <circle cx="239" cy="102" r="20" fill="#D9A21B"/>
+  <g fill="#FBF4E6"><circle cx="196" cy="206" r="7"/><circle cx="206" cy="224" r="4.5"/></g>
+
+  <!-- floor, armchair, her -->
+  <g filter="url(#pc-shadow)"><path d="M0 470 C 160 450, 420 455, 640 475 V600 H0Z" fill="#E9D9BC"/></g>
+  <g filter="url(#pc-shadow)"><rect x="110" y="205" width="210" height="260" rx="70" fill="#2F2A73"/></g>
+  <rect x="112" y="458" width="12" height="30" rx="4" fill="#1E1A4A"/>
+  <rect x="318" y="458" width="12" height="30" rx="4" fill="#1E1A4A"/>
+  <g filter="url(#pc-shadow)"><rect x="95" y="385" width="250" height="78" rx="26" fill="#3A3488"/></g>
+  <use href="#her-seated" x="136" y="196" width="232" height="280"/>
+
+  <!-- her voice, towards the phone -->
+  <g fill="none" stroke="#E8822F" stroke-width="3" stroke-linecap="round">
+    <path d="M272 226 Q 282 240 272 254" opacity="0.8"/>
+    <path d="M284 216 Q 300 240 284 264" opacity="0.5"/>
+    <path d="M296 206 Q 318 240 296 274" opacity="0.25"/>
+  </g>
+
+  <!-- table, tumbler, phone listening -->
+  <rect x="424" y="398" width="12" height="78" fill="#8E5530"/>
+  <ellipse cx="430" cy="478" rx="40" ry="8" fill="#8E5530"/>
+  <g filter="url(#pc-shadow)"><ellipse cx="430" cy="396" rx="74" ry="14" fill="#B5703E"/></g>
+  <path d="M458 340 L 490 340 L 486 392 L 462 392 Z" fill="#D5D8E0"/>
+  <ellipse cx="474" cy="340" rx="16" ry="4" fill="#ECEEF3"/>
+  <rect x="465" y="346" width="5" height="40" fill="#FFFFFF" opacity="0.7"/>
+  <g filter="url(#pc-shadow)"><rect x="398" y="314" width="42" height="76" rx="8" fill="#241D5C"/></g>
+  <rect x="402" y="320" width="34" height="64" rx="5" fill="#FFF3DE"/>
+  <g fill="#2FA36B"><circle cx="412" cy="352" r="3"/><circle cx="419" cy="352" r="3"/><circle cx="426" cy="352" r="3"/></g>
+
+  <rect width="640" height="600" filter="url(#pc-grain)"/>
+  </g>
+</svg>
