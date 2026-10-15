@@ -1,0 +1,57 @@
+<!-- Shared defs and character sheet. Inlined once at the top of <body>; scenes reference these by id.
+     Paper-cut: flat fills, one soft drop-shadow (dy 6, blur 7, indigo @18%), grain overlay <= 7%. -->
+<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="pc-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#241D5C" flood-opacity="0.18"/>
+    </filter>
+    <filter id="pc-grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.14  0 0 0 0 0.11  0 0 0 0 0.36  0 0 0 0.07 0"/>
+    </filter>
+    <pattern id="ab-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="1.6" fill="#3D3590"/>
+    </pattern>
+  </defs>
+
+  <!-- Her (the parent), seated. Grey hair in a bun, round reading glasses, saffron saree with a gold border,
+       warm brown skin, no features beyond the glasses. Coordinates match style-paper-cut.svg so she drops
+       into the armchair at x=136 y=196. -->
+  <symbol id="her-seated" viewBox="136 196 232 280" overflow="visible">
+    <g filter="url(#pc-shadow)">
+      <path d="M168 300 C 172 278, 262 276, 270 300 L 292 405 L 150 405 Z" fill="#E8822F"/>
+    </g>
+    <path d="M150 392 H 300 C 318 392, 324 406, 318 420 L 302 468 H 168 C 150 468, 140 452, 145 432 Z" fill="#E8822F" filter="url(#pc-shadow)"/>
+    <rect x="168" y="456" width="134" height="12" fill="#D9A21B"/>
+    <path d="M188 284 C 230 302, 258 340, 272 402 L 292 405 C 278 334, 250 296, 262 284 Z" fill="#C85A2A"/>
+    <path d="M190 286 C 232 304, 260 342, 274 403" fill="none" stroke="#D9A21B" stroke-width="4"/>
+    <rect x="203" y="262" width="22" height="22" fill="#8F5136"/>
+    <circle cx="212" cy="236" r="35" fill="#C9C4D0"/>
+    <circle cx="220" cy="242" r="30" fill="#9A573C"/>
+    <path d="M190 226 C 196 200, 240 196, 250 222 C 236 214, 210 214, 190 226Z" fill="#C9C4D0"/>
+    <circle cx="178" cy="226" r="16" fill="#C9C4D0"/>
+    <g fill="none" stroke="#241D5C" stroke-width="2.5">
+      <circle cx="228" cy="240" r="7.5"/><circle cx="246" cy="240" r="7.5"/><path d="M235.5 240 H238.5"/>
+    </g>
+    <path d="M262 330 C 290 352, 318 372, 352 374" stroke="#8F5136" stroke-width="15" fill="none" stroke-linecap="round"/>
+  </symbol>
+
+  <!-- The child: adult in their 40s, indigo shirt, seen from behind and slightly in profile, phone in hand. -->
+  <symbol id="child-back" viewBox="0 0 210 330" overflow="visible">
+    <circle cx="188" cy="158" r="34" fill="#F2C14E" opacity="0.3"/>
+    <path d="M50 140 C 36 186, 34 238, 40 286" stroke="#2F2A73" stroke-width="24" fill="none" stroke-linecap="round"/>
+    <g filter="url(#pc-shadow)">
+      <path d="M44 146 C 46 116, 72 104, 100 104 C 128 104, 152 116, 156 146 L 164 330 H 36 Z" fill="#3A3488"/>
+    </g>
+    <path d="M100 104 V 330" stroke="#342E7C" stroke-width="2"/>
+    <rect x="88" y="84" width="24" height="26" rx="6" fill="#8F5A40"/>
+    <circle cx="100" cy="58" r="34" fill="#2A2233"/>
+    <ellipse cx="133" cy="62" rx="6" ry="9" fill="#9A6A4E"/>
+    <path d="M150 138 C 170 168, 176 200, 168 218 C 178 206, 186 190, 186 174" stroke="#3A3488" stroke-width="22" fill="none" stroke-linecap="round"/>
+    <g transform="rotate(12 187 156)">
+      <rect x="178" y="138" width="20" height="36" rx="4" fill="#241D5C"/>
+      <rect x="181" y="142" width="14" height="28" rx="2" fill="#FFF3DE"/>
+    </g>
+    <circle cx="186" cy="174" r="9" fill="#8F5A40"/>
+  </symbol>
+</svg>

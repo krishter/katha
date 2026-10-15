@@ -1,651 +1,438 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Katha — Every family has a story. Coming soon.</title>
-<meta name="description" content="Katha is a gentle WhatsApp companion that turns your parents' daily conversations into a living family archive. Launching soon at katha.life.">
-<meta property="og:title" content="Katha — Coming Soon">
-<meta property="og:description" content="Daily voice conversations on WhatsApp that preserve your family's stories, forever.">
+<title>Katha · Your parent's stories, in their own voice</title>
+<meta name="description" content="Katha talks with your parent on WhatsApp, in their own language, and keeps their stories for the family. We're inviting a small number of families to try it with us.">
+<meta property="og:title" content="Katha · Your parent's stories, in their own voice">
+<meta property="og:description" content="We're inviting a small number of families to try Katha with us.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://katha.life">
+<!-- TODO(Act VI): og:image 1200×630 static render of the hero art -->
+<meta name="theme-color" content="#221C55">
+<script>
+  document.documentElement.classList.replace('no-js', 'js');
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('motion');
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Playfair+Display:ital,wght@0,700;0,900;1,600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --saffron: oklch(72% 0.18 55);
-    --saffron-soft: oklch(88% 0.09 60);
-    --gold: oklch(68% 0.17 75);
-    --gold-soft: oklch(90% 0.08 80);
-    --deep-indigo: oklch(28% 0.12 280);
-    --indigo-mid: oklch(38% 0.14 275);
-    --indigo-soft: oklch(88% 0.05 275);
-    --warm-white: oklch(97% 0.01 80);
-    --parchment: oklch(94% 0.02 80);
-    --parchment-dark: oklch(88% 0.03 75);
-    --text-dark: oklch(22% 0.04 280);
-    --text-mid: oklch(42% 0.05 275);
-    --text-light: oklch(62% 0.04 275);
-    --accent-green: oklch(62% 0.16 160);
-    --accent-rose: oklch(62% 0.16 10);
-    --rose-soft: oklch(90% 0.06 10);
-    --whatsapp: oklch(56% 0.18 155);
-    --whatsapp-soft: oklch(93% 0.05 155);
-    --shadow-soft: 0 18px 45px -18px oklch(28% 0.12 280 / 0.28);
-    --shadow-card: 0 10px 30px -10px oklch(28% 0.12 280 / 0.22);
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'DM Sans', sans-serif;
-    color: var(--text-dark);
-    background:
-      radial-gradient(1100px 700px at 85% 12%, var(--gold-soft) 0%, transparent 55%),
-      radial-gradient(900px 650px at 8% 88%, var(--indigo-soft) 0%, transparent 55%),
-      radial-gradient(700px 500px at 20% 15%, var(--rose-soft) 0%, transparent 50%),
-      var(--parchment);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  .page {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 32px 40px 64px;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* ---------- Header ---------- */
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: 'Playfair Display', serif;
-    font-weight: 900;
-    font-size: 1.6rem;
-    color: var(--deep-indigo);
-    letter-spacing: 0.5px;
-  }
-  .logo-mark {
-    width: 38px; height: 38px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--saffron), var(--gold));
-    display: grid;
-    place-items: center;
-    color: var(--warm-white);
-    font-size: 1.15rem;
-    box-shadow: var(--shadow-card);
-  }
-  .header-tag {
-    font-size: 0.85rem;
-    color: var(--text-light);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  /* ---------- Layout ---------- */
-  .hero {
-    flex: 1;
-    display: grid;
-    grid-template-columns: minmax(340px, 1.05fr) minmax(320px, 1fr);
-    gap: 48px;
-    align-items: center;
-    padding-top: 24px;
-  }
-
-  /* ---------- Left column ---------- */
-  .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--warm-white);
-    border: 1px solid var(--parchment-dark);
-    border-radius: 999px;
-    padding: 7px 16px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--indigo-mid);
-    box-shadow: var(--shadow-card);
-    margin-bottom: 26px;
-  }
-  .eyebrow .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--saffron);
-    animation: pulse 2.2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.55; }
-  }
-
-  h1 {
-    font-family: 'Playfair Display', serif;
-    font-weight: 900;
-    font-size: clamp(2.4rem, 4.6vw, 3.6rem);
-    line-height: 1.12;
-    color: var(--deep-indigo);
-    margin-bottom: 20px;
-  }
-  h1 em {
-    font-style: italic;
-    font-weight: 600;
-    background: linear-gradient(120deg, var(--saffron), var(--gold));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  .sub {
-    font-size: 1.08rem;
-    font-weight: 300;
-    line-height: 1.65;
-    color: var(--text-mid);
-    max-width: 46ch;
-    margin-bottom: 34px;
-  }
-  .sub strong { font-weight: 600; color: var(--text-dark); }
-
-  /* ---------- Waitlist form ---------- */
-  .waitlist {
-    display: flex;
-    gap: 10px;
-    max-width: 460px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  .waitlist input {
-    flex: 1;
-    min-width: 220px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.98rem;
-    padding: 15px 18px;
-    border: 1.5px solid var(--parchment-dark);
-    border-radius: 14px;
-    background: var(--warm-white);
-    color: var(--text-dark);
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  .waitlist input::placeholder { color: var(--text-light); }
-  .waitlist input:focus {
-    border-color: var(--saffron);
-    box-shadow: 0 0 0 4px oklch(72% 0.18 55 / 0.15);
-  }
-  .waitlist button {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.98rem;
-    font-weight: 600;
-    padding: 15px 26px;
-    border: none;
-    border-radius: 14px;
-    background: linear-gradient(135deg, var(--saffron), var(--gold));
-    color: var(--warm-white);
-    cursor: pointer;
-    box-shadow: var(--shadow-card);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-  }
-  .waitlist button:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); }
-  .waitlist button:active { transform: translateY(0); }
-  .form-note {
-    font-size: 0.82rem;
-    color: var(--text-light);
-  }
-  .form-status {
-    font-size: 0.9rem;
-    font-weight: 500;
-    margin-top: 10px;
-    min-height: 1.3em;
-  }
-  .form-status.ok { color: var(--accent-green); }
-  .form-status.err { color: var(--accent-rose); }
-
-  /* ---------- Right column: animated scene ---------- */
-  .scene {
-    position: relative;
-    height: 560px;
-    display: grid;
-    place-items: center;
-    perspective: 1400px;
-  }
-
-  .scene .blob {
-    position: absolute;
-    width: 440px; height: 440px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, var(--saffron-soft), var(--gold-soft) 55%, transparent 75%);
-    filter: blur(6px);
-    opacity: 0.9;
-  }
-
-  /* Phone */
-  .phone {
-    position: relative;
-    width: 270px;
-    background: var(--deep-indigo);
-    border-radius: 34px;
-    padding: 10px;
-    box-shadow: var(--shadow-soft);
-    transform: rotateY(-10deg) rotateX(4deg);
-    animation: float-a 6s ease-in-out infinite;
-    z-index: 3;
-  }
-  .phone-screen {
-    background: var(--parchment);
-    border-radius: 26px;
-    overflow: hidden;
-  }
-  .chat-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--whatsapp);
-    padding: 12px 14px;
-  }
-  .avatar {
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--gold), var(--saffron));
-    display: grid;
-    place-items: center;
-    font-size: 1rem;
-  }
-  .chat-title { color: var(--warm-white); }
-  .chat-title .name { font-weight: 600; font-size: 0.9rem; }
-  .chat-title .status { font-size: 0.7rem; opacity: 0.85; }
-  .chat-body {
-    padding: 14px 12px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 260px;
-    background:
-      radial-gradient(circle at 80% 20%, oklch(90% 0.04 80 / 0.6), transparent 40%),
-      var(--parchment);
-  }
-
-  .bubble {
-    max-width: 88%;
-    border-radius: 16px;
-    padding: 10px 12px;
-    font-size: 0.78rem;
-    box-shadow: 0 2px 6px oklch(28% 0.12 280 / 0.08);
-  }
-  .bubble.in  { background: var(--warm-white); border-top-left-radius: 6px; align-self: flex-start; }
-  .bubble.out { background: var(--whatsapp-soft); border-top-right-radius: 6px; align-self: flex-end; }
-  .bubble .label { font-size: 0.68rem; color: var(--text-light); margin-bottom: 6px; }
-
-  /* Voice note */
-  .voice {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .play {
-    width: 26px; height: 26px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--whatsapp);
-    display: grid;
-    place-items: center;
-  }
-  .play::after {
-    content: '';
-    border-left: 8px solid var(--warm-white);
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    margin-left: 2px;
-  }
-  .wave { display: flex; align-items: center; gap: 2.5px; height: 24px; }
-  .wave span {
-    width: 3px;
-    border-radius: 2px;
-    background: var(--whatsapp);
-    animation: wave 1.15s ease-in-out infinite;
-  }
-  .bubble.out .wave span { background: var(--accent-green); }
-  .wave span:nth-child(1) { height: 8px;  animation-delay: 0s; }
-  .wave span:nth-child(2) { height: 16px; animation-delay: 0.1s; }
-  .wave span:nth-child(3) { height: 11px; animation-delay: 0.2s; }
-  .wave span:nth-child(4) { height: 20px; animation-delay: 0.3s; }
-  .wave span:nth-child(5) { height: 9px;  animation-delay: 0.4s; }
-  .wave span:nth-child(6) { height: 17px; animation-delay: 0.5s; }
-  .wave span:nth-child(7) { height: 12px; animation-delay: 0.6s; }
-  .wave span:nth-child(8) { height: 18px; animation-delay: 0.7s; }
-  .wave span:nth-child(9) { height: 7px;  animation-delay: 0.8s; }
-  @keyframes wave {
-    0%, 100% { transform: scaleY(0.55); }
-    50% { transform: scaleY(1.25); }
-  }
-  .duration { font-size: 0.66rem; color: var(--text-light); }
-
-  /* Typing indicator */
-  .typing { display: flex; gap: 4px; padding: 4px 2px; }
-  .typing span {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--text-light);
-    animation: blink 1.3s ease-in-out infinite;
-  }
-  .typing span:nth-child(2) { animation-delay: 0.2s; }
-  .typing span:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes blink {
-    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-    30% { opacity: 1; transform: translateY(-3px); }
-  }
-
-  /* Floating cards */
-  .float-card {
-    position: absolute;
-    background: var(--warm-white);
-    border-radius: 16px;
-    box-shadow: var(--shadow-card);
-    z-index: 4;
-  }
-
-  .story-card {
-    top: 46px; right: 14px;
-    width: 150px;
-    padding: 10px;
-    transform: rotate(6deg);
-    animation: float-b 7s ease-in-out infinite;
-  }
-  .story-photo {
-    height: 84px;
-    border-radius: 10px;
-    background:
-      radial-gradient(circle at 65% 35%, var(--gold) 0%, transparent 32%),
-      linear-gradient(160deg, var(--saffron-soft), var(--indigo-soft));
-    position: relative;
-    overflow: hidden;
-  }
-  .story-photo::after {
-    content: '';
-    position: absolute;
-    bottom: -12px; left: 12px;
-    width: 90px; height: 42px;
-    border-radius: 50% 50% 0 0;
-    background: var(--indigo-mid);
-    opacity: 0.7;
-  }
-  .story-card .story-title {
-    font-family: 'Playfair Display', serif;
-    font-style: italic;
-    font-size: 0.78rem;
-    color: var(--deep-indigo);
-    margin-top: 8px;
-  }
-  .story-card .story-meta { font-size: 0.64rem; color: var(--text-light); margin-top: 2px; }
-
-  .memory-chip {
-    bottom: 96px; left: -6px;
-    padding: 10px 14px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    transform: rotate(-5deg);
-    animation: float-c 5.5s ease-in-out infinite;
-  }
-  .memory-chip .chip-icon {
-    width: 30px; height: 30px;
-    border-radius: 9px;
-    background: var(--rose-soft);
-    display: grid;
-    place-items: center;
-    font-size: 0.95rem;
-  }
-  .memory-chip .chip-text .t { font-size: 0.74rem; font-weight: 600; color: var(--text-dark); }
-  .memory-chip .chip-text .s { font-size: 0.64rem; color: var(--text-light); }
-
-  .book-card {
-    top: 120px; left: 6px;
-    padding: 12px 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transform: rotate(-8deg);
-    animation: float-b 8s ease-in-out infinite reverse;
-  }
-  .book {
-    width: 34px; height: 26px;
-    position: relative;
-    flex: none;
-  }
-  .book::before, .book::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    width: 17px; height: 24px;
-    background: linear-gradient(var(--warm-white), var(--parchment-dark));
-    border: 1.5px solid var(--gold);
-  }
-  .book::before { left: 0; border-radius: 3px 8px 2px 3px; transform: skewY(6deg); border-right-width: 0.5px; }
-  .book::after  { right: 0; border-radius: 8px 3px 3px 2px; transform: skewY(-6deg); border-left-width: 0.5px; }
-  .book-card .t { font-size: 0.74rem; font-weight: 600; color: var(--text-dark); }
-  .book-card .s { font-size: 0.64rem; color: var(--text-light); }
-
-  /* Sparkles */
-  .spark {
-    position: absolute;
-    border-radius: 50%;
-    z-index: 2;
-    animation: twinkle 3.4s ease-in-out infinite;
-  }
-  .spark.s1 { width: 10px; height: 10px; top: 90px;  left: 60px;  background: var(--saffron); }
-  .spark.s2 { width: 7px;  height: 7px;  top: 210px; right: 34px; background: var(--gold); animation-delay: 0.7s; }
-  .spark.s3 { width: 12px; height: 12px; bottom: 60px; right: 90px; background: var(--accent-rose); opacity: 0.7; animation-delay: 1.3s; }
-  .spark.s4 { width: 6px;  height: 6px;  bottom: 140px; left: 40px; background: var(--indigo-mid); animation-delay: 1.9s; }
-  .spark.s5 { width: 8px;  height: 8px;  top: 30px; right: 150px; background: var(--accent-green); opacity: 0.6; animation-delay: 2.4s; }
-  @keyframes twinkle {
-    0%, 100% { transform: scale(1); opacity: 0.55; }
-    50% { transform: scale(1.6); opacity: 1; }
-  }
-
-  @keyframes float-a {
-    0%, 100% { transform: rotateY(-10deg) rotateX(4deg) translateY(0); }
-    50% { transform: rotateY(-10deg) rotateX(4deg) translateY(-16px); }
-  }
-  @keyframes float-b {
-    0%, 100% { transform: rotate(6deg) translateY(0); }
-    50% { transform: rotate(4deg) translateY(-14px); }
-  }
-  @keyframes float-c {
-    0%, 100% { transform: rotate(-5deg) translateY(0); }
-    50% { transform: rotate(-3deg) translateY(-11px); }
-  }
-
-  /* ---------- Footer ---------- */
-  footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 30px;
-    font-size: 0.82rem;
-    color: var(--text-light);
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  footer .heart { color: var(--accent-rose); }
-  footer .footer-left {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  footer .entity {
-    font-size: 0.76rem;
-    opacity: 0.95;
-    letter-spacing: 0.015em;
-  }
-
-  /* ---------- Responsive ---------- */
-  @media (max-width: 900px) {
-    .page { padding: 24px 22px 40px; }
-    .hero {
-      grid-template-columns: 1fr;
-      gap: 8px;
-      text-align: center;
-      padding-top: 12px;
-    }
-    .hero-copy { display: flex; flex-direction: column; align-items: center; order: 2; }
-    .scene { order: 1; height: 470px; transform: scale(0.88); }
-    .sub { margin-left: auto; margin-right: auto; }
-    .waitlist { justify-content: center; }
-    footer { justify-content: center; text-align: center; }
-    footer .footer-left { align-items: center; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script defer src="main.js"></script>
 </head>
 <body>
-<div class="page">
+<a class="skip" href="#join">Skip to the pilot sign-up</a>
 
-  <header>
-    <div class="logo"><span class="logo-mark">क</span>Katha</div>
-    <div class="header-tag">katha.life</div>
-  </header>
+<!-- art:characters -->
+<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="pc-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#241D5C" flood-opacity="0.18"/>
+    </filter>
+    <filter id="pc-grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.14  0 0 0 0 0.11  0 0 0 0 0.36  0 0 0 0.07 0"/>
+    </filter>
+    <pattern id="ab-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="1.6" fill="#3D3590"/>
+    </pattern>
+  </defs>
 
-  <main class="hero">
-    <div class="hero-copy">
-      <span class="eyebrow"><span class="dot"></span>Coming Soon</span>
-      <h1>Every family has a story.<br>We're building its <em>home</em>.</h1>
-      <p class="sub">
-        <strong>Katha</strong> is a gentle companion on WhatsApp that has daily voice
-        conversations with your parents and grandparents — in their own language —
-        and lovingly turns their memories into a living family archive.
+  <!-- Her (the parent), seated. Grey hair in a bun, round reading glasses, saffron saree with a gold border,
+       warm brown skin, no features beyond the glasses. Coordinates match style-paper-cut.svg so she drops
+       into the armchair at x=136 y=196. -->
+  <symbol id="her-seated" viewBox="136 196 232 280" overflow="visible">
+    <g filter="url(#pc-shadow)">
+      <path d="M168 300 C 172 278, 262 276, 270 300 L 292 405 L 150 405 Z" fill="#E8822F"/>
+    </g>
+    <path d="M150 392 H 300 C 318 392, 324 406, 318 420 L 302 468 H 168 C 150 468, 140 452, 145 432 Z" fill="#E8822F" filter="url(#pc-shadow)"/>
+    <rect x="168" y="456" width="134" height="12" fill="#D9A21B"/>
+    <path d="M188 284 C 230 302, 258 340, 272 402 L 292 405 C 278 334, 250 296, 262 284 Z" fill="#C85A2A"/>
+    <path d="M190 286 C 232 304, 260 342, 274 403" fill="none" stroke="#D9A21B" stroke-width="4"/>
+    <rect x="203" y="262" width="22" height="22" fill="#8F5136"/>
+    <circle cx="212" cy="236" r="35" fill="#C9C4D0"/>
+    <circle cx="220" cy="242" r="30" fill="#9A573C"/>
+    <path d="M190 226 C 196 200, 240 196, 250 222 C 236 214, 210 214, 190 226Z" fill="#C9C4D0"/>
+    <circle cx="178" cy="226" r="16" fill="#C9C4D0"/>
+    <g fill="none" stroke="#241D5C" stroke-width="2.5">
+      <circle cx="228" cy="240" r="7.5"/><circle cx="246" cy="240" r="7.5"/><path d="M235.5 240 H238.5"/>
+    </g>
+    <path d="M262 330 C 290 352, 318 372, 352 374" stroke="#8F5136" stroke-width="15" fill="none" stroke-linecap="round"/>
+  </symbol>
+
+  <!-- The child: adult in their 40s, indigo shirt, seen from behind and slightly in profile, phone in hand. -->
+  <symbol id="child-back" viewBox="0 0 210 330" overflow="visible">
+    <circle cx="188" cy="158" r="34" fill="#F2C14E" opacity="0.3"/>
+    <path d="M50 140 C 36 186, 34 238, 40 286" stroke="#2F2A73" stroke-width="24" fill="none" stroke-linecap="round"/>
+    <g filter="url(#pc-shadow)">
+      <path d="M44 146 C 46 116, 72 104, 100 104 C 128 104, 152 116, 156 146 L 164 330 H 36 Z" fill="#3A3488"/>
+    </g>
+    <path d="M100 104 V 330" stroke="#342E7C" stroke-width="2"/>
+    <rect x="88" y="84" width="24" height="26" rx="6" fill="#8F5A40"/>
+    <circle cx="100" cy="58" r="34" fill="#2A2233"/>
+    <ellipse cx="133" cy="62" rx="6" ry="9" fill="#9A6A4E"/>
+    <path d="M150 138 C 170 168, 176 200, 168 218 C 178 206, 186 190, 186 174" stroke="#3A3488" stroke-width="22" fill="none" stroke-linecap="round"/>
+    <g transform="rotate(12 187 156)">
+      <rect x="178" y="138" width="20" height="36" rx="4" fill="#241D5C"/>
+      <rect x="181" y="142" width="14" height="28" rx="2" fill="#FFF3DE"/>
+    </g>
+    <circle cx="186" cy="174" r="9" fill="#8F5A40"/>
+  </symbol>
+</svg>
+<!-- /art:characters -->
+
+<main class="story" id="story">
+  <svg class="thread" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="thread-ink" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0" stop-color="#F2C14E"/>
+        <stop offset="0.55" stop-color="#E8822F"/>
+        <stop offset="1" stop-color="#241D5C"/>
+      </linearGradient>
+    </defs>
+    <path stroke="url(#thread-ink)"/>
+  </svg>
+
+  <!-- ============ ACT I · The distance (Abstract, indigo) ============ -->
+  <section class="act-i hero" aria-labelledby="hero-title">
+    <div class="wrap masthead">
+      <span class="wordmark"><span class="mark" aria-hidden="true">क</span>Katha</span>
+    </div>
+    <div class="wrap hero-body">
+      <div class="hero-wave" data-thread data-tx=".5" data-ty=".5">
+        <!-- art:hero-wave -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -50 606 100" class="wave-svg" aria-hidden="true" focusable="false">
+<g class="breath" fill="#F6E7C8">
+<rect class="bar" x="10.0" y="-4" width="6" height="8" rx="3" opacity="0.25"/>
+<rect class="bar" x="24.5" y="-7" width="6" height="14" rx="3" opacity="0.31"/>
+<rect class="bar" x="39.0" y="-7.5" width="6" height="15" rx="3" opacity="0.37"/>
+<rect class="bar" x="53.5" y="-9.5" width="6" height="19" rx="3" opacity="0.43"/>
+<rect class="bar" x="68.0" y="-12.5" width="6" height="25" rx="3" opacity="0.48"/>
+<rect class="bar" x="82.5" y="-17.5" width="6" height="35" rx="3" opacity="0.54"/>
+<rect class="bar" x="97.0" y="-18.5" width="6" height="37" rx="3" opacity="0.59"/>
+<rect class="bar" x="111.5" y="-17.5" width="6" height="35" rx="3" opacity="0.64"/>
+<rect class="bar" x="126.0" y="-16.5" width="6" height="33" rx="3" opacity="0.69"/>
+<rect class="bar" x="140.5" y="-20" width="6" height="40" rx="3" opacity="0.74"/>
+<rect class="bar" x="155.0" y="-30.5" width="6" height="61" rx="3" opacity="0.78"/>
+<rect class="bar" x="169.5" y="-21.5" width="6" height="43" rx="3" opacity="0.82"/>
+<rect class="bar" x="184.0" y="-29.5" width="6" height="59" rx="3" opacity="0.86"/>
+<rect class="bar" x="198.5" y="-21" width="6" height="42" rx="3" opacity="0.89"/>
+<rect class="bar" x="213.0" y="-30.5" width="6" height="61" rx="3" opacity="0.92"/>
+<rect class="bar" x="227.5" y="-28" width="6" height="56" rx="3" opacity="0.94"/>
+<rect class="bar" x="242.0" y="-38.5" width="6" height="77" rx="3" opacity="0.96"/>
+<rect class="bar" x="256.5" y="-31" width="6" height="62" rx="3" opacity="0.98"/>
+<rect class="bar" x="271.0" y="-26.5" width="6" height="53" rx="3" opacity="0.99"/>
+<rect class="bar" x="285.5" y="-29.5" width="6" height="59" rx="3" opacity="1.00"/>
+<rect class="bar" x="300.0" y="-32.5" width="6" height="65" rx="3" opacity="1.00"/>
+<rect class="bar" x="314.5" y="-41" width="6" height="82" rx="3" opacity="1.00"/>
+<rect class="bar" x="329.0" y="-28" width="6" height="56" rx="3" opacity="0.99"/>
+<rect class="bar" x="343.5" y="-29.5" width="6" height="59" rx="3" opacity="0.98"/>
+<rect class="bar" x="358.0" y="-23" width="6" height="46" rx="3" opacity="0.96"/>
+<rect class="bar" x="372.5" y="-36" width="6" height="72" rx="3" opacity="0.94"/>
+<rect class="bar" x="387.0" y="-25.5" width="6" height="51" rx="3" opacity="0.92"/>
+<rect class="bar" x="401.5" y="-34.5" width="6" height="69" rx="3" opacity="0.89"/>
+<rect class="bar" x="416.0" y="-23.5" width="6" height="47" rx="3" opacity="0.86"/>
+<rect class="bar" x="430.5" y="-20.5" width="6" height="41" rx="3" opacity="0.82"/>
+<rect class="bar" x="445.0" y="-24" width="6" height="48" rx="3" opacity="0.78"/>
+<rect class="bar" x="459.5" y="-25" width="6" height="50" rx="3" opacity="0.74"/>
+<rect class="bar" x="474.0" y="-24.5" width="6" height="49" rx="3" opacity="0.69"/>
+<rect class="bar" x="488.5" y="-17" width="6" height="34" rx="3" opacity="0.64"/>
+<rect class="bar" x="503.0" y="-13" width="6" height="26" rx="3" opacity="0.59"/>
+<rect class="bar" x="517.5" y="-12.5" width="6" height="25" rx="3" opacity="0.54"/>
+<rect class="bar" x="532.0" y="-15.5" width="6" height="31" rx="3" opacity="0.48"/>
+<rect class="bar" x="546.5" y="-9" width="6" height="18" rx="3" opacity="0.43"/>
+<rect class="bar" x="561.0" y="-9" width="6" height="18" rx="3" opacity="0.37"/>
+<rect class="bar" x="575.5" y="-5.5" width="6" height="11" rx="3" opacity="0.31"/>
+<rect class="bar" x="590.0" y="-4" width="6" height="8" rx="3" opacity="0.25"/>
+</g>
+</svg>
+<!-- /art:hero-wave -->
+      </div>
+      <div class="hero-copy">
+        <!-- COPY: draft -->
+        <h1 id="hero-title" class="display">Amma has told the Bombay Diwali story a dozen times. <em>Nobody has written it down.</em></h1>
+        <!-- COPY: draft -->
+        <p class="lede">Katha keeps your parent's stories, in their own voice.</p>
+      </div>
+    </div>
+    <a class="scroll-cue" href="#distance"><span>Scroll</span><i aria-hidden="true"></i></a>
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty="1"></i>
+  </section>
+
+  <section class="act-i distance" id="distance" aria-label="The distance">
+    <div class="pin-wrap wrap">
+      <figure class="art">
+        <!-- art:act1-distance -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="Two clocks showing different times, and between them a phone with the call ended">
+  <!-- distance between two clocks -->
+  <path d="M248 212 C 300 120, 340 120, 392 212" fill="none" stroke="#F6E7C8" stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- your clock: Sunday evening -->
+  <g fill="none" stroke="#F6E7C8" stroke-width="3" stroke-linecap="round">
+    <circle cx="170" cy="220" r="70"/>
+    <path d="M170 156 V164 M234 220 H226 M170 284 V276 M106 220 H114"/>
+    <path d="M170 220 L 138.8 238"/>
+    <path id="d-min-a" d="M170 220 L 170 168"/>
+  </g>
+  <circle cx="170" cy="220" r="4" fill="#F6E7C8"/>
+
+  <!-- her clock: another time zone -->
+  <g fill="none" stroke="#F2C14E" stroke-width="3" stroke-linecap="round">
+    <circle cx="470" cy="220" r="70"/>
+    <path d="M470 156 V164 M534 220 H526 M470 284 V276 M406 220 H414"/>
+    <path d="M470 220 L 444.5 194.5"/>
+    <path id="d-min-b" d="M470 220 L 470 272"/>
+  </g>
+  <circle cx="470" cy="220" r="4" fill="#F2C14E"/>
+
+  <!-- the phone, call ended -->
+  <g fill="none" stroke="#F2C14E" stroke-width="2">
+    <circle cx="320" cy="440" r="118" opacity="0.18"/>
+    <circle cx="320" cy="440" r="160" opacity="0.09"/>
+  </g>
+  <rect x="262" y="330" width="116" height="214" rx="22" fill="#FBF4E6"/>
+  <rect x="273" y="343" width="94" height="188" rx="13" fill="#F3EDE1"/>
+  <circle cx="320" cy="392" r="20" fill="none" stroke="#241D5C" stroke-width="2.5" opacity="0.55"/>
+  <rect x="294" y="424" width="52" height="5" rx="2.5" fill="#241D5C" opacity="0.45"/>
+  <rect x="304" y="436" width="32" height="4" rx="2" fill="#241D5C" opacity="0.25"/>
+  <g class="call-end">
+    <circle cx="320" cy="494" r="19" fill="#D0566E"/>
+    <path d="M308 497 C 308 488, 332 488, 332 497 L 327 499 L 325 494 C 322 492, 318 492, 315 494 L 313 499 Z" fill="#FBF4E6"/>
+  </g>
+
+  <!-- a steel tumbler left on the side -->
+  <path d="M520 466 L 556 466 L 551 526 L 525 526 Z" fill="#C9CCD8"/>
+  <ellipse cx="538" cy="466" rx="18" ry="4.5" fill="#E6E8EF"/>
+  <rect x="528" y="473" width="5" height="46" fill="#FFFFFF" opacity="0.6"/>
+</svg>
+<!-- /art:act1-distance -->
+      </figure>
+      <ol class="lines">
+        <!-- COPY: draft -->
+        <li class="line">You call on Sundays.</li>
+        <li class="line">She says she's fine.</li>
+        <li class="line">There are questions you've never thought to ask.</li>
+      </ol>
+    </div>
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty="1"></i>
+  </section>
+
+  <!-- Dawn: the ground brightens from indigo to parchment with scroll position, not at a section edge. -->
+  <div class="dawn" aria-hidden="true">
+    <svg class="dawn-sun" viewBox="0 0 1440 640" preserveAspectRatio="xMidYMax slice" focusable="false">
+      <circle cx="720" cy="720" r="420" fill="#D0566E" opacity="0.35"/>
+      <circle cx="720" cy="720" r="300" fill="#EE8B3A" opacity="0.45"/>
+      <circle cx="720" cy="720" r="190" fill="#F2C14E" opacity="0.7"/>
+    </svg>
+    <i class="thread-mark" data-thread data-tx=".5" data-ty=".62"></i>
+  </div>
+
+  <!-- ============ ACT II · The beginning (dawn → parchment, Paper-cut) ============ -->
+  <section class="act-ii setup" aria-labelledby="setup-title">
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty="0"></i>
+    <div class="wrap split">
+      <div class="copy">
+        <p class="eyebrow">The beginning</p>
+        <!-- COPY: draft -->
+        <h2 id="setup-title" class="display">You set it up in about five minutes.</h2>
+        <!-- COPY: draft -->
+        <p class="body">Her name, the time she likes to talk, her language, and a few hints to start from, like <q>Appa grew up in Madurai</q>.</p>
+        <figure class="art" data-thread data-tx=".3" data-ty=".55">
+          <!-- art:act2-setup -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An adult, seen from behind, stands at the window of a city flat in the evening with a phone in hand">
+  <defs>
+    <clipPath id="s3-cut"><path d="M40 140 C 110 40, 430 20, 570 100 C 650 150, 640 420, 570 500 C 480 590, 130 600, 60 500 C 0 420, 0 220, 40 140Z"/></clipPath>
+    <clipPath id="s3-sky"><rect x="324" y="82" width="244" height="326"/></clipPath>
+  </defs>
+  <g clip-path="url(#s3-cut)">
+  <rect width="640" height="600" fill="#F6DCD8"/>
+
+  <!-- city flat window at dusk -->
+  <g filter="url(#pc-shadow)"><rect x="312" y="70" width="268" height="350" rx="6" fill="#FBF4E6"/></g>
+  <g clip-path="url(#s3-sky)">
+    <rect x="324" y="82" width="244" height="326" fill="#F3B98E"/>
+    <ellipse cx="446" cy="410" rx="170" ry="90" fill="#E8822F" opacity="0.55"/>
+    <circle cx="512" cy="146" r="16" fill="#FBF4E6"/>
+    <g fill="#3A3488">
+      <rect x="324" y="300" width="40" height="108"/>
+      <rect x="364" y="262" width="34" height="146"/>
+      <rect x="398" y="318" width="48" height="90"/>
+      <rect x="446" y="240" width="38" height="168"/>
+      <rect x="484" y="290" width="44" height="118"/>
+      <rect x="528" y="270" width="40" height="138"/>
+    </g>
+    <g fill="#F2C14E">
+      <rect x="372" y="278" width="6" height="8"/><rect x="384" y="300" width="6" height="8"/>
+      <rect x="456" y="258" width="6" height="8"/><rect x="468" y="284" width="6" height="8"/><rect x="456" y="330" width="6" height="8"/>
+      <rect x="538" y="290" width="6" height="8"/><rect x="494" y="312" width="6" height="8"/>
+    </g>
+  </g>
+  <path d="M446 82 V408 M324 246 H568" stroke="#FBF4E6" stroke-width="10"/>
+  <g filter="url(#pc-shadow)"><rect x="300" y="414" width="292" height="16" rx="4" fill="#E9D9BC"/></g>
+
+  <!-- floor -->
+  <g filter="url(#pc-shadow)"><path d="M0 500 C 160 486, 420 490, 640 504 V600 H0Z" fill="#E9D9BC"/></g>
+
+  <!-- the child -->
+  <use href="#child-back" x="70" y="190" width="210" height="330"/>
+
+  <rect width="640" height="600" filter="url(#pc-grain)"/>
+  </g>
+</svg>
+<!-- /art:act2-setup -->
+        </figure>
+      </div>
+      <div class="dock">
+        <div class="phone phone-setup" role="img" aria-label="Illustrative: the Katha setup screen on the child's phone, with her name, a 10:30 am time, Tamil as her language, and two hints">
+          <div class="screen" aria-hidden="true">
+            <div class="setup-bar"><span class="mark">क</span>Set up Katha for your parent</div>
+            <div class="setup-body">
+              <div class="field"><span class="k">Her name</span><span class="v">Amma</span></div>
+              <div class="field"><span class="k">Best time to talk</span><span class="v">10:30 am, daily</span></div>
+              <div class="field"><span class="k">Her language</span><span class="v">Tamil</span></div>
+              <div class="field"><span class="k">A few hints</span>
+                <span class="hint">Appa grew up in Madurai</span>
+                <span class="hint">Lived in Bombay in the 70s</span>
+              </div>
+              <div class="field"><span class="btn">Ask her if she'd like to try</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="illustrative">Illustrative</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="act-ii consent" aria-labelledby="consent-title">
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty=".1"></i>
+    <div class="wrap consent-inner">
+      <!-- COPY: draft -->
+      <h2 id="consent-title" class="kicker">She decides.</h2>
+      <!-- COPY: draft -->
+      <p class="statement">
+        <span class="reveal">Katha asks her separately, in her language.</span>
+        <span class="reveal">She says yes in her own words.</span>
+        <span class="reveal">If she doesn't, Katha stays silent.</span>
       </p>
-
-      <!-- Replace YOUR_FORM_ID with your Formspree form ID (formspree.io) -->
-      <form class="waitlist" id="waitlist-form" action="https://formspree.io/f/maqrorwa" method="POST">
-        <input type="email" name="email" placeholder="Your email address" required aria-label="Email address">
-        <button type="submit">Join the waitlist</button>
-      </form>
-      <p class="form-note">Be the first to know when we launch. No spam, ever.</p>
-      <p class="form-status" id="form-status" role="status"></p>
+      <ul class="yeses" aria-label="Illustrative replies, each saying yes">
+        <li lang="hi">हाँ, ठीक है</li>
+        <li lang="ta">ஆமா, சரி</li>
+        <li lang="bn">হ্যাঁ, বলো</li>
+      </ul>
+      <p class="illustrative">Illustrative</p>
     </div>
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty=".95"></i>
+  </section>
 
-    <div class="scene" aria-hidden="true">
-      <div class="blob"></div>
+  <section class="act-ii morning" aria-labelledby="morning-title">
+    <div class="wrap split">
+      <div class="copy">
+        <!-- COPY: draft -->
+        <h2 id="morning-title" class="display">10:30 the next morning, her phone buzzes.</h2>
+        <figure class="art" data-thread data-tx=".655" data-ty=".587">
+          <!-- art:act2-morning -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An elderly woman in a saffron saree sits in an armchair by a sunlit arched window; the phone propped on the table beside her is buzzing">
+  <defs><clipPath id="s5-cut"><path d="M60 120 C 120 20, 420 10, 560 90 C 640 140, 630 420, 560 500 C 470 590, 140 600, 70 500 C 10 420, 10 200, 60 120Z"/></clipPath></defs>
+  <g clip-path="url(#s5-cut)">
+  <rect width="640" height="600" fill="#F6DCD8"/>
 
-      <div class="phone">
-        <div class="phone-screen">
-          <div class="chat-header">
-            <div class="avatar">क</div>
-            <div class="chat-title">
-              <div class="name">Katha</div>
-              <div class="status">listening…</div>
+  <!-- arched window, morning sun -->
+  <g filter="url(#pc-shadow)"><path d="M360 330 V160 A90 90 0 0 1 540 160 V330 Z" fill="#FBF4E6"/></g>
+  <circle cx="450" cy="175" r="44" fill="#F2C14E"/>
+  <path d="M450 72 V330 M360 232 H540" stroke="#E5DAC6" stroke-width="7"/>
+  <path d="M360 330 V160 A90 90 0 0 1 540 160 V330 Z" fill="none" stroke="#E5DAC6" stroke-width="7"/>
+
+  <!-- floor -->
+  <g filter="url(#pc-shadow)"><path d="M0 470 C 160 450, 420 455, 640 475 V600 H0Z" fill="#E9D9BC"/></g>
+
+  <!-- armchair -->
+  <g filter="url(#pc-shadow)"><rect x="110" y="205" width="210" height="260" rx="70" fill="#2F2A73"/></g>
+  <rect x="112" y="458" width="12" height="30" rx="4" fill="#1E1A4A"/>
+  <rect x="318" y="458" width="12" height="30" rx="4" fill="#1E1A4A"/>
+  <g filter="url(#pc-shadow)"><rect x="95" y="385" width="250" height="78" rx="26" fill="#3A3488"/></g>
+
+  <!-- her -->
+  <use href="#her-seated" x="136" y="196" width="232" height="280"/>
+
+  <!-- side table -->
+  <rect x="424" y="398" width="12" height="78" fill="#8E5530"/>
+  <ellipse cx="430" cy="478" rx="40" ry="8" fill="#8E5530"/>
+  <g filter="url(#pc-shadow)"><ellipse cx="430" cy="396" rx="74" ry="14" fill="#B5703E"/></g>
+
+  <!-- steel tumbler -->
+  <path d="M458 340 L 490 340 L 486 392 L 462 392 Z" fill="#D5D8E0"/>
+  <ellipse cx="474" cy="340" rx="16" ry="4" fill="#ECEEF3"/>
+  <rect x="465" y="346" width="5" height="40" fill="#FFFFFF" opacity="0.7"/>
+
+  <!-- the phone buzzing -->
+  <g class="ripples" fill="none" stroke="#E8822F" stroke-width="3">
+    <circle cx="418" cy="352" r="52" opacity="0.5"/>
+    <circle cx="418" cy="352" r="78" opacity="0.28"/>
+    <circle cx="418" cy="352" r="104" opacity="0.12"/>
+  </g>
+  <g filter="url(#pc-shadow)"><rect x="398" y="314" width="42" height="76" rx="8" fill="#241D5C"/></g>
+  <rect x="402" y="320" width="34" height="64" rx="5" fill="#FFF3DE"/>
+  <circle cx="411" cy="352" r="5" fill="#2FA36B"/>
+  <g fill="#241D5C">
+    <rect x="419" y="349" width="2" height="6" rx="1"/><rect x="423" y="346" width="2" height="12" rx="1"/>
+    <rect x="427" y="348" width="2" height="8" rx="1"/><rect x="431" y="350" width="2" height="4" rx="1"/>
+  </g>
+
+  <rect width="640" height="600" filter="url(#pc-grain)"/>
+  </g>
+</svg>
+<!-- /art:act2-morning -->
+        </figure>
+        <!-- COPY: draft -->
+        <p class="body big">It's a voice, not an app.</p>
+        <button type="button" class="hear" data-hear="audio/katha-sample.mp3" aria-pressed="false" hidden>
+          <span class="hear-icon" aria-hidden="true"></span>Hear Katha
+        </button>
+      </div>
+      <div class="dock">
+        <div class="phone phone-chat" role="img" aria-label="Illustrative WhatsApp chat: Katha sends a voice note, she replies with a voice note, and Katha is listening">
+          <div class="screen chat" aria-hidden="true">
+            <div class="chat-head">
+              <span class="avatar">क</span>
+              <span class="who"><span class="name">Katha</span><span class="chat-status">listening…</span></span>
+            </div>
+            <div class="chat-body">
+              <div class="msg in">
+                <span class="play"></span>
+                <span class="vwave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                <span class="meta">0:24 · 10:30</span>
+              </div>
+              <div class="msg out">
+                <span class="play"></span>
+                <span class="vwave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                <span class="meta">2:41 · 10:33</span>
+              </div>
+              <div class="msg in listening"><span class="dots"><i></i><i></i><i></i></span>listening…</div>
             </div>
           </div>
-          <div class="chat-body">
-            <div class="bubble in">
-              <div class="label">Katha</div>
-              <div class="voice">
-                <div class="play"></div>
-                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-                <div class="duration">0:32</div>
-              </div>
-            </div>
-            <div class="bubble out">
-              <div class="label">Amma</div>
-              <div class="voice">
-                <div class="play"></div>
-                <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-                <div class="duration">2:47</div>
-              </div>
-            </div>
-            <div class="bubble in">
-              <div class="typing"><span></span><span></span><span></span></div>
-            </div>
-          </div>
         </div>
+        <p class="illustrative">Illustrative</p>
       </div>
-
-      <div class="float-card story-card">
-        <div class="story-photo"></div>
-        <div class="story-title">"Our first Diwali in Bombay, 1972"</div>
-        <div class="story-meta">Story saved · Childhood</div>
-      </div>
-
-      <div class="float-card memory-chip">
-        <div class="chip-icon">❤</div>
-        <div class="chip-text">
-          <div class="t">Memory card created</div>
-          <div class="s">Shared with 4 family members</div>
-        </div>
-      </div>
-
-      <div class="float-card book-card">
-        <div class="book"></div>
-        <div>
-          <div class="t">128 stories</div>
-          <div class="s">and counting…</div>
-        </div>
-      </div>
-
-      <span class="spark s1"></span>
-      <span class="spark s2"></span>
-      <span class="spark s3"></span>
-      <span class="spark s4"></span>
-      <span class="spark s5"></span>
     </div>
-  </main>
+  </section>
 
-  <footer>
-    <span class="footer-left">
-      <span>© 2026 Katha · Made with <span class="heart">♥</span> in India</span>
-      <span class="entity">Katha is a product of ONENOTSEVEN LABS (107 Labs)</span>
-    </span>
-    <span>Their voice. Their words. Forever yours.</span>
-  </footer>
+  <!-- REVIEW PLACEHOLDER: Acts III–VI land after review of Acts I–II. Remove before merge. -->
+  <section class="todo" id="join">
+    <div class="wrap">
+      <p class="eyebrow">Review build</p>
+      <p class="body">Acts III to VI (the days, her story, the archive, and the pilot sign-up) come next.</p>
+    </div>
+  </section>
+</main>
 
-</div>
-
-<script>
-  // Progressive enhancement: submit via fetch so the user stays on the page.
-  const form = document.getElementById('waitlist-form');
-  const status = document.getElementById('form-status');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = form.querySelector('button');
-    btn.disabled = true;
-    btn.textContent = 'Joining…';
-    try {
-      const res = await fetch(form.action, {
-        method: 'POST',
-        body: new FormData(form),
-        headers: { 'Accept': 'application/json' }
-      });
-      if (res.ok) {
-        status.textContent = "You're on the list! We'll write to you soon. ✦";
-        status.className = 'form-status ok';
-        form.reset();
-      } else {
-        throw new Error();
-      }
-    } catch {
-      status.textContent = 'Something went wrong — please try again in a moment.';
-      status.className = 'form-status err';
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Join the waitlist';
-    }
-  });
-</script>
+<footer class="site-foot">
+  <div class="wrap">
+    <span>© 2026 Katha · a product of ONENOTSEVEN LABS (107 Labs)</span>
+    <span>Katha is a companion, not therapy or medical care.</span>
+  </div>
+</footer>
 </body>
 </html>
