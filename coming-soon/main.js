@@ -85,6 +85,8 @@
     const thread = $('.thread', story);
     const threadPath = $('path', thread);
     const ink = $('#thread-ink', thread);
+    const nib = $('.nib', thread);
+    const nibDots = $$('circle', nib);
     let samples = [];
     let total = 0;
     let penY = 0;
@@ -160,7 +162,7 @@
     // The pen stays where the waveform started on screen; the line is drawn up to it.
     function drawThread() {
       if (!samples.length) return;
-      if (reducedMotion()) { threadPath.style.strokeDashoffset = 0; return; }
+      if (reducedMotion()) { threadPath.style.strokeDashoffset = 0; nib.classList.remove('on'); return; }
       const tip = window.scrollY + penY;
       let lo = 0;
       let hi = samples.length - 1;
@@ -172,7 +174,13 @@
       const a = samples[Math.max(0, lo - 1)];
       const b = samples[lo];
       const f = b.y > a.y ? Math.min(1, Math.max(0, (tip - a.y) / (b.y - a.y))) : 1;
-      threadPath.style.strokeDashoffset = total - (a.len + (b.len - a.len) * f);
+      const drawn = a.len + (b.len - a.len) * f;
+      threadPath.style.strokeDashoffset = total - drawn;
+      // The pen tip sits on the end of the drawn line (and rests at the shelf once the line is done).
+      const p = threadPath.getPointAtLength(drawn);
+      // cx/cy rather than a transform, so the gradient ink is read at the tip's real height.
+      nibDots.forEach((c) => { c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); });
+      nib.classList.toggle('on', drawn > 2);
     }
 
     ScrollTrigger.addEventListener('refresh', buildThread);
