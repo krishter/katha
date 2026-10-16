@@ -149,6 +149,12 @@ class Settings(BaseSettings):
     # 24-hour window — a rollback, not a mode to run in.
     SCHEDULED_OPENER_ENABLED: bool = False
 
+    # C6: the Sarvam TTS model. Flip to bulbul:v4-flash only after the blind
+    # A/B in COST_TO_SERVE.md §10 (Hindi, Tamil, English; Krish and two pilot
+    # parents) finds it at least as good. Voices per language are in
+    # media/voices.py; a language with no v4 voice stays on v3.
+    TTS_MODEL: str = "bulbul:v3"
+
     # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
     # /admin/metrics and /admin/metrics/view answer 404, as if they did not
     # exist. Generate with:

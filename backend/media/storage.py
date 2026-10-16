@@ -83,3 +83,19 @@ async def delete_media(key: str) -> None:
         client.delete_object, Bucket=settings.AWS_S3_BUCKET, Key=key
     )
     logger.info("Deleted %s from S3", key)
+
+
+async def download_media(key: str) -> bytes | None:
+    """
+    Fetch an object's bytes, or None if there is no such object. Any other
+    error is raised, so a caller can tell "not cached yet" from "S3 is
+    down".
+    """
+    client = _s3_client()
+    try:
+        response = await asyncio.to_thread(
+            client.get_object, Bucket=settings.AWS_S3_BUCKET, Key=key
+        )
+    except client.exceptions.NoSuchKey:
+        return None
+    return await asyncio.to_thread(response["Body"].read)

@@ -107,14 +107,22 @@ async def _handle_parent_consent(
     if answer is parent_consent.Answer.YES:
         await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
         await _speak(
-            whatsapp, profile, parent_consent.GRANTED_TEXT, stage="parent_granted"
+            whatsapp,
+            profile,
+            parent_consent.GRANTED_TEXT,
+            stage="parent_granted",
+            fixed=True,
         )
         return
 
     if answer is parent_consent.Answer.NO:
         await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
         await _speak(
-            whatsapp, profile, parent_consent.DECLINE_TEXT, stage="parent_declined"
+            whatsapp,
+            profile,
+            parent_consent.DECLINE_TEXT,
+            stage="parent_declined",
+            fixed=True,
         )
         return
 
@@ -164,22 +172,40 @@ async def _persist_consent_turn(
         return None
 
 
-async def _speak(whatsapp, profile: UserProfileModel, text: str, *, stage: str) -> None:
+async def _speak(
+    whatsapp,
+    profile: UserProfileModel,
+    text: str,
+    *,
+    stage: str,
+    fixed: bool = False,
+) -> None:
     """
     Say something as a voice note in the parent's own language, falling
     back to text if speech fails.
 
     Voice is the point: this user was chosen for a product that talks, and
     the first thing she hears should not be a wall of text in English.
+
+    `fixed` marks text with no name in it, the same for every parent: it
+    comes from the system-speech cache instead of a fresh synthesis
+    (COST_TO_SERVE.md C6). Anything personalised must leave it False.
     """
     try:
-        from adapters import sarvam_tts
-        from media.audio_convert import convert_wav_to_ogg
+        if fixed:
+            from media import system_speech
 
-        audio = await sarvam_tts.synthesize(
-            text, language_code=profile.preferred_language, purpose="tts_system"
-        )
-        audio = await convert_wav_to_ogg(audio)
+            audio = await system_speech.get_system_speech(
+                text, profile.preferred_language
+            )
+        else:
+            from adapters import sarvam_tts
+            from media.audio_convert import convert_wav_to_ogg
+
+            audio = await sarvam_tts.synthesize(
+                text, language_code=profile.preferred_language, purpose="tts_system"
+            )
+            audio = await convert_wav_to_ogg(audio)
         await whatsapp.send_voice_note(
             profile.whatsapp_number, audio, mime_type="audio/ogg"
         )
@@ -233,7 +259,9 @@ async def _open_session_on_demand(
             "Inbound from %s but a session already completed today — not opening",
             profile.user_id,
         )
-        await _speak(whatsapp, profile, _ALREADY_TALKED_TEXT, stage="already_talked")
+        await _speak(
+            whatsapp, profile, _ALREADY_TALKED_TEXT, stage="already_talked", fixed=True
+        )
         return None
 
     try:

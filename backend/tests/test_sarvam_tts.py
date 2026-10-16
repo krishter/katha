@@ -84,3 +84,61 @@ async def test_synthesize_truncates_long_text(mock_tts_response):
     # Verify the truncated text was sent (check via call args)
     call_kwargs = mock_client.post.call_args.kwargs
     assert len(call_kwargs["json"]["text"]) == 2500
+
+
+# ── C6: model, voice and field selection (COST_TO_SERVE.md §10) ───────────────
+
+
+async def _sent(monkeypatch, tts_model, language, mock_tts_response, **kwargs):
+    monkeypatch.setattr("adapters.sarvam_tts.settings.TTS_MODEL", tts_model)
+    with patch("adapters.sarvam_tts.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(return_value=mock_tts_response)
+        mock_client_cls.return_value = mock_client
+        await synthesize("नमस्ते", language, purpose="tts_reply", **kwargs)
+    return mock_client.post.call_args.kwargs["json"]
+
+
+async def test_v3_by_default_with_ritu_and_its_original_field(
+    monkeypatch, mock_tts_response
+):
+    body = await _sent(monkeypatch, "bulbul:v3", "hi-IN", mock_tts_response)
+    assert body["model"] == "bulbul:v3"
+    assert body["speaker"] == "ritu"
+    # Unchanged from what production has always sent.
+    assert body["target_language_code"] == "hi-IN"
+    assert "language_code" not in body
+
+
+async def test_v4_flash_uses_the_per_language_voice_and_language_code(
+    monkeypatch, mock_tts_response, usage_rows
+):
+    body = await _sent(monkeypatch, "bulbul:v4-flash", "hi-IN", mock_tts_response)
+    assert body["model"] == "bulbul:v4-flash"
+    assert body["speaker"] == "ritu_hi_conversation"
+    assert body["language_code"] == "hi-IN"
+    assert "target_language_code" not in body
+    assert usage_rows[0]["model"] == "bulbul:v4-flash"
+
+
+@pytest.mark.parametrize("language", ["ml-IN", "or-IN", "ta-IN", "pa-IN", "as-IN"])
+async def test_v4_flash_falls_back_to_v3_for_an_unmapped_language(
+    monkeypatch, mock_tts_response, usage_rows, language
+):
+    body = await _sent(monkeypatch, "bulbul:v4-flash", language, mock_tts_response)
+    assert body["model"] == "bulbul:v3"
+    assert body["speaker"] == "ritu"
+    assert body["target_language_code"] == language
+    # The ledger prices what was actually used.
+    assert usage_rows[0]["model"] == "bulbul:v3"
+
+
+def test_every_v4_voice_belongs_to_its_language():
+    from media.voices import V4_FLASH_VOICES
+    from prompts.system_prompt import SUPPORTED_LANGUAGES
+
+    for language, voice in V4_FLASH_VOICES.items():
+        assert language in SUPPORTED_LANGUAGES
+        assert f"_{language.split('-')[0]}_" in voice, (language, voice)

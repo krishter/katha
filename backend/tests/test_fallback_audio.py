@@ -29,11 +29,11 @@ def test_get_fallback_text_returns_message_per_stage():
 async def test_preload_populates_cache_for_every_language():
     with (
         patch(
-            "core.fallback_audio.sarvam_tts.synthesize",
+            "media.system_speech.sarvam_tts.synthesize",
             new=AsyncMock(return_value=b"fake-wav"),
         ),
         patch(
-            "core.fallback_audio.convert_wav_to_ogg",
+            "media.system_speech.audio_convert.convert_wav_to_ogg",
             new=AsyncMock(return_value=b"fake-ogg"),
         ),
     ):
@@ -46,11 +46,11 @@ async def test_preload_populates_cache_for_every_language():
 async def test_get_fallback_audio_falls_back_to_english_for_unknown_language():
     with (
         patch(
-            "core.fallback_audio.sarvam_tts.synthesize",
+            "media.system_speech.sarvam_tts.synthesize",
             new=AsyncMock(return_value=b"fake-wav"),
         ),
         patch(
-            "core.fallback_audio.convert_wav_to_ogg",
+            "media.system_speech.audio_convert.convert_wav_to_ogg",
             new=AsyncMock(return_value=b"fake-ogg"),
         ),
     ):
@@ -72,11 +72,11 @@ async def test_preload_does_not_raise_when_tts_fails_for_one_language():
 
     with (
         patch(
-            "core.fallback_audio.sarvam_tts.synthesize",
+            "media.system_speech.sarvam_tts.synthesize",
             new=AsyncMock(side_effect=_flaky_synthesize),
         ),
         patch(
-            "core.fallback_audio.convert_wav_to_ogg",
+            "media.system_speech.audio_convert.convert_wav_to_ogg",
             new=AsyncMock(return_value=b"fake-ogg"),
         ),
     ):

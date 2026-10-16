@@ -52,3 +52,27 @@ def usage_rows(request, monkeypatch):
     monkeypatch.setattr(usage, "_inbound_already_recorded", _inbound_already_recorded)
     monkeypatch.setattr(usage, "_set_status", _set_status)
     yield rows
+
+
+@pytest.fixture(autouse=True)
+def system_speech_store(monkeypatch):
+    """
+    Keep the system-speech cache in memory for every test. backend/.env can
+    hold real AWS keys, and a unit test must never read or write the real
+    bucket. Yields the dict standing in for S3, keyed by object key.
+    """
+    from media import system_speech
+
+    store: dict[str, bytes] = {}
+
+    async def _get(key):
+        return store.get(key)
+
+    async def _put(key, data):
+        store[key] = data
+
+    monkeypatch.setattr(system_speech, "_s3_get", _get)
+    monkeypatch.setattr(system_speech, "_s3_put", _put)
+    system_speech.clear_memory()
+    yield store
+    system_speech.clear_memory()

@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 from enum import Enum
 
-from adapters import sarvam_tts
-from media.audio_convert import convert_wav_to_ogg
+from media import system_speech
 from prompts.system_prompt import SUPPORTED_LANGUAGES
 
 logger = logging.getLogger(__name__)
@@ -57,11 +56,11 @@ async def preload_fallback_audio() -> None:
     for stage, text in _MESSAGES.items():
         for language_code in SUPPORTED_LANGUAGES:
             try:
-                wav_bytes = await sarvam_tts.synthesize(
-                    text, language_code=language_code, purpose="tts_fallback"
+                # Through the system-speech cache: synthesised once and kept
+                # in S3, so a restart no longer re-synthesises every clip.
+                _cache[(stage, language_code)] = await system_speech.get_system_speech(
+                    text, language_code, purpose="tts_fallback"
                 )
-                ogg_bytes = await convert_wav_to_ogg(wav_bytes)
-                _cache[(stage, language_code)] = ogg_bytes
             except Exception:
                 logger.error(
                     "Failed to pre-synthesize fallback audio for stage=%s language=%s",
