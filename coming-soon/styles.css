@@ -67,11 +67,9 @@ fieldset { border: 0; min-width: 0; }
 .body.big { font-family: var(--display); font-style: italic; font-size: clamp(1.4rem, 2.4vw, 1.9rem); color: var(--ink); }
 .lede { font-size: clamp(1.05rem, 1.6vw, 1.25rem); }
 .illustrative { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); text-align: center; margin-top: 12px; }
-.mark {
-  display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
-  background: linear-gradient(135deg, var(--saffron), var(--gold)); color: var(--warm);
-  font-family: var(--sans); font-size: 1rem; font-weight: 600; flex: none;
-}
+/* The brush க mark (symbol #ka). Primary colours on light grounds; .rev for the reverse on indigo. */
+.mark { display: block; width: 34px; height: 34px; flex: none; overflow: visible; }
+.mark.rev { --ka-front: #F9F4EE; --ka-grain: #E3D5C2; --ka-grain-o: .9; }
 .statement { font-family: var(--display); font-size: clamp(1.8rem, 4.4vw, 3.6rem); line-height: 1.2; max-width: 22ch; text-wrap: balance; }
 
 /* ---------- Layers: grounds < thread < content ----------
@@ -175,7 +173,7 @@ fieldset { border: 0; min-width: 0; }
 .intro { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; padding-block: 16vh 14vh; }
 .intro-wave { width: min(320px, 80%); margin-bottom: 18px; }
 .intro-wave-svg { display: block; width: 100%; height: auto; overflow: visible; }
-.mark-lg { width: 52px; height: 52px; border-radius: 16px; font-size: 1.5rem; }
+.mark-lg { width: 84px; height: 84px; }
 .intro-title { font-size: clamp(2.4rem, 5.4vw, 4.4rem); }
 .intro-lede { max-width: 34ch; color: var(--on-dark-soft); }
 .how {
@@ -223,7 +221,7 @@ fieldset { border: 0; min-width: 0; }
 }
 .screen { height: 100%; border-radius: 30px; overflow: hidden; background: var(--warm); display: flex; flex-direction: column; }
 .setup-bar { display: flex; align-items: center; gap: 10px; padding: 26px 16px 14px; font-weight: 600; font-size: 0.86rem; color: var(--ink); border-bottom: 1px solid #E9DFCC; }
-.setup-bar .mark { width: 26px; height: 26px; border-radius: 8px; font-size: 0.8rem; }
+.setup-bar .mark { width: 26px; height: 26px; }
 .setup-body { padding: 14px 16px; display: grid; gap: 12px; }
 .field { display: grid; gap: 4px; }
 .field .k { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
@@ -233,7 +231,8 @@ fieldset { border: 0; min-width: 0; }
 
 .chat { background: #EFE7DA; }
 .chat-head { display: flex; align-items: center; gap: 10px; padding: 24px 14px 12px; background: var(--ok); color: #fff; }
-.chat-head .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, var(--saffron), var(--gold)); font-weight: 600; }
+.chat-head .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #F2EADD; }
+.chat-head .avatar .mark { width: 24px; height: 24px; }
 .chat-head .who { display: grid; line-height: 1.25; }
 .chat-head .name { font-weight: 600; font-size: 0.92rem; }
 .chat-status { font-size: 0.72rem; opacity: 0.9; }
