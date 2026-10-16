@@ -1,0 +1,67 @@
+{
+  "ran_at": "20261016T170016Z",
+  "cases_selected": [
+    "tc05"
+  ],
+  "complete_run": false,
+  "objective": "0/0",
+  "rubric": "1/1",
+  "overall": "1/1",
+  "results": [
+    {
+      "tc": "TC-05",
+      "kind": "rubric",
+      "passed": true,
+      "evidence": "Responses (text, session_end_suggested):\n  [1] end=False :: \"That's perfectly alright, Subramaniam \u2014 we can keep it very gentle today. Just one small question: can you tell me what the house you grew up in looked like?\"\n  [2] end=True :: \"That's completely fine \u2014 rest is important, and I'm always here when you feel like talking. Take care of yourself today, Subramaniam.\"\nsession_end_suggested reached by exchange: 2\nword_counts=[29, 22] not_growing=True under_ceiling(<=100)=True low_pressure(<=1 question each)=True"
+    }
+  ],
+  "usage": {
+    "prices_as_of": "2026-10-16",
+    "usd_inr_rate": "95.06",
+    "rows": 4,
+    "unpriced_rows": 0,
+    "inr_total": "0.8137",
+    "by_operation": {
+      "dialogue": {
+        "calls": 2,
+        "models": [
+          "claude-sonnet-4-6"
+        ],
+        "input_tokens": 2281,
+        "output_tokens": 93,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "mean_input_tokens": 1140,
+        "mean_output_tokens": 46,
+        "inr": "0.7831",
+        "inr_per_call": "0.3916",
+        "latency_ms_p50": 2029,
+        "latency_ms_p95": 2550
+      },
+      "extraction": {
+        "calls": 2,
+        "models": [
+          "claude-haiku-5-5"
+        ],
+        "input_tokens": 2201,
+        "output_tokens": 203,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "mean_input_tokens": 1100,
+        "mean_output_tokens": 102,
+        "inr": "0.0306",
+        "inr_per_call": "0.0153",
+        "latency_ms_p50": 1116,
+        "latency_ms_p95": 2491
+      }
+    },
+    "by_case_inr": {
+      "eval-tc05": "0.8137"
+    }
+  },
+  "verbatim_quotes": {
+    "checked": 0,
+    "exact": 0,
+    "not_verbatim": []
+  }
+}

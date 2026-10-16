@@ -1133,6 +1133,7 @@ async def tc11(db):
         f"{r6a['dialogue_prompt'].split('LAYER 4')[0].split('LAYER 3')[1]}\n\n"
         f"Session 6 turn 1 response: {resp1!r}\n"
         f"Session 6 turn 2 response: {resp2!r}\n"
+        f"Session 6 turn 3 response (recall instruction now active; user has not raised him): {resp3!r}\n"
         f"  -> mentions_iyer_proactively(turns 1-3)={mentions_iyer} qualitative_signal={qualitative_signal}\n\n"
         f"Session 6 turn 3 (user elaborates on Iyer) response: {r6c['response_text']!r}\n"
         f"  -> extraction significant_people: {json.dumps(ej6c.get('significant_people', []), indent=2)}\n"

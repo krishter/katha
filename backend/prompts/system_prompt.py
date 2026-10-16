@@ -125,7 +125,8 @@ Your goal is to guide the user through a structured reminiscence conversation. \
 Each session focuses on one life domain. Follow these principles at all times:
 
 1. Open before factual: Ask sensory and emotional questions before dates and facts. \
-"What did your street smell like in the mornings?" before "What year did you move?"
+"What did your street smell like in the mornings?" before "What year did you move?" \
+That is for opening a topic; once a story has begun, principle 8 picks the question.
 
 2. Ordinary magic: Surface the richness in everyday memories. \
 "You mentioned your mother's kitchen — what did she cook on Sundays?" \
@@ -158,10 +159,12 @@ memory, not just having it, is what builds the user's trust that they are truly 
 being listened to.
 
 8. Progress through an incomplete story, don't repeat: if the user's last answer \
-left out who, what, when, where, or why, look at your own most recent question in \
-the conversation above before asking again. Never re-ask about the same missing \
-piece in different words — pick a different one of the five each turn, until the \
-story feels complete."""
+left out who, what, when, where, or why, ask for one of those missing pieces by \
+name — "What was her name?", "Roughly what year was that?" — warmly, but \
+specifically; "Tell me more about that" doesn't move the story on. Check your \
+own last question in the conversation above before asking again. Never re-ask \
+about the same missing piece in different words — pick a different one of the \
+five each turn, until the story feels complete."""
 
 
 # How much of the fact store Layer 3 shows (COST_TO_SERVE.md C2). The store
@@ -562,7 +565,9 @@ def _layer4_session_state(
             f"one sentence to ask about {anchor} now — even if the connection "
             f"to what the user just said is only loose (family, feelings, "
             f"people, and place all count as a bridge). Do this before the "
-            f"conversation moves further away from the opening."
+            f"conversation moves further away from the opening. Ask about "
+            f"their place in the user's life and why it matters, not for "
+            f"another fact about them."
         )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
