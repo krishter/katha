@@ -1,0 +1,134 @@
+<!-- Shared defs and character sheet. Inlined once at the top of <body>; scenes reference these by id.
+     Paper-cut: flat fills, one soft drop-shadow (dy 6, blur 7, indigo @18%), grain overlay <= 7%. -->
+<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="pc-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#241D5C" flood-opacity="0.18"/>
+    </filter>
+    <filter id="pc-grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.14  0 0 0 0 0.11  0 0 0 0 0.36  0 0 0 0.07 0"/>
+    </filter>
+    <pattern id="ab-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="1.6" fill="#3D3590"/>
+    </pattern>
+  </defs>
+
+  <!-- Her (the parent), seated. Grey hair in a bun, round reading glasses, saffron saree with a gold border,
+       warm brown skin, no features beyond the glasses. Coordinates match style-paper-cut.svg so she drops
+       into the armchair at x=136 y=196. -->
+  <symbol id="her-seated" viewBox="136 196 232 280" overflow="visible">
+    <g filter="url(#pc-shadow)">
+      <path d="M168 300 C 172 278, 262 276, 270 300 L 292 405 L 150 405 Z" fill="#E8822F"/>
+    </g>
+    <path d="M150 392 H 300 C 318 392, 324 406, 318 420 L 302 468 H 168 C 150 468, 140 452, 145 432 Z" fill="#E8822F" filter="url(#pc-shadow)"/>
+    <rect x="168" y="456" width="134" height="12" fill="#D9A21B"/>
+    <path d="M188 284 C 230 302, 258 340, 272 402 L 292 405 C 278 334, 250 296, 262 284 Z" fill="#C85A2A"/>
+    <path d="M190 286 C 232 304, 260 342, 274 403" fill="none" stroke="#D9A21B" stroke-width="4"/>
+    <rect x="203" y="262" width="22" height="22" fill="#8F5136"/>
+    <circle cx="212" cy="236" r="35" fill="#C9C4D0"/>
+    <circle cx="220" cy="242" r="30" fill="#9A573C"/>
+    <path d="M190 226 C 196 200, 240 196, 250 222 C 236 214, 210 214, 190 226Z" fill="#C9C4D0"/>
+    <circle cx="178" cy="226" r="16" fill="#C9C4D0"/>
+    <g fill="none" stroke="#241D5C" stroke-width="2.5">
+      <circle cx="228" cy="240" r="7.5"/><circle cx="246" cy="240" r="7.5"/><path d="M235.5 240 H238.5"/>
+    </g>
+    <path d="M262 330 C 290 352, 318 372, 352 374" stroke="#8F5136" stroke-width="15" fill="none" stroke-linecap="round"/>
+  </symbol>
+
+  <!-- The child: adult in their 40s, indigo shirt, seen from behind and slightly in profile, phone in hand. -->
+  <symbol id="child-back" viewBox="0 0 210 330" overflow="visible">
+    <circle cx="188" cy="158" r="34" fill="#F2C14E" opacity="0.3"/>
+    <path d="M50 140 C 36 186, 34 238, 40 286" stroke="#2F2A73" stroke-width="24" fill="none" stroke-linecap="round"/>
+    <g filter="url(#pc-shadow)">
+      <path d="M44 146 C 46 116, 72 104, 100 104 C 128 104, 152 116, 156 146 L 164 330 H 36 Z" fill="#3A3488"/>
+    </g>
+    <path d="M100 104 V 330" stroke="#342E7C" stroke-width="2"/>
+    <rect x="88" y="84" width="24" height="26" rx="6" fill="#8F5A40"/>
+    <circle cx="100" cy="58" r="34" fill="#2A2233"/>
+    <ellipse cx="133" cy="62" rx="6" ry="9" fill="#9A6A4E"/>
+    <path d="M150 138 C 170 168, 176 200, 168 218 C 178 206, 186 190, 186 174" stroke="#3A3488" stroke-width="22" fill="none" stroke-linecap="round"/>
+    <g transform="rotate(12 187 156)">
+      <rect x="178" y="138" width="20" height="36" rx="4" fill="#241D5C"/>
+      <rect x="181" y="142" width="14" height="28" rx="2" fill="#FFF3DE"/>
+    </g>
+    <circle cx="186" cy="174" r="9" fill="#8F5A40"/>
+  </symbol>
+
+  <!-- The grandchild: about nine, headphones on, phone held in both hands. Appears only in the bookend. -->
+  <symbol id="grandchild" viewBox="0 0 200 260" overflow="visible">
+    <g filter="url(#pc-shadow)">
+      <rect x="34" y="218" width="132" height="34" rx="17" fill="#3A3488"/>
+      <path d="M60 150 C 62 124, 82 114, 100 114 C 120 114, 138 124, 140 150 L 146 230 H 54 Z" fill="#D0566E"/>
+    </g>
+    <rect x="90" y="100" width="20" height="18" rx="5" fill="#8F5A40"/>
+    <circle cx="100" cy="80" r="30" fill="#A86A48"/>
+    <path d="M70 80 C 70 50, 130 46, 131 78 C 118 66, 86 62, 70 80Z" fill="#2A2233"/>
+    <path d="M66 82 C 64 40, 136 40, 134 82" stroke="#241D5C" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <rect x="58" y="72" width="16" height="24" rx="7" fill="#F2C14E"/>
+    <rect x="126" y="72" width="16" height="24" rx="7" fill="#F2C14E"/>
+    <path d="M68 146 C 58 178, 74 196, 96 196" stroke="#A86A48" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <path d="M132 146 C 142 178, 126 196, 104 196" stroke="#A86A48" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <rect x="84" y="170" width="32" height="44" rx="5" fill="#241D5C"/>
+    <rect x="88" y="175" width="24" height="34" rx="3" fill="#FFF3DE"/>
+    <path d="M97 186 L 106 192 L 97 198 Z" fill="#2FA36B"/>
+  </symbol>
+
+  <!-- Vignettes linked by the quote card's flight (Act III). Same 640x600 space as the full scenes. -->
+  <clipPath id="vh-cut"><path d="M60 120 C 120 20, 420 10, 560 90 C 640 140, 630 420, 560 500 C 470 590, 140 600, 70 500 C 10 420, 10 200, 60 120Z"/></clipPath>
+  <clipPath id="vc-cut"><path d="M40 140 C 110 40, 430 20, 570 100 C 650 150, 640 420, 570 500 C 480 590, 130 600, 60 500 C 0 420, 0 220, 40 140Z"/></clipPath>
+
+  <symbol id="vignette-her" viewBox="0 0 640 600" overflow="visible">
+    <g clip-path="url(#vh-cut)">
+      <rect width="640" height="600" fill="#F7E3BF"/>
+      <g filter="url(#pc-shadow)"><path d="M0 470 C 160 450, 420 455, 640 475 V600 H0Z" fill="#E9D9BC"/></g>
+      <g filter="url(#pc-shadow)"><rect x="110" y="205" width="210" height="260" rx="70" fill="#2F2A73"/></g>
+      <rect x="112" y="458" width="12" height="30" rx="4" fill="#1E1A4A"/>
+      <rect x="318" y="458" width="12" height="30" rx="4" fill="#1E1A4A"/>
+      <g filter="url(#pc-shadow)"><rect x="95" y="385" width="250" height="78" rx="26" fill="#3A3488"/></g>
+      <use href="#her-seated" x="136" y="196" width="232" height="280"/>
+      <rect x="424" y="398" width="12" height="78" fill="#8E5530"/>
+      <ellipse cx="430" cy="478" rx="40" ry="8" fill="#8E5530"/>
+      <g filter="url(#pc-shadow)"><ellipse cx="430" cy="396" rx="74" ry="14" fill="#B5703E"/></g>
+      <path d="M458 340 L 490 340 L 486 392 L 462 392 Z" fill="#D5D8E0"/>
+      <ellipse cx="474" cy="340" rx="16" ry="4" fill="#ECEEF3"/>
+      <g filter="url(#pc-shadow)"><rect x="398" y="314" width="42" height="76" rx="8" fill="#241D5C"/></g>
+      <rect x="402" y="320" width="34" height="64" rx="5" fill="#FFF3DE"/>
+      <rect width="640" height="600" filter="url(#pc-grain)"/>
+    </g>
+  </symbol>
+
+  <!-- The child at an airport gate, phone in hand; the phone sits at (277, 356). -->
+  <symbol id="vignette-child" viewBox="0 0 640 600" overflow="visible">
+    <g clip-path="url(#vc-cut)">
+      <rect width="640" height="600" fill="#F6DCD8"/>
+      <g filter="url(#pc-shadow)"><rect x="250" y="80" width="360" height="290" rx="8" fill="#FBF4E6"/></g>
+      <rect x="262" y="92" width="336" height="266" fill="#F3D9A8"/>
+      <rect x="262" y="318" width="336" height="40" fill="#E9C79A"/>
+      <g fill="#3A3488">
+        <ellipse cx="460" cy="250" rx="118" ry="15"/>
+        <path d="M440 252 L 392 302 L 420 302 L 490 254Z"/>
+        <path d="M352 250 L 334 212 L 354 212 L 384 246Z"/>
+      </g>
+      <path d="M374 92 V358 M486 92 V358" stroke="#FBF4E6" stroke-width="8"/>
+      <g filter="url(#pc-shadow)"><path d="M0 470 C 160 456, 420 460, 640 474 V600 H0Z" fill="#E9D9BC"/></g>
+      <g fill="#C9CCD8">
+        <rect x="412" y="392" width="48" height="40" rx="8"/><rect x="466" y="392" width="48" height="40" rx="8"/><rect x="520" y="392" width="48" height="40" rx="8"/>
+        <rect x="408" y="428" width="164" height="16" rx="6"/>
+      </g>
+      <path d="M428 444 V470 M552 444 V470" stroke="#241D5C" stroke-width="6"/>
+      <use href="#child-back" x="90" y="200" width="210" height="330"/>
+      <rect width="640" height="600" filter="url(#pc-grain)"/>
+    </g>
+  </symbol>
+
+  <!-- The quote card in flight: lines stand in for the quote, which is shown full size beside the scene. -->
+  <symbol id="mini-card" viewBox="0 0 120 90" overflow="visible">
+    <g filter="url(#pc-shadow)"><rect width="120" height="90" rx="9" fill="#FBF4E6"/></g>
+    <rect x="12" y="12" width="14" height="14" rx="4" fill="#E8822F"/>
+    <rect x="12" y="36" width="96" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
+    <rect x="12" y="48" width="84" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
+    <rect x="12" y="60" width="58" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
+    <rect x="12" y="74" width="34" height="4" rx="2" fill="#D9A21B"/>
+  </symbol>
+</svg>

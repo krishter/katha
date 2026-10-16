@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" class="scene" role="img" aria-label="A shelf of eight book spines, one for each chapter of her life, each lit as it fills in">
+  <defs><clipPath id="sh-above"><rect width="640" height="420"/></clipPath></defs>
+  <g fill="#F2C14E">
+    <circle cx="320" cy="300" r="215" opacity="0.05"/>
+    <circle cx="320" cy="300" r="155" opacity="0.07"/>
+    <circle cx="320" cy="300" r="95" opacity="0.09"/>
+  </g>
+  <g clip-path="url(#sh-above)">
+    <g class="spine" data-lit="#E8822F">
+      <rect class="spine-body" x="95" y="170" width="52" height="250" rx="3" fill="#E8822F"/>
+      <rect x="95" y="192" width="52" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="95" y="386" width="52" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="121" cy="220" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#F2C14E">
+      <rect class="spine-body" x="153" y="210" width="46" height="210" rx="3" fill="#F2C14E"/>
+      <rect x="153" y="232" width="46" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="153" y="386" width="46" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="176" cy="260" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#D0566E">
+      <rect class="spine-body" x="205" y="140" width="56" height="280" rx="3" fill="#D0566E"/>
+      <rect x="205" y="162" width="56" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="205" y="386" width="56" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="233" cy="190" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#D9A21B">
+      <rect class="spine-body" x="267" y="230" width="44" height="190" rx="3" fill="#D9A21B"/>
+      <rect x="267" y="252" width="44" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="267" y="386" width="44" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="289" cy="280" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#F6DCD8">
+      <rect class="spine-body" x="317" y="160" width="54" height="260" rx="3" fill="#F6DCD8"/>
+      <rect x="317" y="182" width="54" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="317" y="386" width="54" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="344" cy="210" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#EE8B3A">
+      <rect class="spine-body" x="377" y="190" width="48" height="230" rx="3" fill="#EE8B3A"/>
+      <rect x="377" y="212" width="48" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="377" y="386" width="48" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="401" cy="240" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#F2C14E">
+      <rect class="spine-body" x="431" y="150" width="58" height="270" rx="3" fill="#F2C14E"/>
+      <rect x="431" y="172" width="58" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="431" y="386" width="58" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="460" cy="200" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+    <g class="spine" data-lit="#D0566E">
+      <rect class="spine-body" x="495" y="205" width="50" height="215" rx="3" fill="#D0566E"/>
+      <rect x="495" y="227" width="50" height="5" fill="#221C55" opacity="0.22"/>
+      <rect x="495" y="386" width="50" height="5" fill="#221C55" opacity="0.22"/>
+      <circle cx="520" cy="255" r="5" fill="#221C55" opacity="0.28"/>
+    </g>
+  </g>
+  <rect x="60" y="420" width="520" height="14" rx="3" fill="#F6E7C8"/>
+  <path d="M110 434 V462 M530 434 V462" stroke="#F6E7C8" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+</svg>
