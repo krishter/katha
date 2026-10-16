@@ -22,6 +22,7 @@ import pytest
 from media.audio_split import (
     MAX_SYNC_SECONDS,
     _cut_points,
+    compress_pauses,
     probe_duration,
     split_for_stt,
 )
@@ -225,3 +226,68 @@ def test_split_is_not_silently_skipped_in_ci():
         "ffmpeg is not installed, so every audio-split test skipped and this "
         "file verified nothing. CI installs it — see .github/workflows/ci.yml"
     )
+
+
+# ── pause compression (COST_TO_SERVE.md C7) ──────────────────────────────────
+
+
+def _speech_gap_speech(gap: float) -> str:
+    """2s of tone, `gap` seconds of true silence, 2s of tone. All three at
+    48 kHz mono, which concat requires (sine defaults to 44.1 kHz)."""
+    return (
+        f"sine=frequency=300:duration=2:sample_rate=48000[a];"
+        f"anullsrc=r=48000:cl=mono,atrim=duration={gap}[b];"
+        f"sine=frequency=300:duration=2:sample_rate=48000[c];"
+        f"[a][b][c]concat=n=3:v=0:a=1"
+    )
+
+
+@needs_ffmpeg
+async def test_a_long_pause_is_shortened_to_about_half_a_second():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "gap.ogg"
+        _make_audio(path, _speech_gap_speech(3.0))
+        original = path.read_bytes()
+        audio, seconds_in, seconds_out = await compress_pauses(original, 1.0)
+
+    assert seconds_in == pytest.approx(7.0, abs=0.2)
+    # 2 + 0.5 + 2: the speech is all kept, the pause is cut to half a second.
+    assert seconds_out == pytest.approx(4.5, abs=0.3)
+    assert audio != original  # re-encoded without the long pause
+
+
+@needs_ffmpeg
+async def test_speech_without_long_pauses_comes_back_byte_identical():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "short-gap.ogg"
+        _make_audio(path, _speech_gap_speech(0.6))
+        original = path.read_bytes()
+    audio, seconds_in, seconds_out = await compress_pauses(original, 1.0)
+    assert audio == original
+    assert seconds_out == seconds_in
+
+
+async def test_an_ffmpeg_failure_passes_the_original_through(monkeypatch):
+    from media import audio_split
+
+    async def _probe(path):
+        return 12.0
+
+    async def _broken_run(*args, **kwargs):
+        return 1, b"", b"ffmpeg exploded"
+
+    monkeypatch.setattr(audio_split, "probe_duration", _probe)
+    monkeypatch.setattr(audio_split, "_run", _broken_run)
+    audio, seconds_in, seconds_out = await compress_pauses(b"original-bytes", 1.0)
+    assert audio == b"original-bytes"
+    assert (seconds_in, seconds_out) == (12.0, 12.0)
+
+
+async def test_an_unreadable_note_passes_through_unmeasured(monkeypatch):
+    from media import audio_split
+
+    async def _probe(path):
+        raise RuntimeError("ffprobe failed")
+
+    monkeypatch.setattr(audio_split, "probe_duration", _probe)
+    assert await compress_pauses(b"x", 1.0) == (b"x", None, None)

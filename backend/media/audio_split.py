@@ -210,3 +210,85 @@ async def split_for_stt_measured(
             "silence boundaries" if silences else "fixed intervals",
         )
         return pieces, duration
+
+
+# Pause compression (docs/specs/COST_TO_SERVE.md C7). Sarvam bills by the
+# second sent, and reflective speech pauses a lot: the 89-second note above
+# had 35 silences. Long pauses are shortened, never removed, so a cut can
+# never join two words, and speech itself is never touched.
+#
+# Quieter than the split's -25dB on purpose: a soft-spoken word must never
+# be mistaken for silence, so only near-true silence is shortened. Tune on
+# fixtures before lowering it.
+_PAUSE_THRESHOLD_DB = "-35dB"
+_KEPT_PAUSE_SECONDS = 0.5
+# A result less than this much shorter is not worth a re-encode.
+_MIN_SAVING_SECONDS = 0.25
+
+
+async def compress_pauses(
+    audio_bytes: bytes, max_pause_seconds: float = 1.0
+) -> tuple[bytes, float | None, float | None]:
+    """
+    Shorten every pause longer than `max_pause_seconds` to half a second.
+
+    Returns (audio, seconds_in, seconds_out). In memory only, like the
+    split: nothing is stored, as the privacy page promises voice notes are
+    discarded after transcription. On any failure — ffprobe, ffmpeg, a
+    result that is not actually shorter — the original bytes come back
+    untouched (the module's pass-through pattern), with seconds_out equal
+    to seconds_in.
+    """
+    with tempfile.TemporaryDirectory(prefix="katha-pauses-") as tmp:
+        directory = Path(tmp)
+        source = directory / "in.ogg"
+        source.write_bytes(audio_bytes)
+
+        try:
+            seconds_in = await probe_duration(source)
+        except Exception:
+            logger.warning(
+                "Could not probe duration — not compressing pauses", exc_info=True
+            )
+            return audio_bytes, None, None
+
+        target = directory / "out.ogg"
+        try:
+            code, _stdout, stderr = await _run(
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(source),
+                "-af",
+                (
+                    "silenceremove="
+                    "stop_periods=-1"
+                    f":stop_duration={max_pause_seconds}"
+                    f":stop_silence={_KEPT_PAUSE_SECONDS}"
+                    f":stop_threshold={_PAUSE_THRESHOLD_DB}"
+                ),
+                "-c:a",
+                "libopus",
+                str(target),
+                timeout=120.0,
+            )
+            if code != 0:
+                raise RuntimeError(stderr.decode()[:200])
+            seconds_out = await probe_duration(target)
+        except Exception:
+            logger.warning(
+                "Pause compression failed — sending the original audio",
+                exc_info=True,
+            )
+            return audio_bytes, seconds_in, seconds_in
+
+        if seconds_out > seconds_in - _MIN_SAVING_SECONDS:
+            # Nothing worth shortening: keep the original bytes rather than
+            # pay for a re-encode that buys nothing.
+            return audio_bytes, seconds_in, seconds_in
+
+        logger.info(
+            "Shortened pauses: %.1fs -> %.1fs before STT", seconds_in, seconds_out
+        )
+        return target.read_bytes(), seconds_in, seconds_out

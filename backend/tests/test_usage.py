@@ -398,3 +398,72 @@ async def test_twilio_adapter_records_the_real_sid(usage_rows):
         "outbound_text",
         "SMreal",
     )
+
+
+async def test_stt_bills_the_compressed_seconds_and_keeps_the_original(
+    monkeypatch, usage_rows
+):
+    from adapters.sarvam_stt import transcribe
+
+    ok = MagicMock(status_code=200)
+    ok.json.return_value = {
+        "transcript": "text",
+        "language_code": "hi-IN",
+        "language_probability": 0.9,
+    }
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr("adapters.sarvam_stt.settings.STT_TRIM_PAUSES", True)
+    with (
+        patch(
+            "adapters.sarvam_stt.audio_split.compress_pauses",
+            new=AsyncMock(return_value=(b"shorter", 90.0, 61.5)),
+        ) as compress,
+        patch(
+            "adapters.sarvam_stt.audio_split.split_for_stt_measured",
+            new=AsyncMock(return_value=([b"a", b"b", b"c"], 61.5)),
+        ) as split,
+        patch("adapters.sarvam_stt.httpx.AsyncClient", return_value=client),
+        patch("adapters.sarvam_stt.post_with_retry", new=AsyncMock(return_value=ok)),
+    ):
+        await transcribe(b"original")
+
+    compress.assert_awaited_once_with(b"original", 1.0)
+    split.assert_awaited_once_with(b"shorter")  # the shortened audio is sent
+    assert usage_rows[0]["units"] == {
+        "seconds_received": 90.0,
+        "seconds_billed": 61.5,
+        "chunks": 3,
+    }
+
+
+async def test_stt_without_trimming_sends_the_note_as_received(monkeypatch, usage_rows):
+    from adapters.sarvam_stt import transcribe
+
+    ok = MagicMock(status_code=200)
+    ok.json.return_value = {
+        "transcript": "text",
+        "language_code": "hi-IN",
+        "language_probability": 0.9,
+    }
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr("adapters.sarvam_stt.settings.STT_TRIM_PAUSES", False)
+    with (
+        patch(
+            "adapters.sarvam_stt.audio_split.compress_pauses", new=AsyncMock()
+        ) as compress,
+        patch(
+            "adapters.sarvam_stt.audio_split.split_for_stt_measured",
+            new=AsyncMock(return_value=([b"a"], 20.0)),
+        ),
+        patch("adapters.sarvam_stt.httpx.AsyncClient", return_value=client),
+        patch("adapters.sarvam_stt.post_with_retry", new=AsyncMock(return_value=ok)),
+    ):
+        await transcribe(b"original")
+
+    compress.assert_not_awaited()
+    assert usage_rows[0]["units"]["seconds_received"] == 20.0
+    assert usage_rows[0]["units"]["seconds_billed"] == 20.0

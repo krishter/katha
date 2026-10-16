@@ -155,6 +155,12 @@ class Settings(BaseSettings):
     # media/voices.py; a language with no v4 voice stays on v3.
     TTS_MODEL: str = "bulbul:v3"
 
+    # C7: shorten long pauses before STT, which bills by the second sent.
+    # Pauses longer than STT_MAX_PAUSE_SECONDS become 0.5 s; speech is
+    # never cut. false sends the note exactly as received.
+    STT_TRIM_PAUSES: bool = True
+    STT_MAX_PAUSE_SECONDS: float = 1.0
+
     # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
     # /admin/metrics and /admin/metrics/view answer 404, as if they did not
     # exist. Generate with:
