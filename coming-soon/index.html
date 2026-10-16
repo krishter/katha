@@ -184,8 +184,9 @@ fieldset { border: 0; min-width: 0; }
   .distance .pin-wrap { grid-template-columns: 1fr 1fr; gap: 64px; min-height: 100vh; padding-block: 0; }
 }
 
-/* What fades + Katha, introduced. Static by default; .anim stacks it into one pinned screen. */
-.fades-pin { position: relative; overflow: hidden; padding-block: 10vh 0; }
+/* What fades + Katha, introduced. Static by default; .anim stacks it into one pinned screen.
+   The pin clips sideways only: the glow spills down into the dawn band, so the warmth carries on. */
+.fades-pin { position: relative; overflow: hidden; overflow: clip visible; padding-block: 10vh 0; }
 .fades-text { display: grid; gap: 40px; text-align: center; }
 .fades-open { font-size: clamp(1.5rem, 3vw, 2.4rem); color: var(--on-dark-soft); }
 .details { list-style: none; display: grid; gap: 0.5em; }
@@ -869,7 +870,7 @@ fieldset { border: 0; min-width: 0; }
         <!-- COPY: draft -->
         <h2 id="setup-title" class="display">You set it up in about five minutes.</h2>
         <!-- COPY: draft -->
-        <p class="body">Her name, the time she likes to talk, her language, and a few hints to start from, like <q>Appa grew up in Madurai</q>.</p>
+        <p class="body">Her name, the time she likes to talk, her language, and a few hints to start from, like <q>Amma grew up in Madurai</q>.</p>
         <figure class="art" data-thread data-tx=".3" data-ty=".55">
           <!-- art:act2-setup -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An adult, seen from behind, stands at the window of a city flat in the evening with a phone in hand">
@@ -924,7 +925,7 @@ fieldset { border: 0; min-width: 0; }
               <div class="field"><span class="k">Best time to talk</span><span class="v">10:30 am, daily</span></div>
               <div class="field"><span class="k">Her language</span><span class="v">Tamil</span></div>
               <div class="field"><span class="k">A few hints</span>
-                <span class="hint">Appa grew up in Madurai</span>
+                <span class="hint">Amma grew up in Madurai</span>
                 <span class="hint">Lived in Bombay in the 70s</span>
               </div>
               <div class="field"><span class="btn">Ask her if she'd like to try</span></div>

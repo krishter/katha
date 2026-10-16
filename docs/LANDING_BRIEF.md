@@ -78,7 +78,7 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
    A small line under it, *"Here's how it works,"* leads into Act II. The indigo background starts warming here.
 
 ### Act II — The beginning *(dawn → parchment, Paper-cut; a phone mockup pinned on the right on desktop)*
-3. **You set it up in about five minutes.** Her name, the time she likes to talk, her language, a few hints ("Appa grew up in Madurai"). *Art:* the child at a window, phone in hand.
+3. **You set it up in about five minutes.** Her name, the time she likes to talk, her language, a few hints ("Amma grew up in Madurai"). *Art:* the child at a window, phone in hand.
 4. **She decides.** *"Katha asks her separately, in her language. She says yes in her own words. If she doesn't, Katha stays silent."* Give this its own full-width moment.
 5. **10:30 the next morning, her phone buzzes.** The style-draft scene. *"It's a voice, not an app."* The pinned phone plays a short WhatsApp exchange: Katha's voice note, then her reply, then the "listening…" state.
 

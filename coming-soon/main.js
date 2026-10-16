@@ -168,7 +168,11 @@
         const mid = (lo + hi) >> 1;
         if (samples[mid].y < tip) lo = mid + 1; else hi = mid;
       }
-      threadPath.style.strokeDashoffset = total - samples[lo].len;
+      // Interpolate between samples: snapping to one made the tip saw up and down as you scrolled.
+      const a = samples[Math.max(0, lo - 1)];
+      const b = samples[lo];
+      const f = b.y > a.y ? Math.min(1, Math.max(0, (tip - a.y) / (b.y - a.y))) : 1;
+      threadPath.style.strokeDashoffset = total - (a.len + (b.len - a.len) * f);
     }
 
     ScrollTrigger.addEventListener('refresh', buildThread);

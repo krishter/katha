@@ -155,8 +155,9 @@ fieldset { border: 0; min-width: 0; }
   .distance .pin-wrap { grid-template-columns: 1fr 1fr; gap: 64px; min-height: 100vh; padding-block: 0; }
 }
 
-/* What fades + Katha, introduced. Static by default; .anim stacks it into one pinned screen. */
-.fades-pin { position: relative; overflow: hidden; padding-block: 10vh 0; }
+/* What fades + Katha, introduced. Static by default; .anim stacks it into one pinned screen.
+   The pin clips sideways only: the glow spills down into the dawn band, so the warmth carries on. */
+.fades-pin { position: relative; overflow: hidden; overflow: clip visible; padding-block: 10vh 0; }
 .fades-text { display: grid; gap: 40px; text-align: center; }
 .fades-open { font-size: clamp(1.5rem, 3vw, 2.4rem); color: var(--on-dark-soft); }
 .details { list-style: none; display: grid; gap: 0.5em; }
