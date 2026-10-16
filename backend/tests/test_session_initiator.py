@@ -62,6 +62,25 @@ def _make_db_factory(profile=None, active_session=None, followup_rows=None):
     return factory, mock_db
 
 
+@pytest.fixture(autouse=True)
+def opener_on(request, monkeypatch):
+    """
+    Most tests here exercise the daily opener, which is now the rollback
+    path (SCHEDULED_OPENER_ENABLED=true). Tests of the default, where the
+    parent starts every conversation, are marked `opener_off`.
+    """
+    enabled = request.node.get_closest_marker("opener_off") is None
+    monkeypatch.setattr(
+        "scheduler.session_initiator.settings.SCHEDULED_OPENER_ENABLED", enabled
+    )
+    # The opener converts WAV to OGG before sending; ffmpeg is not the point
+    # of these tests.
+    monkeypatch.setattr(
+        "scheduler.session_initiator.convert_wav_to_ogg",
+        AsyncMock(side_effect=lambda wav: b"OGG:" + wav),
+    )
+
+
 # ── tests ──────────────────────────────────────────────────────────────────────
 
 
@@ -114,8 +133,10 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
     ):
         await initiate_sessions(factory)
 
+    # Converted to OGG before sending: the raw WAV used to go out labelled
+    # audio/ogg, which WhatsApp cannot play.
     stub_adapter.send_voice_note.assert_called_once_with(
-        profile.whatsapp_number, b"fake-audio", mime_type="audio/ogg"
+        profile.whatsapp_number, b"OGG:fake-audio", mime_type="audio/ogg"
     )
 
 
@@ -350,3 +371,134 @@ async def test_scheduler_does_not_initiate_without_parent_consent():
 
     mock_start.assert_not_called()
     stub_adapter.send_voice_note.assert_not_called()
+
+
+# ── the parent starts every conversation (COST_TO_SERVE.md C5) ────────────────
+
+
+def _everything_patched(stack, stub_adapter, abandoned):
+
+    mocks = {
+        "abandon": AsyncMock(return_value=abandoned),
+        "start": AsyncMock(),
+        "tts": AsyncMock(return_value=b"wav"),
+        "process": AsyncMock(return_value=len(abandoned)),
+    }
+    stack.enter_context(
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        )
+    )
+    stack.enter_context(
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=mocks["abandon"],
+        )
+    )
+    stack.enter_context(
+        patch(
+            "scheduler.session_initiator.session_manager.start_session",
+            new=mocks["start"],
+        )
+    )
+    stack.enter_context(
+        patch("scheduler.session_initiator.sarvam_tts.synthesize", new=mocks["tts"])
+    )
+    stack.enter_context(
+        patch(
+            "scheduler.session_initiator.orchestrator.process_abandoned_sessions",
+            new=mocks["process"],
+        )
+    )
+    return mocks
+
+
+@pytest.mark.opener_off
+@pytest.mark.asyncio
+async def test_by_default_the_scheduler_opens_nothing_and_sends_nothing():
+    from contextlib import ExitStack
+
+    from scheduler.session_initiator import initiate_sessions
+
+    now = datetime.now(timezone.utc).astimezone(
+        __import__("pytz").timezone("Asia/Kolkata")
+    )
+    # Someone is due this minute, and someone is unanswered for 30 minutes.
+    factory, _ = _make_db_factory(
+        profile=_make_profile(now.hour, now.minute),
+        followup_rows=[(MagicMock(user_id="user-test"), _make_profile(8, 0))],
+    )
+    stub_adapter = MagicMock()
+    stub_adapter.send_voice_note = AsyncMock()
+    stub_adapter.send_text = AsyncMock()
+
+    with ExitStack() as stack:
+        mocks = _everything_patched(stack, stub_adapter, abandoned=[])
+        await initiate_sessions(factory)
+
+    mocks["abandon"].assert_awaited_once()  # the sweep still runs
+    mocks["start"].assert_not_awaited()  # no session started
+    mocks["tts"].assert_not_awaited()  # nothing synthesised, nothing billed
+    stub_adapter.send_voice_note.assert_not_called()
+    stub_adapter.send_text.assert_not_called()  # no nudge either
+
+
+@pytest.mark.opener_off
+@pytest.mark.asyncio
+async def test_by_default_abandoned_sessions_still_get_their_outputs():
+    from contextlib import ExitStack
+
+    from scheduler.session_initiator import initiate_sessions
+
+    factory, _ = _make_db_factory()
+    abandoned = [MagicMock(session_id="s1", user_id="u1", exchange_count=4)]
+    with ExitStack() as stack:
+        mocks = _everything_patched(stack, MagicMock(), abandoned=abandoned)
+        await initiate_sessions(factory)
+
+    mocks["process"].assert_awaited_once()
+    assert mocks["process"].await_args.args[0] == abandoned
+
+
+@pytest.mark.asyncio
+async def test_rollback_opener_is_billed_as_tts_opener():
+    from scheduler.session_initiator import initiate_sessions
+
+    now = datetime.now(timezone.utc).astimezone(
+        __import__("pytz").timezone("Asia/Kolkata")
+    )
+    factory, _ = _make_db_factory(profile=_make_profile(now.hour, now.minute))
+    stub_adapter = MagicMock()
+    stub_adapter.send_voice_note = AsyncMock(return_value=("SM1", "audio/k.ogg"))
+    tts = AsyncMock(return_value=b"wav")
+    with (
+        patch(
+            "scheduler.session_initiator.get_whatsapp_adapter",
+            return_value=stub_adapter,
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.abandon_stale_sessions",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.get_active_session_by_number",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "scheduler.session_initiator.session_manager.start_session",
+            new=AsyncMock(return_value=_make_session_state()),
+        ),
+        patch(
+            "scheduler.session_initiator.freemium.is_session_allowed",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "scheduler.session_initiator.parent_consent.has_granted",
+            new=AsyncMock(return_value=True),
+        ),
+        patch("scheduler.session_initiator.sarvam_tts.synthesize", new=tts),
+    ):
+        await initiate_sessions(factory)
+
+    assert tts.await_args.kwargs["purpose"] == "tts_opener"

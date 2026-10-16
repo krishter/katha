@@ -141,6 +141,14 @@ class Settings(BaseSettings):
     # five-minute cache would usually expire between turns.
     PROMPT_CACHE_TTL: str = "1h"
 
+    # C5: the parent starts every conversation (decided 2026-10-16, Option B
+    # in docs/proposals/outbound-messaging-window.md). Off, the scheduler
+    # only sweeps stale sessions and produces outputs for abandoned ones; a
+    # session opens when she sends a voice note. true restores the daily
+    # voice opener and the 30-minute nudge, which Meta rejects outside the
+    # 24-hour window — a rollback, not a mode to run in.
+    SCHEDULED_OPENER_ENABLED: bool = False
+
     # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
     # /admin/metrics and /admin/metrics/view answer 404, as if they did not
     # exist. Generate with:
