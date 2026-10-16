@@ -34,7 +34,7 @@ from prompts.system_prompt import (
     PriorContext,
     UserProfile,
     build_extraction_prompt,
-    build_system_prompt,
+    build_system_prompt_parts,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,8 +76,12 @@ _RETRIEVAL_TOP_K = 25
 # The cap only costs latency when the model actually generates into it, so
 # headroom here is close to free; what keeps replies short is Layer 5's
 # length instruction, not this number.
-_DIALOGUE_MAX_TOKENS = 1200
-_EXTRACTION_MAX_TOKENS = 2000
+#
+# Raised for the 5.5 models (COST_TO_SERVE.md §6): thinking counts toward
+# max_tokens, and their tokenizer yields about 30% more tokens for the same
+# text. Extraction on Haiku thinks adaptively, so it gets the most room.
+_DIALOGUE_MAX_TOKENS = 1600
+_EXTRACTION_MAX_TOKENS = 4000
 _EXTRACTION_RETRY_INSTRUCTION = (
     "\n\nIMPORTANT: Your previous reply did not match the required format. "
     "Return ONLY the <extraction>{...}</extraction> block with syntactically "
@@ -816,14 +820,20 @@ async def process_voice_turn(
     # preceding turn's raw exchange is included directly (not just via the
     # deferred fact/vector-store pipeline) so a story that unfolds over two
     # turns keeps continuity even if that turn's extraction hasn't run yet.
-    dialogue_prompt = build_system_prompt(user_profile, state, prior_context)
+    #
+    # The prompt goes in two parts so its stable half (Layers 1-3) can be
+    # cached across the session's turns (C3).
+    prompt_parts = build_system_prompt_parts(user_profile, state, prior_context)
     messages = await _load_last_turn_messages(session_id, db)
     messages.append(Message(role="user", content=stt_result.transcript))
     try:
         llm_response = await llm.chat(
             messages,
-            system=dialogue_prompt,
+            system=prompt_parts.per_turn,
+            cache_system_prefix=prompt_parts.stable,
             max_tokens=_DIALOGUE_MAX_TOKENS,
+            model=settings.LLM_DIALOGUE_MODEL,
+            effort=settings.LLM_DIALOGUE_EFFORT,
             purpose="dialogue",
         )
     except Exception:
@@ -958,6 +968,8 @@ async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
         [Message(role="user", content=prompt)],
         system=None,
         max_tokens=_EXTRACTION_MAX_TOKENS,
+        model=settings.LLM_EXTRACTION_MODEL,
+        effort=settings.LLM_EXTRACTION_EFFORT,
         purpose="extraction",
     )
     if conversation_policy.check_extraction_response(llm_response.content):
@@ -972,6 +984,8 @@ async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
         [Message(role="user", content=prompt + _EXTRACTION_RETRY_INSTRUCTION)],
         system=None,
         max_tokens=_EXTRACTION_MAX_TOKENS,
+        model=settings.LLM_EXTRACTION_MODEL,
+        effort=settings.LLM_EXTRACTION_EFFORT,
         purpose="extraction_retry",
     )
     total_input = llm_response.input_tokens + retry_response.input_tokens

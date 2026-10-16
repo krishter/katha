@@ -602,6 +602,46 @@ Return only the <response> block above. Structured extraction is handled by a \
 separate pass — do not include JSON or any other tags or commentary here."""
 
 
+@dataclass
+class SystemPromptParts:
+    """
+    The dialogue system prompt in two halves (COST_TO_SERVE.md C3).
+
+    `stable` is Layers 1-3: the persona, the protocol, and what Katha knows
+    about her. With Layer 3 frozen per session (C2) it is identical on every
+    turn of a session, so it is what gets cached. `per_turn` is Layers 4-5,
+    which change every turn and always come last.
+    """
+
+    stable: str
+    per_turn: str
+
+    def joined(self) -> str:
+        return f"{self.stable}\n\n{self.per_turn}"
+
+
+def build_system_prompt_parts(
+    user_profile: UserProfile,
+    session_state: SessionState,
+    prior_context: PriorContext,
+) -> SystemPromptParts:
+    """The dialogue system prompt, split for caching; see build_system_prompt."""
+    stable = "\n\n".join(
+        [
+            _layer1_persona(user_profile),
+            _layer2_therapeutic(),
+            _layer3_life_context(user_profile, session_state, prior_context),
+        ]
+    )
+    per_turn = "\n\n".join(
+        [
+            _layer4_session_state(session_state, prior_context),
+            _layer5_output_format(),
+        ]
+    )
+    return SystemPromptParts(stable=stable, per_turn=per_turn)
+
+
 def build_system_prompt(
     user_profile: UserProfile,
     session_state: SessionState,
@@ -611,15 +651,14 @@ def build_system_prompt(
     Assembles the dialogue system prompt — the fast, low-token-budget call
     on the critical path. Returns <response> only; see build_extraction_prompt
     for the separate, latency-tolerant structured-extraction call.
+
+    One string, for callers that want it whole (the eval runner, tests).
+    The dialogue call itself sends the two parts separately so the stable
+    half can be cached.
     """
-    layers = [
-        _layer1_persona(user_profile),
-        _layer2_therapeutic(),
-        _layer3_life_context(user_profile, session_state, prior_context),
-        _layer4_session_state(session_state, prior_context),
-        _layer5_output_format(),
-    ]
-    return "\n\n".join(layers)
+    return build_system_prompt_parts(
+        user_profile, session_state, prior_context
+    ).joined()
 
 
 # The eight ids, rendered into the extraction prompt. The prompt used to

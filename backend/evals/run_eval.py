@@ -45,6 +45,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import delete, select  # noqa: E402
 
+from config import settings  # noqa: E402
 from core import (  # noqa: E402
     conversation_policy,
     orchestrator,
@@ -63,7 +64,10 @@ from models.story_atom import StoryAtom  # noqa: E402
 from models.turn import Turn  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
 from prompts.domains import get_domain  # noqa: E402
-from prompts.system_prompt import UserProfile, build_system_prompt  # noqa: E402
+from prompts.system_prompt import (  # noqa: E402
+    UserProfile,
+    build_system_prompt_parts,
+)
 
 RESULTS: list[dict] = []
 
@@ -73,6 +77,12 @@ RESULTS: list[dict] = []
 # row seen twice is counted once.
 USAGE_ROWS: dict[str, dict] = {}
 RUN_STARTED = datetime.now(timezone.utc)
+
+# COST_TO_SERVE.md §6: a cheaper extraction model must not paraphrase a
+# parent's words. Every non-null verbatim_quote extracted during the run is
+# checked against the transcript it came from. Kept apart from the TC counts
+# so the pass rates stay comparable with earlier runs.
+VERBATIM_CHECKS: list[dict] = []
 
 
 def record(tc, kind, passed, evidence):
@@ -211,15 +221,21 @@ async def _real_turn(
             session_id, user_id, state.domain, db
         )
 
-    dialogue_prompt = build_system_prompt(prompt_profile, state, prior_context)
+    # The same two-part prompt, model and effort as production, so the eval
+    # measures what parents get — including prompt caching.
+    prompt_parts = build_system_prompt_parts(prompt_profile, state, prior_context)
+    dialogue_prompt = prompt_parts.joined()
     messages = await orchestrator._load_last_turn_messages(session_id, db)
     from adapters.llm import Message
 
     messages.append(Message(role="user", content=transcript))
     llm_response = await orchestrator.llm.chat(
         messages,
-        system=dialogue_prompt,
+        system=prompt_parts.per_turn,
+        cache_system_prefix=prompt_parts.stable,
         max_tokens=orchestrator._DIALOGUE_MAX_TOKENS,
+        model=settings.LLM_DIALOGUE_MODEL,
+        effort=settings.LLM_DIALOGUE_EFFORT,
         purpose="dialogue",
     )
     # Through the post-turn policy, exactly as production does, rather
@@ -259,6 +275,7 @@ async def _real_turn(
     extraction_json, in_tok, out_tok = await orchestrator._call_extraction_llm(
         extraction_prompt
     )
+    check_verbatim_quotes(user_id, transcript, extraction_json)
     extraction_result = await story_extractor.process_extraction(
         extraction_json,
         session_id,
@@ -1132,6 +1149,24 @@ async def tc11(db):
     await cleanup(db, uid)
 
 
+def check_verbatim_quotes(user_id: str, transcript: str, extraction_json: dict) -> None:
+    """Every verbatim_quote must be an exact (NFC) substring of the transcript."""
+    import unicodedata
+
+    source = unicodedata.normalize("NFC", transcript)
+    for atom in extraction_json.get("story_atoms", []) or []:
+        quote = atom.get("verbatim_quote") if isinstance(atom, dict) else None
+        if not quote:
+            continue
+        VERBATIM_CHECKS.append(
+            {
+                "case": user_id,
+                "quote": quote,
+                "exact": unicodedata.normalize("NFC", quote) in source,
+            }
+        )
+
+
 def summarise_usage(rows: list[dict]) -> dict:
     """
     What the run's paid calls cost, from the ledger rows it made, priced by
@@ -1299,6 +1334,14 @@ async def main():
     cost = summarise_usage(list(USAGE_ROWS.values()))
     print_cost(cost)
 
+    paraphrased = [c for c in VERBATIM_CHECKS if not c["exact"]]
+    print(
+        f"\nVERBATIM QUOTES: {len(VERBATIM_CHECKS) - len(paraphrased)}/"
+        f"{len(VERBATIM_CHECKS)} exact substrings of their transcript"
+    )
+    for c in paraphrased:
+        print(f"  NOT VERBATIM ({c['case']}): {c['quote']!r}")
+
     # Timestamped, never overwritten: a partial re-run of a few cases used
     # to clobber the full run's results, so the file on disk silently
     # disagreed with the run it appeared to describe.
@@ -1318,6 +1361,11 @@ async def main():
                 "overall": f"{total_pass}/{total}",
                 "results": RESULTS,
                 "usage": cost,
+                "verbatim_quotes": {
+                    "checked": len(VERBATIM_CHECKS),
+                    "exact": len(VERBATIM_CHECKS) - len(paraphrased),
+                    "not_verbatim": paraphrased,
+                },
             },
             f,
             indent=2,

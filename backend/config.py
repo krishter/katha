@@ -123,6 +123,24 @@ class Settings(BaseSettings):
     # rebuilds it every turn, as before. The rendering caps apply either way.
     LAYER3_FREEZE_PER_SESSION: bool = True
 
+    # Which Claude model each call runs on (COST_TO_SERVE.md C1, C4). Every
+    # one rolls back with an env change and a restart: the old path stays in
+    # the code until the pilot has run a month on the new one.
+    #   Dialogue — rollback value claude-sonnet-4-6.
+    LLM_DIALOGUE_MODEL: str = "claude-sonnet-5-5"
+    # output_config.effort for dialogue. The eval compares low and medium.
+    LLM_DIALOGUE_EFFORT: str = "medium"
+    #   Per-turn extraction, its retry, and entity extraction — rollback
+    #   value claude-sonnet-4-6.
+    LLM_EXTRACTION_MODEL: str = "claude-haiku-5-5"
+    LLM_EXTRACTION_EFFORT: str = "low"
+
+    # C3: cache the stable start of the dialogue system prompt (Layers 1-3).
+    PROMPT_CACHE_ENABLED: bool = True
+    # "5m" or "1h". Parents take minutes between voice notes, so the
+    # five-minute cache would usually expire between turns.
+    PROMPT_CACHE_TTL: str = "1h"
+
     # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
     # /admin/metrics and /admin/metrics/view answer 404, as if they did not
     # exist. Generate with:

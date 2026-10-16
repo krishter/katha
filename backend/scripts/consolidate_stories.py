@@ -52,6 +52,12 @@ from models.turn import Turn  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("consolidate")
 
+# Consolidation stays on the model it was evaluated on. COST_TO_SERVE.md
+# moves dialogue and per-turn extraction only, and puts consolidation
+# pipeline changes out of scope; evals/run_consolidation_eval.py imports
+# this so the eval tests what this script runs.
+CONSOLIDATION_MODEL = "claude-sonnet-4-6"
+
 # The consent handshake is not a conversation and has nothing to consolidate.
 _SKIP_STATUSES = {"consent"}
 
@@ -64,6 +70,7 @@ async def make_llm_call():
             [Message(role="user", content=prompt)],
             system=None,
             max_tokens=max_tokens,
+            model=CONSOLIDATION_MODEL,
             purpose="consolidation",
         )
         if response.stop_reason == "max_tokens":

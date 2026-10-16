@@ -789,3 +789,33 @@ def test_session_100_prompt_stays_under_8000_characters():
     session.exchange_count = 3  # recall anchor and full Layer 4 in play
     prompt = build_system_prompt(_PROFILE, session, _session_100_prior())
     assert len(prompt) < 8000, len(prompt)
+
+
+# ── C3: the prompt in a cacheable half and a per-turn half ────────────────────
+
+
+def test_stable_and_per_turn_join_to_the_whole_prompt():
+    from prompts.system_prompt import build_system_prompt_parts
+
+    prior = _session_100_prior()
+    session = SimpleNamespace(**{**vars(_SESSION), "exchange_count": 3})
+    parts = build_system_prompt_parts(_PROFILE, session, prior)
+    assert parts.joined() == build_system_prompt(_PROFILE, session, prior)
+    # Layers 1-3 are cached; 4-5 change every turn and must come after.
+    assert "LAYER 3" in parts.stable and "LAYER 4" not in parts.stable
+    assert parts.per_turn.lstrip().startswith("LAYER 4")
+
+
+def test_the_stable_half_does_not_change_between_turns_of_a_session():
+    """What makes it cacheable: with Layer 3 frozen, only Layers 4-5 move."""
+    from prompts.system_prompt import build_system_prompt_parts
+
+    prior = _session_100_prior()
+    turn_2 = SimpleNamespace(**{**vars(_SESSION), "exchange_count": 1})
+    turn_5 = SimpleNamespace(
+        **{**vars(_SESSION), "exchange_count": 4, "goal_met": True}
+    )
+    first = build_system_prompt_parts(_PROFILE, turn_2, prior)
+    later = build_system_prompt_parts(_PROFILE, turn_5, prior)
+    assert first.stable == later.stable
+    assert first.per_turn != later.per_turn

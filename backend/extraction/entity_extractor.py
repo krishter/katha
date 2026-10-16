@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from adapters import llm
 from adapters.llm import Message
+from config import settings
 from memory import fact_store
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,11 @@ async def extract_entities(
     response = await llm.chat(
         messages=[Message(role="user", content=_EXTRACTION_PROMPT + transcript)],
         system=None,
+        # Explicit, and raised from the old 500 default: on Haiku 5.5 the
+        # adaptive thinking counts toward it (COST_TO_SERVE.md §6).
+        max_tokens=1500,
+        model=settings.LLM_EXTRACTION_MODEL,
+        effort=settings.LLM_EXTRACTION_EFFORT,
         purpose="entities",
     )
 

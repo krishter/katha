@@ -216,7 +216,7 @@ async def test_llm_records_tokens_cache_counts_and_latency(usage_rows):
     from adapters.llm import Message, chat
 
     response = MagicMock()
-    response.content = [MagicMock(text="<response>Hello</response>")]
+    response.content = [MagicMock(type="text", text="<response>Hello</response>")]
     response.usage = SimpleNamespace(
         input_tokens=1500,
         output_tokens=60,
@@ -231,7 +231,11 @@ async def test_llm_records_tokens_cache_counts_and_latency(usage_rows):
         patch("adapters.llm._client", client),
         usage.usage_scope(user_id="u1", session_id=_SESSION),
     ):
-        await chat([Message(role="user", content="hi")], purpose="dialogue")
+        await chat(
+            [Message(role="user", content="hi")],
+            model="claude-sonnet-4-6",
+            purpose="dialogue",
+        )
 
     (row,) = usage_rows
     assert (row["vendor"], row["operation"], row["model"]) == (
@@ -266,7 +270,11 @@ async def test_llm_records_nothing_when_the_call_fails(usage_rows):
         side_effect=APIError("boom", request=MagicMock(), body=None)
     )
     with patch("adapters.llm._client", client), pytest.raises(RuntimeError):
-        await chat([Message(role="user", content="hi")], purpose="dialogue")
+        await chat(
+            [Message(role="user", content="hi")],
+            model="claude-sonnet-4-6",
+            purpose="dialogue",
+        )
     assert usage_rows == []
 
 
