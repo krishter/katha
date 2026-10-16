@@ -1,0 +1,163 @@
+{
+  "ran_at": "20261016T170401Z",
+  "cases_selected": [
+    "tc01",
+    "tc02",
+    "tc03",
+    "tc04",
+    "tc05",
+    "tc06",
+    "tc07",
+    "tc08",
+    "tc09",
+    "tc10",
+    "tc11"
+  ],
+  "complete_run": true,
+  "objective": "5/5",
+  "rubric": "4/6",
+  "overall": "9/11",
+  "results": [
+    {
+      "tc": "TC-01",
+      "kind": "objective",
+      "passed": true,
+      "evidence": "story_atoms: [\n  {\n    \"domain\": \"childhood\",\n    \"title\": \"Birth in a village near Mysore\",\n    \"narrative\": \"Subramaniam was born in 1948 in a small village near Mysore. His father was a schoolteacher there.\",\n    \"who\": [\n      \"Subramaniam\",\n      \"his father\"\n    ],\n    \"what\": \"Born in a small village; father worked as a schoolteacher in the village\",\n    \"when_approx\": \"1948\",\n    \"where_approx\": \"A small village near Mysore\",\n    \"why\": null,\n    \"verbatim_quote\": \"I was born in 1948 in a small village near Mysore. My father was a schoolteacher there.\",\n    \"open_threads\": [\n      \"Name of the village\",\n      \"What his father taught and whether he taught at the local school Subramaniam later attended\",\n      \"The family home described in Katha's question about the house and mornings\"\n    ]\n  }\n]\nentity_extractor facts (post-session pass): people=[{'name': 'Father', 'relationship': \"speaker's father\"}] places=['Mysore'] dates=['1948']\nhas_1948=True has_mysore=True has_father_teacher=True"
+    },
+    {
+      "tc": "TC-02",
+      "kind": "objective",
+      "passed": true,
+      "evidence": "story_atoms: [\n  {\n    \"domain\": \"childhood\",\n    \"title\": \"Evening street games after school\",\n    \"narrative\": \"As a boy, Subramaniam and his friends played gilli-danda and marbles on the street outside their house every evening after school, until darkness fell and their mothers called them in for dinner from the doorway.\",\n    \"who\": [\n      \"Subramaniam\",\n      \"his friends\",\n      \"his mother\"\n    ],\n    \"what\": \"Playing gilli-danda and marbles on the street every evening after school\",\n    \"when_approx\": null,\n    \"where_approx\": \"The street outside his childhood home\",\n    \"why\": \"Captures the carefree rhythm of his boyhood evenings and the community of the street\",\n    \"verbatim_quote\": \"our mothers had to call us in for dinner, shouting our names from the doorway\",\n    \"open_threads\": [\n      \"What did his mother's voice sound like when calling his name?\",\n      \"What was waiting for him on the dinner table?\",\n      \"Names and details of the friends he played with\",\n      \"Which decade and town/city this street was in\"\n    ]\n  }\n]\nthemes field (raw, likely unused): []\ndomain_ok=True subtheme_signal_in_narrative_or_title=True"
+    },
+    {
+      "tc": "TC-03",
+      "kind": "rubric",
+      "passed": true,
+      "evidence": "Session 2 domain: family_ancestors\nLayer 3 block (turn 1):\n \u2014 LIFE CONTEXT\nWhat you already know about Subramaniam:\n  - Dates: 1948\n  - People: Kamala (sister of the speaker (two years older))\n  - Places: Madurai\nWhat Subramaniam's family told us at the start:\n  Grew up in Tamil Nadu. Retired schoolteacher.\nOpen story threads to revisit:\n  - What did Subramaniam and Kamala do together after school, as Katha asked?\n  - What was the nature of Kamala's relationship to Subramaniam (cousin, neighbour, sibling)?\n  - What happened to the closeness as they grew older?\n  - Which temple they walked to\n  - What he remembers about those walks with Kamala\n  - Approximate era and town of childhood home\n  - What the provisions shop sold and how the father ran it\n  - Sensory memories of the shop and street from childhood\n  - Siblings and household life in the house above or beside the shop\n\nToday's focus domain: Family & Ancestors\n\n\nExchanges run: 3 (up to 3, per the anchor's exchange_count>=2 gate)\n  [1] \"Thank you for sharing that, Subramaniam. Having them so close by must have shaped your childhood in a lovely way. When you think of your father's parents, what is the first thing that comes to mind \u2014 maybe their house, a smell, or a sound?\"\n  [2] \"Weekend visits to grandparents sound like a little ritual of their own. What was your grandmother's name, and was she the one who welcomed you at the door?\"\n  [3] \"A small house often holds the warmest memories, Subramaniam, because everyone ends up close together. I'm curious about your sister Kamala, who is two years older than you. Was she with you on those weekend visits, and what was she like as a big sister in that house?\"\nAny response contains 'Kamala' (unprompted) within 3 exchanges: True"
+    },
+    {
+      "tc": "TC-04",
+      "kind": "rubric",
+      "passed": true,
+      "evidence": "Session 3 domain: childhood (kept same as session 1's flood mention)\nLayer 3 block (turn 1):\n \u2014 LIFE CONTEXT\nWhat you already know about Subramaniam:\n  - Dates: 1972\nWhat Subramaniam's family told us at the start:\n  Grew up in Tamil Nadu. Retired schoolteacher.\nOpen story threads to revisit:\n  - Mother's name\n  - What he remembers most about those mornings: the sound of the decoction, the aroma, or his mother moving in the kitchen\n  - Where the family lived and when these mornings were\n  - How she made the coffee and whether he learned to make it himself\n  - What was it like on the rooftop with the neighbours over three days?\n  - Which town or village was the street in?\n  - How did the loss of the shop's stock affect the family afterward?\n\nToday's focus domain: Childhood & Home\nDomain entry question: Tell me about the house you grew up in \u2014 what did it look like?\n\n\n  [1] \"Thank you for sharing that with me, Subramaniam. A flood is a heavy thing to carry in memory, and I'd like to hear it in whatever way feels right to you. I remember you spoke of the rooftop, the neighbours, and those three days. Where was your family living when the water came, and which town or village was it?\"\n  [2] \"I can hear that it was hard, Subramaniam, not only for your family but for everyone on the street. Thank you for trusting me with it. We can stay with this memory or set it aside for today, whichever feels right to you. And if you'd like to continue, I'd love to know the name of the town or village where that street was.\"\n  [3] '\"Pulling together\" says so much about how a street can be a family too, Subramaniam. I\\'d love to know what that looked like, perhaps who was there on the rooftop beside you in those days. Also, 1972 has come up in our talks before, and I\\'m curious what that year means to you: was it a turning point for your family?'\nreasks_already_answered_facts=False introduces_new_angle_on_flood_thread=True"
+    },
+    {
+      "tc": "TC-05",
+      "kind": "rubric",
+      "passed": false,
+      "evidence": "Responses (text, session_end_suggested):\n  [1] end=False :: \"Thank you for telling me, Subramaniam \u2014 we'll keep today light and easy, with no rush at all. Just one small thing, and only if you feel like it: when you think of the house you grew up in, what's the first little thing that comes to mind?\"\n  [2] end=True :: \"That's perfectly alright, Subramaniam. Rest is more important than any story, and we have all the time in the world. Whenever you feel up to it, I'll be here, and we can begin with something as small as a smell or a sound from long ago. Would you like to pause here for today?\"\nsession_end_suggested reached by exchange: 2\nword_counts=[48, 54] not_growing=False under_ceiling(<=100)=True low_pressure(<=1 question each)=True"
+    },
+    {
+      "tc": "TC-06",
+      "kind": "objective",
+      "passed": true,
+      "evidence": "NOTE (carried from baseline): this harness feeds the transcript directly, bypassing Sarvam STT entirely -- it cannot test code-mixed transcription accuracy, only what the LLM does with already-correct text. Documented limitation, not new to this run.\nstory_atoms: [\n  {\n    \"domain\": \"childhood\",\n    \"title\": \"Growing up in a large joint family home\",\n    \"narrative\": \"Subramaniam described his childhood home as very large, a joint family of at least fifteen people living together under one roof.\",\n    \"who\": [\n      \"Subramaniam\",\n      \"his joint family members\"\n    ],\n    \"what\": \"Living in a large joint family household with at least fifteen people\",\n    \"when_approx\": null,\n    \"where_approx\": null,\n    \"why\": null,\n    \"verbatim_quote\": \"Humara ghar bahut bada tha, you know, a joint family \\u2014 we were at least 15 people.\",\n    \"open_threads\": [\n      \"What did the house sound like in the mornings as everyone woke up?\",\n      \"Who were the members of the household and what were their roles?\",\n      \"Where was this home located and what was it like?\"\n    ]\n  }\n]\npost-session facts: {'dates': [], 'people': [], 'places': [], 'institutions': []}\nhas_joint_family_concept=True has_15_preserved=True"
+    },
+    {
+      "tc": "TC-07",
+      "kind": "rubric",
+      "passed": true,
+      "evidence": "Katha response: 'Subramaniam, \"simple\" is not how I would describe a life spent keeping a home \u2014 those are exactly the stories I most want to hear. The everyday things, the people, the small moments, are the most precious ones to keep. So let me start somewhere gentle: when you think of the house you grew up in, what did it look like as you came up to the door?'\npassed criteria: not_face_value=True, specific_question=True"
+    },
+    {
+      "tc": "TC-08",
+      "kind": "objective",
+      "passed": true,
+      "evidence": "Turn 1 response: 'Oh, what a lovely thing to remember, Subramaniam. A neighbourhood sweet-maker \u2014 I can almost imagine the smell drifting down the street. What was his name, and what was the sweet he made that you remember most?'\nTurn 2 response: 'It sounds like his shop was the heart of the street, Subramaniam. Where in the neighbourhood was it, and what did you see and smell when you walked up to it?'\n5W follow-up targets hit across the two turns: {'where', 'who', 'when'}"
+    },
+    {
+      "tc": "TC-09",
+      "kind": "objective",
+      "passed": true,
+      "evidence": "Katha closing response: \"Thank you for sharing that with me, Subramaniam. The small details you brought back, the ones that made me feel I was standing right there with you, are exactly what I hope to keep safe. That's a lovely place for us to pause today. Tomorrow, I'd love to hear about the school days of your childhood, and perhaps how you first came to love teaching. Does that sound good to you?\"\nextraction session_end_suggested=True\ncloses_warmly=True previews_next_domain=True"
+    },
+    {
+      "tc": "TC-10",
+      "kind": "rubric",
+      "passed": true,
+      "evidence": "pre_check.crisis_detected (should be False - grief != crisis keyword): False\nKatha response: \"Subramaniam, I'm so sorry about your son. Thank you for trusting me with that, and for telling me how much he loved your cooking. We can stay with him for as long as you like, or we can pause here, whichever feels right to you today.\"\nvalidates_grief=True pushes_for_elaboration=False offers_choice_to_continue=False\nNOTE: human-review required per TECH_DESIGN pass criteria; scored here on literal text signals."
+    },
+    {
+      "tc": "TC-11",
+      "kind": "rubric",
+      "passed": false,
+      "evidence": "Session 2 (family_ancestors) significant_people extracted: [\n  {\n    \"name\": \"Mr. Iyer\",\n    \"relationship\": \"old teacher\",\n    \"why_significant\": \"Changed Subramaniam's life and remains one of the people he thinks about most from those years\",\n    \"signal\": \"Explicit phrases 'He changed my life' and 'I still think about', plus unusual emotional weight in describing him as more memorable than almost anyone else from that period\"\n  }\n]\n  -> has_iyer_entry=True has_why_significant=True\n\nSession sequence -> domains: s1=childhood(filler) s2=family_ancestors(real) s3=education(filler) then two filler laps -> s6.domain=career\nSession 6 prior_context.significant_people (should still list Iyer, unresolved): [{'name': 'Mr. Iyer', 'signal': \"Explicit phrases 'He changed my life' and 'I still think about', plus unusual emotional weight in describing him as more memorable than almost anyone else from that period\", 'relationship': 'old teacher', 'why_significant': \"Changed Subramaniam's life and remains one of the people he thinks about most from those years\", 'first_seen_session': 2}]\n  -> still_has_iyer_unresolved_going_in=True\n\nSession 6 dialogue_prompt Layer 3 block:\n \u2014 LIFE CONTEXT\nWhat you already know about Subramaniam:\n  - People: Mr. Iyer (former teacher of the speaker)\nWhat Subramaniam's family told us at the start:\n  Grew up in Tamil Nadu. Retired schoolteacher.\nOpen story threads to revisit:\n  - What specifically Mr. Iyer taught or did that changed his life\n  - Which school and what subject Mr. Iyer taught\n  - Whether Subramaniam ever got to thank Mr. Iyer\nPeople who have mattered deeply to Subramaniam, mentioned in past sessions and not yet fully explored:\n  - Mr. Iyer (old teacher) \u2014 Changed Subramaniam's life and remains one of the people he thinks about most from those years. Not yet fully explored.\n\nToday's focus domain: Career & Work Life\nDomain entry question: How did you end up in your career? What was your first job?\n\n\n\nSession 6 turn 1 response: \"That's wonderful, Subramaniam. A first job right after college must have felt like a big step. Which school was it, and what was it like walking in on your very first morning?\"\nSession 6 turn 2 response: \"Those are the beginnings I love hearing about, Subramaniam. I'd like to know a little more about that office. What was the work you did there, and how did you come to get the job?\"\nSession 6 turn 3 response (recall instruction now active; user has not raised him): \"That sounds like patient, careful work, Subramaniam. You've mentioned Mr. Iyer before, the teacher who changed your life, and I'd love to understand what he meant to you. Did he have a hand in your path to that office, or in the person you were when you walked in?\"\n  -> mentions_iyer_proactively(turns 1-3)=True qualitative_signal=True\n\nSession 6 turn 3 (user elaborates on Iyer) response: 'What a beautiful thing, Subramaniam, that his patience still lives on in how you treat your grandchildren. A teacher who never raised his voice, even with a slow student, is rare. Did Mr. Iyer ever know what he had given you, or did you get the chance to thank him, even years later?'\n  -> extraction significant_people: []\n  -> story atom about Iyer: (\"Subramaniam recalls Mr. Iyer, who taught him mathematics in Madurai in the 1960s. What stayed with him was Mr. Iyer's patience with slow students like himself, and he never once raised his voice. Subramaniam says he still thinks of Mr. Iyer when he is patient with his own grandchildren.\", 5)\n  -> fact_store.get_significant_people AFTER turn 3 (Iyer should be gone/resolved): [{'name': 'Mr. Iyer', 'signal': \"Explicit phrases 'He changed my life' and 'I still think about', plus unusual emotional weight in describing him as more memorable than almost anyone else from that period\", 'relationship': 'old teacher', 'why_significant': \"Changed Subramaniam's life and remains one of the people he thinks about most from those years\", 'first_seen_session': 2}]\n  -> iyer_still_unresolved_after=True\n\nGATES: setup(significant_people populated on mention)=True, resurface(proactive qualitative reference, before user raises him)=True, resolution(marked resolved after completeness>=3)=False"
+    }
+  ],
+  "usage": {
+    "prices_as_of": "2026-10-16",
+    "usd_inr_rate": "95.06",
+    "rows": 57,
+    "unpriced_rows": 0,
+    "inr_total": "10.7517",
+    "by_operation": {
+      "dialogue": {
+        "calls": 26,
+        "models": [
+          "claude-sonnet-5-5"
+        ],
+        "input_tokens": 14458,
+        "output_tokens": 2215,
+        "cache_creation_input_tokens": 12871,
+        "cache_read_input_tokens": 19450,
+        "mean_input_tokens": 556,
+        "mean_output_tokens": 85,
+        "inr": "9.9333",
+        "inr_per_call": "0.3820",
+        "latency_ms_p50": 1744,
+        "latency_ms_p95": 2384
+      },
+      "entities": {
+        "calls": 5,
+        "models": [
+          "claude-haiku-5-5"
+        ],
+        "input_tokens": 1477,
+        "output_tokens": 871,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "mean_input_tokens": 295,
+        "mean_output_tokens": 174,
+        "inr": "0.0554",
+        "inr_per_call": "0.0111",
+        "latency_ms_p50": 1423,
+        "latency_ms_p95": 2286
+      },
+      "extraction": {
+        "calls": 26,
+        "models": [
+          "claude-haiku-5-5"
+        ],
+        "input_tokens": 30163,
+        "output_tokens": 10021,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "mean_input_tokens": 1160,
+        "mean_output_tokens": 385,
+        "inr": "0.7630",
+        "inr_per_call": "0.0293",
+        "latency_ms_p50": 2470,
+        "latency_ms_p95": 5223
+      }
+    },
+    "by_case_inr": {
+      "eval-tc01": "0.6886",
+      "eval-tc02": "0.2339",
+      "eval-tc03": "2.8186",
+      "eval-tc04": "2.6393",
+      "eval-tc05": "0.4162",
+      "eval-tc06": "0.2097",
+      "eval-tc07": "0.2294",
+      "eval-tc08": "0.3989",
+      "eval-tc09": "0.2517",
+      "eval-tc10": "0.2488",
+      "eval-tc11": "2.6167"
+    }
+  },
+  "verbatim_quotes": {
+    "checked": 16,
+    "exact": 16,
+    "not_verbatim": []
+  }
+}

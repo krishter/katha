@@ -209,32 +209,36 @@ async def process_extraction(
     # Who was already on file BEFORE this pass upserts anyone. This is the
     # difference between "we just met this person" and "we have known about
     # them and now the user has finally elaborated".
-    known_before = {
-        _normalise_person_name(p.get("name", ""))
-        for p in await fact_store.get_significant_people(user_id, db)
-    }
-    known_before.discard("")
+    known_before: dict[str, str] = {}
+    for p in await fact_store.get_significant_people(user_id, db):
+        key = _normalise_person_name(p.get("name", ""))
+        if key:
+            known_before[key] = p.get("name", "")
 
-    resolved: list[str] = []
     for person in significant_people:
         await fact_store.upsert_significant_person(
             user_id, person, db, session_number=session_number
         )
 
-        # Resolution retires someone from future Layer 3 injection, so it
-        # must only happen once they have actually been resurfaced and
-        # explored. Previously this scanned created_atoms with no such
-        # guard, so a person flagged and written about in the same
-        # extraction was retired before Katha had ever raised them —
-        # TECH_DESIGN 3.3 TC-11 specifies session 2 flags and session 6
-        # resolves. Nobody was ever resurfaced.
-        name = _normalise_person_name(person.get("name", ""))
-        if not name or name not in known_before:
-            continue
-
-        if _atom_elaborates_on(created_atoms, name):
-            await fact_store.mark_resolved(user_id, person.get("name", ""), db)
-            resolved.append(person.get("name", ""))
+    # Resolution retires someone from future Layer 3 injection, so it must
+    # only happen once they have actually been resurfaced and explored.
+    # Previously this scanned created_atoms with no such guard, so a person
+    # flagged and written about in the same extraction was retired before
+    # Katha had ever raised them — TECH_DESIGN 3.3 TC-11 specifies session 2
+    # flags and session 6 resolves. Nobody was ever resurfaced.
+    #
+    # It is driven by the atoms, over everyone already on file, rather than
+    # by whoever the extractor re-lists in significant_people. The
+    # extraction prompt says not to re-flag a known person without new
+    # emotional signal, and a model that follows that literally (Haiku 5.5
+    # does) never re-lists the person it has just heard a full story about,
+    # so they could never be resolved. TC-11's own condition is only that
+    # an atom about them reaches completeness 3.
+    resolved: list[str] = []
+    for key, original_name in known_before.items():
+        if _atom_elaborates_on(created_atoms, key):
+            await fact_store.mark_resolved(user_id, original_name, db)
+            resolved.append(original_name)
 
     return ExtractionResult(
         story_atoms=created_atoms,
