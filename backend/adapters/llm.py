@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 from anthropic import APIError, AsyncAnthropic
 
 from config import settings
+from core import usage
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +39,26 @@ class LLMResponse:
     stop_reason: str = "end_turn"
 
 
+def _count(value) -> int:
+    """A token count from the SDK's usage object; absent or None is 0."""
+    return value if isinstance(value, int) else 0
+
+
 async def chat(
     messages: list[Message],
     system: str | None = None,
     max_tokens: int = 500,
+    *,
+    purpose: str,
 ) -> LLMResponse:
-    """Send messages to Claude Sonnet 4.6 and return the response."""
+    """
+    Send messages to Claude Sonnet 4.6 and return the response.
+
+    `purpose` is what the call is for — dialogue, extraction,
+    extraction_retry, entities, consolidation or eval — and becomes the
+    operation on its api_usage row. Required, so no call site can be
+    unaccounted for.
+    """
     # Separate any system-role message; explicit system= param takes precedence
     system_content = system
     user_messages = []
@@ -62,10 +78,30 @@ async def chat(
     if system_content is not None:
         kwargs["system"] = system_content
 
+    started = time.monotonic()
     try:
         response = await _client.messages.create(**kwargs)
     except APIError as exc:
         raise RuntimeError(f"Anthropic API error: {exc}") from exc
+    latency_ms = int((time.monotonic() - started) * 1000)
+
+    await usage.record(
+        "anthropic",
+        purpose,
+        {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+            "cache_creation_input_tokens": _count(
+                getattr(response.usage, "cache_creation_input_tokens", 0)
+            ),
+            "cache_read_input_tokens": _count(
+                getattr(response.usage, "cache_read_input_tokens", 0)
+            ),
+            "latency_ms": latency_ms,
+            "stop_reason": response.stop_reason,
+        },
+        model=_MODEL,
+    )
 
     if response.stop_reason == "max_tokens":
         logger.warning(

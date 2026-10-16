@@ -65,7 +65,7 @@ async def test_get_fallback_audio_returns_none_when_nothing_cached():
 
 
 async def test_preload_does_not_raise_when_tts_fails_for_one_language():
-    async def _flaky_synthesize(text, language_code):
+    async def _flaky_synthesize(text, language_code, **_kwargs):
         if language_code == "ta-IN":
             raise RuntimeError("Sarvam TTS is down")
         return b"fake-wav"

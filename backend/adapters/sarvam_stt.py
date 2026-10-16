@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -6,11 +8,13 @@ import httpx
 
 from adapters.retry import post_with_retry
 from config import settings
+from core import usage
 from media import audio_split
 
 logger = logging.getLogger(__name__)
 
 _SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
+_STT_MODEL = "saaras:v3"
 
 
 @dataclass
@@ -37,7 +41,7 @@ async def _transcribe_one(
         headers={"api-subscription-key": settings.SARVAM_API_KEY},
         files={"file": (filename, audio_bytes)},
         data={
-            "model": "saaras:v3",
+            "model": _STT_MODEL,
             "language_code": "unknown",
             "mode": "transcribe",
         },
@@ -51,6 +55,23 @@ async def _transcribe_one(
         transcript=body["transcript"],
         language_code=body["language_code"],
         language_probability=body["language_probability"],
+    )
+
+
+async def _record(seconds: float | None, *, chunks: int) -> None:
+    """
+    One ledger row per transcribed note. Recorded only once every chunk has
+    come back, which is also the only case where the turn goes on to use
+    it. `seconds_billed` equals `seconds_received` until pauses are
+    shortened before sending (COST_TO_SERVE.md C7). A duration ffprobe
+    could not read is left out, and the row then shows as unpriced.
+    """
+    rounded = round(seconds, 2) if seconds is not None else None
+    await usage.record(
+        "sarvam",
+        "stt",
+        {"seconds_received": rounded, "seconds_billed": rounded, "chunks": chunks},
+        model=_STT_MODEL,
     )
 
 
@@ -70,11 +91,13 @@ async def transcribe(
     language for a five-minute answer, and the language chosen here is what
     the reply is spoken back in.
     """
-    pieces = await audio_split.split_for_stt(audio_bytes)
+    pieces, seconds = await audio_split.split_for_stt_measured(audio_bytes)
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         if len(pieces) == 1:
-            return await _transcribe_one(client, pieces[0], filename)
+            result = await _transcribe_one(client, pieces[0], filename)
+            await _record(seconds, chunks=1)
+            return result
 
         semaphore = asyncio.Semaphore(_MAX_CONCURRENT_CHUNKS)
 
@@ -89,6 +112,8 @@ async def transcribe(
     # Every chunk has to land. A silently dropped middle is worse than a
     # failed turn: she would be told her story was heard, and a hole in it
     # is not visible to anyone until the family reads the archive.
+    await _record(seconds, chunks=len(results))
+
     best = max(results, key=lambda r: r.language_probability)
     transcript = " ".join(r.transcript.strip() for r in results if r.transcript.strip())
 

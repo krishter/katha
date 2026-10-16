@@ -126,8 +126,20 @@ def _cut_points(duration: float, silences: list[float]) -> list[float]:
 async def split_for_stt(
     audio_bytes: bytes, max_seconds: float = MAX_SYNC_SECONDS
 ) -> list[bytes]:
+    """Return the audio as one or more pieces, each within `max_seconds`."""
+    pieces, _duration = await split_for_stt_measured(audio_bytes, max_seconds)
+    return pieces
+
+
+async def split_for_stt_measured(
+    audio_bytes: bytes, max_seconds: float = MAX_SYNC_SECONDS
+) -> tuple[list[bytes], float | None]:
     """
-    Return the audio as one or more pieces, each within `max_seconds`.
+    Return the audio as one or more pieces, each within `max_seconds`, and
+    its duration in seconds (None if ffprobe could not read it).
+
+    The duration is what Sarvam bills by, so the usage ledger needs it, and
+    the split already has to measure it.
 
     Short audio is returned unchanged and untouched — the common case
     (a brief reply) must not pay for ffmpeg or risk re-encoding artefacts.
@@ -146,10 +158,10 @@ async def split_for_stt(
             logger.warning(
                 "Could not probe duration — passing audio through", exc_info=True
             )
-            return [audio_bytes]
+            return [audio_bytes], None
 
         if duration <= max_seconds:
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         logger.info(
             "Voice note is %.1fs — splitting for STT (limit %.0fs)",
@@ -160,7 +172,7 @@ async def split_for_stt(
         silences = await _silence_ends(source)
         cuts = _cut_points(duration, silences)
         if not cuts:
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         code, _stdout, stderr = await _run(
             "ffmpeg",
@@ -184,12 +196,12 @@ async def split_for_stt(
                 "ffmpeg split failed (%s) — passing audio through",
                 stderr.decode()[:200],
             )
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         pieces = [p.read_bytes() for p in sorted(directory.glob("seg*.ogg"))]
         if not pieces:
             logger.warning("Split produced no segments — passing audio through")
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         logger.info(
             "Split %.1fs into %d piece(s) at %s",
@@ -197,4 +209,4 @@ async def split_for_stt(
             len(pieces),
             "silence boundaries" if silences else "fixed intervals",
         )
-        return pieces
+        return pieces, duration

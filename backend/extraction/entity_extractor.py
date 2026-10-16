@@ -70,6 +70,7 @@ async def extract_entities(
     response = await llm.chat(
         messages=[Message(role="user", content=_EXTRACTION_PROMPT + transcript)],
         system=None,
+        purpose="entities",
     )
 
     entities = NamedEntities()

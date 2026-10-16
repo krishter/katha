@@ -5,6 +5,7 @@ import os
 import pytest
 from sqlalchemy import delete, text
 
+from models.api_usage import ApiUsage
 from models.crisis_event import CrisisEvent
 from models.db import AsyncSessionLocal, engine
 from models.fact import Fact
@@ -22,6 +23,7 @@ from models.user_profile import UserProfileModel
 # so a row left behind makes the second run of that test fail on a
 # collision rather than on anything real.
 _TABLES_IN_DELETE_ORDER = [
+    ApiUsage,
     CrisisEvent,
     MemoryCard,
     StoryAtom,

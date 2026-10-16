@@ -58,7 +58,7 @@ async def preload_fallback_audio() -> None:
         for language_code in SUPPORTED_LANGUAGES:
             try:
                 wav_bytes = await sarvam_tts.synthesize(
-                    text, language_code=language_code
+                    text, language_code=language_code, purpose="tts_fallback"
                 )
                 ogg_bytes = await convert_wav_to_ogg(wav_bytes)
                 _cache[(stage, language_code)] = ogg_bytes

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adapters import sarvam_stt
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
-from core import orchestrator, parent_consent, session_manager
+from core import orchestrator, parent_consent, session_manager, usage
 from core.delivery import record_card_delivery
 from core.fallback_audio import FailureStage, get_fallback_text
 from models.db import get_db
@@ -177,7 +177,7 @@ async def _speak(whatsapp, profile: UserProfileModel, text: str, *, stage: str) 
         from media.audio_convert import convert_wav_to_ogg
 
         audio = await sarvam_tts.synthesize(
-            text, language_code=profile.preferred_language
+            text, language_code=profile.preferred_language, purpose="tts_system"
         )
         audio = await convert_wav_to_ogg(audio)
         await whatsapp.send_voice_note(
@@ -421,6 +421,7 @@ async def twilio_status_callback(
             logger.info("Message %s -> %s", message_sid, status)
 
         await record_card_delivery(message_sid, status, error_code, db)
+        await usage.record_status(message_sid, status, error_code)
 
     except Exception:
         logger.error("Status callback processing error", exc_info=True)
@@ -440,12 +441,54 @@ async def whatsapp_verify(
     return Response(status_code=403, content="Forbidden")
 
 
+async def _note_inbound(profile: UserProfileModel | None, db: AsyncSession) -> None:
+    """
+    Stamp when she last messaged. Meta allows free-form messages only within
+    24 hours of it. Bookkeeping, so it can never cost the turn.
+    """
+    if profile is None:
+        return
+    try:
+        from datetime import datetime, timezone
+
+        profile.last_inbound_at = datetime.now(timezone.utc)
+        db.add(profile)
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Could not record last_inbound_at for %s", profile.user_id, exc_info=True
+        )
+        await db.rollback()
+
+
 @router.post("/webhook/whatsapp")
 async def whatsapp_incoming(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     whatsapp=Depends(get_whatsapp_adapter),
+) -> Response:
+    """
+    Main webhook handler for incoming Twilio WhatsApp events. See
+    _whatsapp_incoming.
+
+    Every paid call made while handling the message is attributed to her in
+    the usage ledger. The handler widens that scope as it learns who she is,
+    which session this is and which turn; resetting here puts it back
+    however the handler exits.
+    """
+    token = usage.enter_scope()
+    try:
+        return await _whatsapp_incoming(request, background_tasks, db, whatsapp)
+    finally:
+        usage.exit_scope(token)
+
+
+async def _whatsapp_incoming(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession,
+    whatsapp,
 ) -> Response:
     """
     Main webhook handler for incoming Twilio WhatsApp events.
@@ -514,6 +557,14 @@ async def whatsapp_incoming(
         # message arrives with no session at all, and the old path answered
         # it with "your session isn't scheduled yet".
         profile = await _load_profile_by_number(from_number, db)
+
+        # Twilio charges for every inbound message, including ones that
+        # never become a turn. Recorded after the idempotency check above,
+        # and once per SID even when Twilio retries (see record_inbound).
+        usage.enter_scope(user_id=profile.user_id if profile is not None else None)
+        await usage.record_inbound(message_sid)
+        await _note_inbound(profile, db)
+
         if profile is not None and not await parent_consent.has_granted(
             profile.user_id, db
         ):
@@ -555,6 +606,7 @@ async def whatsapp_incoming(
             state = await _open_session_on_demand(whatsapp, profile, from_number, db)
             if state is None:
                 return _ack()
+        usage.enter_scope(user_id=state.user_id, session_id=state.session_id)
 
         # 6. Handle voice note
         if media_url and "audio" in media_type:
@@ -570,6 +622,7 @@ async def whatsapp_incoming(
                 background_tasks=background_tasks,
             )
 
+            usage.enter_scope(turn_id=result.turn_id)
             await _deliver_turn_result(whatsapp, from_number, result, db)
 
             # Update last_user_message_at

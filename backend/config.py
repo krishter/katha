@@ -103,6 +103,20 @@ class Settings(BaseSettings):
     # DELETE /user/{user_id} is a DPDP problem, not a cosmetic one.
     COOKIE_DOMAIN: str = ""
 
+    # Cost to serve (docs/specs/COST_TO_SERVE.md). Prices live in
+    # core/pricing.py; these are only what the ledger needs to report.
+    #
+    # USD to INR, for reporting Anthropic and Twilio costs in rupees. Not
+    # used to charge anyone.
+    USD_INR_RATE: float = 95.06
+    # Meta category of each approved template, as a JSON object keyed by
+    # template SID: {"HX...": "utility", "HX...": "marketing"}. Meta, not
+    # us, decides a template's category, and it charges per category, so
+    # the adapter cannot infer it. A template missing from this map is
+    # recorded as "unknown" and shows up as unpriced on the admin page
+    # rather than silently reading as free.
+    META_TEMPLATE_CATEGORIES: str = ""
+
 
 settings = Settings()
 

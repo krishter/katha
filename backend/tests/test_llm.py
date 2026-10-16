@@ -25,7 +25,7 @@ async def test_chat_returns_llm_response():
     mock_client = _mock_client(response=_make_mock_response())
 
     with patch("adapters.llm._client", mock_client):
-        result = await chat([Message(role="user", content="Hello")])
+        result = await chat([Message(role="user", content="Hello")], purpose="dialogue")
 
     assert isinstance(result, LLMResponse)
     assert result.content == "Hello! How can I help you?"
@@ -36,7 +36,7 @@ async def test_chat_returns_positive_token_counts():
     mock_client = _mock_client(response=_make_mock_response())
 
     with patch("adapters.llm._client", mock_client):
-        result = await chat([Message(role="user", content="Hello")])
+        result = await chat([Message(role="user", content="Hello")], purpose="dialogue")
 
     assert result.input_tokens > 0
     assert result.output_tokens > 0
@@ -51,7 +51,8 @@ async def test_chat_separates_system_message():
             [
                 Message(role="system", content="You are a helpful assistant."),
                 Message(role="user", content="Hello"),
-            ]
+            ],
+            purpose="dialogue",
         )
 
     call_kwargs = mock_client.messages.create.call_args.kwargs
@@ -65,7 +66,7 @@ async def test_chat_defaults_max_tokens_to_500():
     mock_client = _mock_client(response=_make_mock_response())
 
     with patch("adapters.llm._client", mock_client):
-        await chat([Message(role="user", content="Hello")])
+        await chat([Message(role="user", content="Hello")], purpose="dialogue")
 
     assert mock_client.messages.create.call_args.kwargs["max_tokens"] == 500
 
@@ -74,7 +75,9 @@ async def test_chat_passes_through_custom_max_tokens():
     mock_client = _mock_client(response=_make_mock_response())
 
     with patch("adapters.llm._client", mock_client):
-        await chat([Message(role="user", content="Hello")], max_tokens=2000)
+        await chat(
+            [Message(role="user", content="Hello")], max_tokens=2000, purpose="dialogue"
+        )
 
     assert mock_client.messages.create.call_args.kwargs["max_tokens"] == 2000
 
@@ -95,7 +98,7 @@ async def test_chat_raises_on_api_error():
 
     with patch("adapters.llm._client", mock_client):
         with pytest.raises(RuntimeError, match="Anthropic API error"):
-            await chat([Message(role="user", content="Hello")])
+            await chat([Message(role="user", content="Hello")], purpose="dialogue")
 
 
 # ── SDK signature drift (production incident, 2026-10-02) ───────────────────
@@ -127,7 +130,7 @@ def _kwargs_chat_builds() -> dict:
     with patch("adapters.llm._client") as mock_client:
         mock_client.messages.create = AsyncMock(side_effect=_capture)
         asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-            chat([Message(role="user", content="hi")], system="sys")
+            chat([Message(role="user", content="hi")], system="sys", purpose="dialogue")
         )
     return captured
 
@@ -183,7 +186,7 @@ async def test_chat_surfaces_stop_reason():
     mock_client = _mock_client(response=_make_mock_response(stop_reason="max_tokens"))
 
     with patch("adapters.llm._client", mock_client):
-        result = await chat([Message(role="user", content="Hello")])
+        result = await chat([Message(role="user", content="Hello")], purpose="dialogue")
 
     assert result.stop_reason == "max_tokens"
 
@@ -192,6 +195,6 @@ async def test_chat_defaults_stop_reason_when_api_omits_it():
     mock_client = _mock_client(response=_make_mock_response(stop_reason=None))
 
     with patch("adapters.llm._client", mock_client):
-        result = await chat([Message(role="user", content="Hello")])
+        result = await chat([Message(role="user", content="Hello")], purpose="dialogue")
 
     assert result.stop_reason == "end_turn"

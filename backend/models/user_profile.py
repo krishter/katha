@@ -49,6 +49,13 @@ class UserProfileModel(Base):
         Integer, nullable=False, server_default="0"
     )
 
+    # When she last messaged Katha. Meta allows free-form messages only
+    # within 24 hours of this, so it is what decides whether a send needs an
+    # approved template.
+    last_inbound_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

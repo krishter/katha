@@ -38,15 +38,23 @@ import pathlib
 import sys
 import uuid
 from datetime import datetime, time, timezone
+from types import SimpleNamespace
 
 # Import the backend package from evals/, wherever the repo is checked out.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import delete  # noqa: E402
+from sqlalchemy import delete, select  # noqa: E402
 
-from core import conversation_policy, orchestrator, session_manager  # noqa: E402
+from core import (  # noqa: E402
+    conversation_policy,
+    orchestrator,
+    pricing,
+    session_manager,
+    usage,
+)
 from extraction import entity_extractor, story_extractor  # noqa: E402
 from memory import fact_store  # noqa: E402
+from models.api_usage import ApiUsage  # noqa: E402
 from models.db import AsyncSessionLocal, engine  # noqa: E402
 from models.fact import Fact  # noqa: E402
 from models.memory_card import MemoryCard  # noqa: E402
@@ -59,6 +67,13 @@ from prompts.system_prompt import UserProfile, build_system_prompt  # noqa: E402
 
 RESULTS: list[dict] = []
 
+# Every paid call the run made, as read back from api_usage before cleanup
+# deletes it (docs/specs/COST_TO_SERVE.md §14 step 2: the ledger, not a
+# model estimate, is where the run's cost comes from). Keyed by row id so a
+# row seen twice is counted once.
+USAGE_ROWS: dict[str, dict] = {}
+RUN_STARTED = datetime.now(timezone.utc)
+
 
 def record(tc, kind, passed, evidence):
     RESULTS.append({"tc": tc, "kind": kind, "passed": passed, "evidence": evidence})
@@ -66,10 +81,37 @@ def record(tc, kind, passed, evidence):
     print(evidence)
 
 
+async def capture_usage(db, user_id: str | None = None) -> None:
+    """Copy this run's ledger rows (all eval users, or one) into USAGE_ROWS."""
+    query = select(ApiUsage).where(ApiUsage.created_at >= RUN_STARTED)
+    if user_id is not None:
+        query = query.where(ApiUsage.user_id == user_id)
+    else:
+        query = query.where(ApiUsage.user_id.like("eval-%"))
+    for row in (await db.execute(query)).scalars().all():
+        USAGE_ROWS[str(row.id)] = {
+            "user_id": row.user_id,
+            "session_id": str(row.session_id) if row.session_id else None,
+            "vendor": row.vendor,
+            "operation": row.operation,
+            "model": row.model,
+            "units": dict(row.units or {}),
+        }
+
+
 async def cleanup(db, user_id: str) -> None:
+    await capture_usage(db, user_id)
     if os.environ.get("EVAL_SKIP_CLEANUP") == "1":
         return
-    for model in (MemoryCard, StoryAtom, Turn, Fact, Session, UserProfileModel):
+    for model in (
+        ApiUsage,
+        MemoryCard,
+        StoryAtom,
+        Turn,
+        Fact,
+        Session,
+        UserProfileModel,
+    ):
         await db.execute(delete(model).where(model.user_id == user_id))
     await db.commit()
 
@@ -153,6 +195,15 @@ async def real_turn(
     extraction call, persist atoms/facts, apply extraction to session
     state. Mirrors orchestrator.process_voice_turn + run_extraction_for_turn
     minus STT/TTS/WhatsApp."""
+    with usage.usage_scope(user_id=user_id, session_id=session_id):
+        return await _real_turn(
+            db, user_id, session_id, state, prompt_profile, transcript, prior_context
+        )
+
+
+async def _real_turn(
+    db, user_id, session_id, state, prompt_profile, transcript, prior_context
+):
     if prior_context is None:
         prior_context = await orchestrator.build_prior_context(
             user_id, state.domain, db
@@ -164,7 +215,10 @@ async def real_turn(
 
     messages.append(Message(role="user", content=transcript))
     llm_response = await orchestrator.llm.chat(
-        messages, system=dialogue_prompt, max_tokens=orchestrator._DIALOGUE_MAX_TOKENS
+        messages,
+        system=dialogue_prompt,
+        max_tokens=orchestrator._DIALOGUE_MAX_TOKENS,
+        purpose="dialogue",
     )
     # Through the post-turn policy, exactly as production does, rather
     # than parsing the raw output directly. The policy is what strips a
@@ -1076,6 +1130,112 @@ async def tc11(db):
     await cleanup(db, uid)
 
 
+def summarise_usage(rows: list[dict]) -> dict:
+    """
+    What the run's paid calls cost, from the ledger rows it made, priced by
+    core/pricing.py. Per operation and per case, plus per-call averages, so
+    the cost of one dialogue or extraction call can be read directly.
+
+    STT, TTS and WhatsApp are bypassed by this harness (see the module
+    docstring), so only Claude appears here.
+    """
+    from collections import defaultdict
+    from decimal import Decimal
+
+    by_op: dict = defaultdict(
+        lambda: {
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inr": Decimal(0),
+            "latency_ms": [],
+            "models": set(),
+        }
+    )
+    by_case: dict = defaultdict(lambda: Decimal(0))
+    unpriced = 0
+    for row in rows:
+        units = row["units"]
+        op = by_op[row["operation"]]
+        op["calls"] += 1
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        ):
+            op[key] += int(units.get(key) or 0)
+        if units.get("latency_ms") is not None:
+            op["latency_ms"].append(units["latency_ms"])
+        if row["model"]:
+            op["models"].add(row["model"])
+        inr = pricing.cost_inr(SimpleNamespace(**row))
+        if inr is None:
+            unpriced += 1
+            continue
+        op["inr"] += inr
+        by_case[row["user_id"]] += inr
+
+    def _pct(values, q):
+        if not values:
+            return None
+        ordered = sorted(values)
+        return ordered[min(len(ordered) - 1, int(round(q * (len(ordered) - 1))))]
+
+    operations = {}
+    for name, op in sorted(by_op.items()):
+        calls = op["calls"]
+        operations[name] = {
+            "calls": calls,
+            "models": sorted(op["models"]),
+            "input_tokens": op["input_tokens"],
+            "output_tokens": op["output_tokens"],
+            "cache_creation_input_tokens": op["cache_creation_input_tokens"],
+            "cache_read_input_tokens": op["cache_read_input_tokens"],
+            "mean_input_tokens": round(op["input_tokens"] / calls) if calls else 0,
+            "mean_output_tokens": round(op["output_tokens"] / calls) if calls else 0,
+            "inr": str(op["inr"].quantize(Decimal("0.0001"))),
+            "inr_per_call": str((op["inr"] / calls).quantize(Decimal("0.0001")))
+            if calls
+            else "0",
+            "latency_ms_p50": _pct(op["latency_ms"], 0.5),
+            "latency_ms_p95": _pct(op["latency_ms"], 0.95),
+        }
+    total = sum((Decimal(o["inr"]) for o in operations.values()), Decimal(0))
+    return {
+        "prices_as_of": pricing.PRICES_AS_OF,
+        "usd_inr_rate": str(pricing.usd_inr_rate()),
+        "rows": len(rows),
+        "unpriced_rows": unpriced,
+        "inr_total": str(total.quantize(Decimal("0.0001"))),
+        "by_operation": operations,
+        "by_case_inr": {
+            case: str(v.quantize(Decimal("0.0001")))
+            for case, v in sorted(by_case.items())
+        },
+    }
+
+
+def print_cost(cost: dict) -> None:
+    print(
+        "\nCOST (from api_usage, priced by core/pricing.py "
+        + cost["prices_as_of"]
+        + ")"
+    )
+    for name, op in cost["by_operation"].items():
+        print(
+            f"  {name:17s} calls={op['calls']:3d} in={op['mean_input_tokens']:6d} "
+            f"out={op['mean_output_tokens']:5d} (mean)  INR/call={op['inr_per_call']}  "
+            f"p50={op['latency_ms_p50']}ms p95={op['latency_ms_p95']}ms"
+        )
+    print(
+        f"  total INR {cost['inr_total']} over {cost['rows']} rows "
+        f"({cost['unpriced_rows']} unpriced)"
+    )
+
+
 ALL_CASES = {
     "tc01": tc01,
     "tc02": tc02,
@@ -1097,7 +1257,10 @@ async def main():
         for name in selected:
             fn = ALL_CASES[name]
             try:
-                await fn(db)
+                # Every case's user id is eval-<case>; calls made outside
+                # real_turn (entity extraction, session close) carry it too.
+                with usage.usage_scope(user_id=f"eval-{name}"):
+                    await fn(db)
             except Exception as e:
                 import traceback
 
@@ -1107,6 +1270,10 @@ async def main():
                     False,
                     f"Exception during test: {e}\n{traceback.format_exc()}",
                 )
+
+        # Rows a case left behind (an error before its own cleanup, or
+        # EVAL_SKIP_CLEANUP=1) are still this run's spend.
+        await capture_usage(db)
 
     await engine.dispose()
 
@@ -1127,6 +1294,9 @@ async def main():
     total = len(objective) + len(rubric)
     print(f"Overall:   {total_pass}/{total}")
 
+    cost = summarise_usage(list(USAGE_ROWS.values()))
+    print_cost(cost)
+
     # Timestamped, never overwritten: a partial re-run of a few cases used
     # to clobber the full run's results, so the file on disk silently
     # disagreed with the run it appeared to describe.
@@ -1145,6 +1315,7 @@ async def main():
                 "rubric": f"{rub_pass}/{len(rubric)}",
                 "overall": f"{total_pass}/{total}",
                 "results": RESULTS,
+                "usage": cost,
             },
             f,
             indent=2,

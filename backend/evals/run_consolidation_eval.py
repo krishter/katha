@@ -45,7 +45,10 @@ def _has_indic(text: str) -> bool:
 
 async def _call_llm(prompt: str, *, step: str, max_tokens: int):
     response = await llm.chat(
-        [Message(role="user", content=prompt)], system=None, max_tokens=max_tokens
+        [Message(role="user", content=prompt)],
+        system=None,
+        max_tokens=max_tokens,
+        purpose="eval",
     )
     return response.content, response.input_tokens, response.output_tokens
 

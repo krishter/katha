@@ -64,6 +64,7 @@ async def make_llm_call():
             [Message(role="user", content=prompt)],
             system=None,
             max_tokens=max_tokens,
+            purpose="consolidation",
         )
         if response.stop_reason == "max_tokens":
             # Worth seeing in Phase A: a truncated grouping silently loses

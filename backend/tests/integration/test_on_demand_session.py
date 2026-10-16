@@ -90,11 +90,11 @@ class _Harness:
         app.dependency_overrides[get_db] = _db
         app.dependency_overrides[get_whatsapp_adapter] = lambda: self.adapter
 
-        async def _tts(text, language_code=None):
+        async def _tts(text, language_code=None, **_kwargs):
             self.spoken.append(text)
             return b"RIFF" + b"\x00" * 40
 
-        async def _llm(messages, system=None, max_tokens=500):
+        async def _llm(messages, system=None, max_tokens=500, **_kwargs):
             content = (
                 "<response>Tell me more about that.</response>"
                 if system is not None
@@ -138,7 +138,10 @@ class _Harness:
         return self
 
     async def __aexit__(self, *exc):
-        for p in self._patches:
+        # Reverse order: two of these patch the same attribute through
+        # different import paths, and stopping them forwards restores the
+        # first fake instead of the real function, for every later test.
+        for p in reversed(self._patches):
             p.stop()
         from adapters.whatsapp_stub import get_whatsapp_adapter
 

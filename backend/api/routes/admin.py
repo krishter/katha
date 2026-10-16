@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import auth
 from core.auth import get_current_user
 from media import storage
+from models.api_usage import ApiUsage
 from models.consent_record import ConsentRecord
 from models.db import get_db
 from models.fact import Fact
@@ -116,6 +117,9 @@ async def delete_user(
             "user_profiles",
             delete(UserProfileModel).where(UserProfileModel.user_id == user_id),
         ),
+        # The usage ledger holds counts, not content, but it is keyed to
+        # her and outlives nothing (COST_TO_SERVE.md §3.6).
+        ("api_usage", delete(ApiUsage).where(ApiUsage.user_id == user_id)),
     ]:
         try:
             await db.execute(stmt)

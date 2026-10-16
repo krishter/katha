@@ -43,5 +43,6 @@ select = ["E", "F", "I"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
+    "real_ledger: write usage-ledger rows to the real database instead of the in-memory capture every other test gets (see backend/conftest.py).",
     "integration: requires a real Postgres (pgvector) connection — skips itself if DATABASE_URL isn't reachable rather than failing CI, which has no DB service. Run against `docker compose up db` for real verification (see REMEDIATION_PLAN WS5).",
 ]

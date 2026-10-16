@@ -29,7 +29,7 @@ async def test_synthesize_returns_bytes(mock_tts_response):
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
 
-        result = await synthesize("Hello, how are you?", "en-IN")
+        result = await synthesize("Hello, how are you?", "en-IN", purpose="tts_reply")
 
     assert isinstance(result, bytes)
     assert len(result) > 0
@@ -44,7 +44,7 @@ async def test_synthesize_decodes_base64(mock_tts_response):
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
 
-        result = await synthesize("Hello", "en-IN")
+        result = await synthesize("Hello", "en-IN", purpose="tts_reply")
 
     assert result == _FAKE_WAV
     # Must not be the raw base64 string bytes
@@ -64,7 +64,7 @@ async def test_synthesize_raises_on_http_error():
         mock_client_cls.return_value = mock_client
 
         with pytest.raises(RuntimeError, match="Sarvam TTS error 422"):
-            await synthesize("Hello", "en-IN")
+            await synthesize("Hello", "en-IN", purpose="tts_reply")
 
 
 async def test_synthesize_truncates_long_text(mock_tts_response):
@@ -77,7 +77,7 @@ async def test_synthesize_truncates_long_text(mock_tts_response):
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
 
-        result = await synthesize(long_text, "en-IN")
+        result = await synthesize(long_text, "en-IN", purpose="tts_reply")
 
     # Should succeed (not raise) and return bytes
     assert isinstance(result, bytes)

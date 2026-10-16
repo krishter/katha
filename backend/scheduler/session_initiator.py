@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_tts
 from adapters.whatsapp_stub import get_whatsapp_adapter
-from core import freemium, orchestrator, parent_consent, session_manager
+from core import freemium, orchestrator, parent_consent, session_manager, usage
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
 from prompts.domains import get_domain
@@ -64,92 +64,99 @@ async def initiate_sessions(db_session_factory) -> None:
         whatsapp = get_whatsapp_adapter()
 
         for profile in due_profiles:
-            try:
-                # Check for existing active session today
-                active = await session_manager.get_active_session_by_number(
-                    profile.whatsapp_number, db
-                )
-                if active is not None:
+            # Every paid call for this parent's opener is attributed to her.
+            with usage.usage_scope(user_id=profile.user_id):
+                try:
+                    # Check for existing active session today
+                    active = await session_manager.get_active_session_by_number(
+                        profile.whatsapp_number, db
+                    )
+                    if active is not None:
+                        logger.info(
+                            "Scheduler: user %s already has active session %s "
+                            "— skipping",
+                            profile.user_id,
+                            active.session_id,
+                        )
+                        continue
+
+                    # Consent gate. Nothing is scheduled for a parent who has
+                    # not agreed — that includes one who has never messaged,
+                    # one who has been asked and not answered clearly, and one
+                    # who declined. Katha cannot open the conversation anyway
+                    # (Meta 63049, see plan S3.0); she waits to be spoken to.
+                    if not await parent_consent.has_granted(profile.user_id, db):
+                        logger.info(
+                            "Scheduler: user %s has no recorded parent consent — "
+                            "not initiating",
+                            profile.user_id,
+                        )
+                        continue
+
+                    # Freemium gate — skip cleanly rather than let start_session
+                    # raise HTTPException(402) into the generic except below.
+                    if not await freemium.is_session_allowed(profile.user_id, db):
+                        await freemium.send_upgrade_prompt(profile.user_id, db)
+                        logger.info(
+                            "Scheduler: skipped session initiation for %s — "
+                            "session limit reached",
+                            profile.user_id,
+                        )
+                        continue
+
+                    # Create new session — session_number and domain are chosen
+                    # by start_session based on the user's actual progress.
+                    state = await session_manager.start_session(profile.user_id, db)
+                    usage.enter_scope(session_id=state.session_id)
+
+                    # Build opening message from the session's actual domain
+                    domain_name = state.domain
+                    domain = get_domain(domain_name)
+                    opening_text = (
+                        f"Namaste {profile.name} ji! "
+                        f"I'm Katha, your daily companion. "
+                        f"Today I'd love to hear about your life. "
+                        f"{domain.entry_prompt}"
+                    )
+
+                    # Synthesize
+                    audio_bytes = await sarvam_tts.synthesize(
+                        opening_text,
+                        language_code=profile.preferred_language,
+                        purpose="tts_opener",
+                    )
+
+                    # Send voice note
+                    message_sid, audio_s3_key = await whatsapp.send_voice_note(
+                        profile.whatsapp_number, audio_bytes, mime_type="audio/ogg"
+                    )
+
+                    # Record session_open_message_id and the audio key. The key
+                    # was previously discarded, leaving the object unreachable
+                    # by DELETE /user/{user_id} (S2.4a).
+                    await db.execute(
+                        update(Session)
+                        .where(Session.id == state.session_id)
+                        .values(
+                            session_open_message_id=message_sid,
+                            session_open_audio_s3_key=audio_s3_key,
+                            whatsapp_number=profile.whatsapp_number,
+                        )
+                    )
+                    await db.commit()
+
                     logger.info(
-                        "Scheduler: user %s already has active session %s — skipping",
+                        "Scheduler: session initiated for user %s, domain %s, sid %s",
                         profile.user_id,
-                        active.session_id,
+                        domain_name,
+                        message_sid,
                     )
-                    continue
 
-                # Consent gate. Nothing is scheduled for a parent who has
-                # not agreed — that includes one who has never messaged,
-                # one who has been asked and not answered clearly, and one
-                # who declined. Katha cannot open the conversation anyway
-                # (Meta 63049, see plan S3.0); she waits to be spoken to.
-                if not await parent_consent.has_granted(profile.user_id, db):
-                    logger.info(
-                        "Scheduler: user %s has no recorded parent consent — "
-                        "not initiating",
+                except Exception:
+                    logger.exception(
+                        "Scheduler: failed to initiate session for user %s",
                         profile.user_id,
                     )
-                    continue
-
-                # Freemium gate — skip cleanly rather than let start_session
-                # raise HTTPException(402) into the generic except below.
-                if not await freemium.is_session_allowed(profile.user_id, db):
-                    await freemium.send_upgrade_prompt(profile.user_id, db)
-                    logger.info(
-                        "Scheduler: skipped session initiation for %s — "
-                        "session limit reached",
-                        profile.user_id,
-                    )
-                    continue
-
-                # Create new session — session_number and domain are chosen
-                # by start_session based on the user's actual progress.
-                state = await session_manager.start_session(profile.user_id, db)
-
-                # Build opening message from the session's actual domain
-                domain_name = state.domain
-                domain = get_domain(domain_name)
-                opening_text = (
-                    f"Namaste {profile.name} ji! "
-                    f"I'm Katha, your daily companion. "
-                    f"Today I'd love to hear about your life. "
-                    f"{domain.entry_prompt}"
-                )
-
-                # Synthesize
-                audio_bytes = await sarvam_tts.synthesize(
-                    opening_text, language_code=profile.preferred_language
-                )
-
-                # Send voice note
-                message_sid, audio_s3_key = await whatsapp.send_voice_note(
-                    profile.whatsapp_number, audio_bytes, mime_type="audio/ogg"
-                )
-
-                # Record session_open_message_id and the audio key. The key
-                # was previously discarded, leaving the object unreachable
-                # by DELETE /user/{user_id} (S2.4a).
-                await db.execute(
-                    update(Session)
-                    .where(Session.id == state.session_id)
-                    .values(
-                        session_open_message_id=message_sid,
-                        session_open_audio_s3_key=audio_s3_key,
-                        whatsapp_number=profile.whatsapp_number,
-                    )
-                )
-                await db.commit()
-
-                logger.info(
-                    "Scheduler: session initiated for user %s, domain %s, sid %s",
-                    profile.user_id,
-                    domain_name,
-                    message_sid,
-                )
-
-            except Exception:
-                logger.exception(
-                    "Scheduler: failed to initiate session for user %s", profile.user_id
-                )
 
         # 3. 30-minute no-response follow-up
         await _send_followups(db, whatsapp)
@@ -204,26 +211,30 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
     rows = result.all()
 
     for session_row, profile in rows:
-        # Claim the session before sending. If the send raises, the stamp is
-        # already committed and no retry storm can start.
-        session_row.followup_sent_at = datetime.now(timezone.utc)
-        db.add(session_row)
-        await db.commit()
+        with usage.usage_scope(user_id=profile.user_id, session_id=session_row.id):
+            # Claim the session before sending. If the send raises, the stamp is
+            # already committed and no retry storm can start.
+            session_row.followup_sent_at = datetime.now(timezone.utc)
+            db.add(session_row)
+            await db.commit()
 
-        try:
-            followup_text = (
-                f"Hi {profile.name} ji, just checking in — no pressure at all. "
-                "Whenever you're ready, just send me a voice note and we'll continue. "
-                "I'm here. \U0001f64f"
-            )
-            await whatsapp.send_text(profile.whatsapp_number, followup_text)
-            logger.info("Scheduler: sent 30-min follow-up to user %s", profile.user_id)
-        except Exception:
-            logger.exception(
-                "Scheduler: failed to send follow-up for user %s (not retried — "
-                "the stamp is already set; see _send_followups docstring)",
-                profile.user_id,
-            )
+            try:
+                followup_text = (
+                    f"Hi {profile.name} ji, just checking in — no pressure at all. "
+                    "Whenever you're ready, just send me a voice note and "
+                    "we'll continue. "
+                    "I'm here. \U0001f64f"
+                )
+                await whatsapp.send_text(profile.whatsapp_number, followup_text)
+                logger.info(
+                    "Scheduler: sent 30-min follow-up to user %s", profile.user_id
+                )
+            except Exception:
+                logger.exception(
+                    "Scheduler: failed to send follow-up for user %s (not retried — "
+                    "the stamp is already set; see _send_followups docstring)",
+                    profile.user_id,
+                )
 
 
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
