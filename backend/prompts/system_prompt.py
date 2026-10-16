@@ -164,6 +164,86 @@ piece in different words — pick a different one of the five each turn, until t
 story feels complete."""
 
 
+# How much of the fact store Layer 3 shows (COST_TO_SERVE.md C2). The store
+# only grows: entity extraction appends every new name, place and date after
+# every session, so rendering all of it made the dialogue prompt grow with
+# tenure — about 18,300 characters at session 100, paid on every turn.
+#
+# The earliest people are kept because entries are appended in the order they
+# were first mentioned, and the first people anyone talks about are usually
+# the closest family. The latest are kept because they are what she is
+# talking about now. Dates keep only the latest; institutions only the first.
+# (first, last) per category; 0 means nothing is kept from that end.
+_FACT_CAPS: dict[str, tuple[int, int]] = {
+    "people": (10, 5),
+    "places": (5, 5),
+    "dates": (0, 8),
+    "institutions": (5, 0),
+}
+_OTHER_FACT_CAP = 5
+_FACT_LABELS = {
+    "people": "People",
+    "places": "Places",
+    "dates": "Dates",
+    "institutions": "Institutions",
+}
+
+
+def _fact_value_text(value) -> str:
+    """One fact as plain words: a person as "Kamala (sister)", else str()."""
+    if isinstance(value, dict):
+        name = str(value.get("name") or "").strip()
+        relationship = str(value.get("relationship") or "").strip()
+        if name and relationship:
+            return f"{name} ({relationship})"
+        return name or relationship
+    return str(value).strip()
+
+
+def _dedupe(values: list) -> list[str]:
+    """Rendered text, without blanks or case-insensitive repeats, order kept."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        text = _fact_value_text(value)
+        if text and text.lower() not in seen:
+            seen.add(text.lower())
+            out.append(text)
+    return out
+
+
+def _first_and_last(values: list[str], first: int, last: int) -> list[str]:
+    if len(values) <= first + last:
+        return values
+    return values[:first] + (values[-last:] if last else [])
+
+
+def render_facts(facts: dict) -> list[str]:
+    """
+    The fact store as compact lines, one per category, e.g.
+    "People: Kamala (sister); Mr. Iyer (teacher)".
+
+    Replaces the Python reprs Layer 3 used to show — a list of dicts with
+    quotes and braces costs tokens and reads worse — and caps each category
+    (see _FACT_CAPS) so the prompt stops growing with tenure. Always on: it
+    is how facts are rendered, not a behaviour that needs a rollback flag.
+    """
+    lines: list[str] = []
+    for key, value in facts.items():
+        label = _FACT_LABELS.get(key, str(key).replace("_", " ").capitalize())
+        if isinstance(value, list):
+            values = _dedupe(value)
+            first, last = _FACT_CAPS.get(key, (_OTHER_FACT_CAP, 0))
+            values = _first_and_last(values, first, last)
+            if values:
+                lines.append(f"{label}: " + "; ".join(values))
+        else:
+            text = _fact_value_text(value)
+            if text:
+                lines.append(f"{label}: {text}")
+    return lines
+
+
 def _layer3_life_context(
     user_profile: UserProfile,
     session_state: SessionState,
@@ -187,7 +267,7 @@ def _layer3_life_context(
         )
     else:
         facts_formatted = "\n".join(
-            f"  - {k}: {v}" for k, v in prior_context.facts.items()
+            f"  - {line}" for line in render_facts(prior_context.facts)
         )
         context_block = (
             f"What you already know about {user_profile.name}:\n{facts_formatted}"

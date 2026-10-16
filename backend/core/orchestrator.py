@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import re
@@ -8,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from fastapi import BackgroundTasks
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
@@ -25,6 +26,7 @@ from memory_cards import generator as memory_card_generator
 from memory_cards.generator import MemoryCardResult
 from models.crisis_event import CrisisEvent
 from models.memory_card import MemoryCard
+from models.session import Session
 from models.turn import Turn
 from models.user_profile import UserProfileModel
 from prompts.domains import domain_label
@@ -203,6 +205,70 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
         open_threads=open_threads,
         significant_people=significant_people,
     )
+
+
+async def prior_context_for_session(
+    session_id: str, user_id: str, domain: str, db
+) -> PriorContext:
+    """
+    Layer 3 for this turn: built on the session's first turn and reused for
+    the rest of it (COST_TO_SERVE.md C2), unless LAYER3_FREEZE_PER_SESSION
+    is off.
+
+    Freezing is what makes the dialogue prompt's opening layers identical
+    from one turn to the next, so they can be cached. What it gives up is
+    small: atoms extracted mid-session are already in the conversation
+    itself, and the next session picks them up. A session that started
+    before the snapshot existed has none, and gets one on its next turn.
+
+    The snapshot is bookkeeping. If reading or writing it fails, the turn
+    goes ahead on a freshly built Layer 3, exactly as before.
+    """
+    if not settings.LAYER3_FREEZE_PER_SESSION:
+        return await build_prior_context(user_id, domain, db)
+
+    try:
+        stored = (
+            await db.execute(
+                select(Session.prior_context).where(
+                    Session.id == uuid.UUID(str(session_id))
+                )
+            )
+        ).scalar_one_or_none()
+        if isinstance(stored, dict):
+            return PriorContext(
+                facts=stored.get("facts") or {},
+                open_threads=stored.get("open_threads") or [],
+                significant_people=stored.get("significant_people") or [],
+            )
+    except Exception:
+        logger.warning(
+            "Could not read the Layer 3 snapshot for session %s — rebuilding",
+            session_id,
+            exc_info=True,
+        )
+        await db.rollback()
+
+    prior_context = await build_prior_context(user_id, domain, db)
+    try:
+        # Only where none exists yet, so two turns racing on a new session
+        # cannot leave it with two different snapshots over its lifetime.
+        await db.execute(
+            update(Session)
+            .where(Session.id == uuid.UUID(str(session_id)))
+            .where(Session.prior_context.is_(None))
+            .values(prior_context=dataclasses.asdict(prior_context))
+        )
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Could not store the Layer 3 snapshot for session %s — this turn "
+            "goes ahead, the next one rebuilds",
+            session_id,
+            exc_info=True,
+        )
+        await db.rollback()
+    return prior_context
 
 
 async def _log_crisis_event(
@@ -742,7 +808,9 @@ async def process_voice_turn(
         )
 
     # 4. Build real prior context from fact store + vector store
-    prior_context = await build_prior_context(state.user_id, state.domain, db)
+    prior_context = await prior_context_for_session(
+        session_id, state.user_id, state.domain, db
+    )
 
     # 5. Build dialogue prompt and call the dialogue LLM. The immediately
     # preceding turn's raw exchange is included directly (not just via the

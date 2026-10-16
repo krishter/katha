@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     # rather than silently reading as free.
     META_TEMPLATE_CATEGORIES: str = ""
 
+    # C2: build Layer 3 once per session, on its first turn, and reuse it
+    # for every later turn. Keeps the start of the dialogue prompt identical
+    # within a session, which is what lets prompt caching work. false
+    # rebuilds it every turn, as before. The rendering caps apply either way.
+    LAYER3_FREEZE_PER_SESSION: bool = True
+
     # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
     # /admin/metrics and /admin/metrics/view answer 404, as if they did not
     # exist. Generate with:

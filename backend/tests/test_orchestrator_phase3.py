@@ -315,7 +315,15 @@ def _voice_turn_patches(stack: ExitStack, session_state, llm_content) -> None:
     Patch every external dependency of process_voice_turn for the
     successful-turn path. record_turn returns session_state unchanged
     (exchange_count bookkeeping isn't the point of these tests).
+
+    The Layer 3 snapshot is off here: it adds its own commit on a session's
+    first turn, and these tests count commits to prove the turn is saved
+    before TTS. The snapshot has its own tests
+    (tests/integration/test_prior_context_freeze.py).
     """
+    stack.enter_context(
+        patch("core.orchestrator.settings.LAYER3_FREEZE_PER_SESSION", False)
+    )
     stack.enter_context(
         patch(
             "core.orchestrator.session_manager.get_session",

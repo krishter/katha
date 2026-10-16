@@ -205,8 +205,10 @@ async def _real_turn(
     db, user_id, session_id, state, prompt_profile, transcript, prior_context
 ):
     if prior_context is None:
-        prior_context = await orchestrator.build_prior_context(
-            user_id, state.domain, db
+        # The same path as production: built on the session's first turn
+        # and reused after it when LAYER3_FREEZE_PER_SESSION is on.
+        prior_context = await orchestrator.prior_context_for_session(
+            session_id, user_id, state.domain, db
         )
 
     dialogue_prompt = build_system_prompt(prompt_profile, state, prior_context)
