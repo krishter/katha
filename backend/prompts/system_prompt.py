@@ -565,9 +565,9 @@ def _layer4_session_state(
             f"one sentence to ask about {anchor} now — even if the connection "
             f"to what the user just said is only loose (family, feelings, "
             f"people, and place all count as a bridge). Do this before the "
-            f"conversation moves further away from the opening. Ask about "
-            f"their place in the user's life and why it matters, not for "
-            f"another fact about them."
+            f"conversation moves further away from the opening. Ask what "
+            f"made them matter so much to the user — the feeling, not a fact "
+            f"about them or the part they played in events."
         )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}

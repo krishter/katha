@@ -128,8 +128,10 @@ class Settings(BaseSettings):
     # the code until the pilot has run a month on the new one.
     #   Dialogue — rollback value claude-sonnet-4-6.
     LLM_DIALOGUE_MODEL: str = "claude-sonnet-5-5"
-    # output_config.effort for dialogue. The eval compares low and medium.
-    LLM_DIALOGUE_EFFORT: str = "medium"
+    # output_config.effort for dialogue. low: the eval passed as well as
+    # medium at lower cost (evals/results/20261016T170550Z.json against
+    # 20261016T170401Z.json), which is the spec's rule for choosing.
+    LLM_DIALOGUE_EFFORT: str = "low"
     #   Per-turn extraction, its retry, and entity extraction — rollback
     #   value claude-sonnet-4-6.
     LLM_EXTRACTION_MODEL: str = "claude-haiku-5-5"
