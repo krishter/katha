@@ -24,7 +24,7 @@ This update does two things:
 
 Decided 2026-10-16:
 - Stay on the **Anthropic API with the 5.5 models**, not Bedrock India.
-- **The parent initiates.** Katha does not message first, so no session-open template is needed (Option B in `docs/proposals/outbound-messaging-window.md`).
+- **The parent initiates.** Katha does not message first, so no session-open template is needed (Option B in `docs/proposals/outbound-messaging-window.md`). Confirmed again 2026-10-16, when §15 and §17 were corrected: they had described a template opener for a closed window, which this decision rules out.
 
 ## 2. Scope
 
@@ -324,8 +324,8 @@ Each commit is green on its own targeted tests:
 | `tests/test_pricing.py` (new) | Each vendor's cost from known units; cache read and write priced separately; unpriced model gives None |
 | `tests/test_system_prompt.py` (update) | Compact facts rendering; caps; session-100 prompt under 8,000 characters; `stable` + `per_turn` join equals the old string; render-coverage test still passes |
 | `tests/integration/test_prior_context_freeze.py` (new) | Snapshot written on turn 1 and reused on turn 2; legacy null session filled |
-| `tests/test_session_initiator.py` (update) | Window open sends OGG voice; window closed with template sends the template and makes no TTS call; no template sends nothing and starts no session; nudge skipped when closed |
-| `tests/test_webhook.py` (update) | `last_inbound_at` set; `OPEN_SESSION` tap speaks the opener (active session and on-demand cases); inbound ledger row written once despite Twilio retries |
+| `tests/test_session_initiator.py` (update) | Flag off (default): the sweep and abandoned-session outputs still run, but no session is started, nothing is synthesised or sent, and no nudge goes out. Flag on (rollback): today's opener, sent as OGG via `convert_wav_to_ogg` with `purpose="tts_opener"`, and the nudge |
+| `tests/test_webhook.py` (update) | `last_inbound_at` set; the parent's voice note opens a session on demand; inbound ledger row written once despite Twilio retries |
 | `tests/test_sarvam_tts.py` (update) | Model and voice selection; v4 fallback to v3 for an unmapped language; request field names per model |
 | `tests/test_system_speech.py` (new) | Cache hit skips synthesis; key includes model, voice and text hash |
 | `tests/test_audio_split.py` (update) | `compress_pauses` shortens a synthetic 3 s gap to about 0.5 s; passes through on ffmpeg failure; short speech untouched |
@@ -352,7 +352,7 @@ The biggest line still left is Twilio, at ₹7.75 per session. The pricing-by-ca
 - [ ] Dialogue cache hit rate > 0.6 on those sessions
 - [ ] Eval gate met (§3.2); results committed for the baseline and the new config
 - [ ] Dialogue p95 latency within +20% of baseline
-- [ ] The opener reaches a parent whose window is closed (template), and no TTS is billed for it
+- [ ] With `SCHEDULED_OPENER_ENABLED=false`, the scheduler starts no session and bills no TTS or outbound message; a session opens only when the parent sends a voice note
 - [ ] Each of C1–C7 rolls back by env change alone (tested by flipping each in a local run)
 - [ ] Deletion removes ledger rows; PII test passes
 - [ ] Lint and type checks pass; PR titled per `.claude/rules/git.md`
