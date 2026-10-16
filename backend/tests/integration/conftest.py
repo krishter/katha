@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import delete, text
 
 from models.api_usage import ApiUsage
+from models.consent_record import ConsentRecord
 from models.crisis_event import CrisisEvent
 from models.db import AsyncSessionLocal, engine
 from models.fact import Fact
@@ -24,6 +25,7 @@ from models.user_profile import UserProfileModel
 # collision rather than on anything real.
 _TABLES_IN_DELETE_ORDER = [
     ApiUsage,
+    ConsentRecord,
     CrisisEvent,
     MemoryCard,
     StoryAtom,

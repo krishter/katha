@@ -117,6 +117,15 @@ class Settings(BaseSettings):
     # rather than silently reading as free.
     META_TEMPLATE_CATEGORIES: str = ""
 
+    # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
+    # /admin/metrics and /admin/metrics/view answer 404, as if they did not
+    # exist. Generate with:
+    #   python -c "import secrets; print(secrets.token_urlsafe(32))"
+    ADMIN_API_TOKEN: str = ""
+    # Comma-separated user_ids left out of every metric: self-trial accounts
+    # and rehearsal users. The page reports how many, never which.
+    METRICS_EXCLUDED_USER_IDS: str = ""
+
 
 settings = Settings()
 
@@ -136,6 +145,11 @@ def validate_production_config(s: Settings = settings) -> None:
 
     if s.JWT_SECRET == _DEFAULT_JWT_SECRET or len(s.JWT_SECRET) < 32:
         problems.append("JWT_SECRET is the default value or shorter than 32 characters")
+    if s.ADMIN_API_TOKEN and len(s.ADMIN_API_TOKEN) < 32:
+        problems.append(
+            "ADMIN_API_TOKEN is set but shorter than 32 characters — it is the "
+            "only thing guarding the operator metrics page"
+        )
     if s.SES_MOCK:
         problems.append("SES_MOCK is True — magic link emails would never send")
     if s.WHATSAPP_ADAPTER == "stub":

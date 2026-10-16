@@ -121,6 +121,26 @@ SARVAM_API_KEY / ANTHROPIC_API_KEY
 Keep it out of git, `chmod 600`, and keep a sealed copy somewhere you'd still have it if the
 box died tonight.
 
+### 3a — The operator metrics page *(optional; off until you set a token)*
+
+`/admin/metrics` (JSON) and `/admin/metrics/view` (one HTML page) report the pilot's numbers
+and its cost to serve (`docs/specs/ADMIN_METRICS.md`). With no token set, both answer 404.
+
+1. Generate a token: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+   Production refuses to boot with one shorter than 32 characters.
+2. On the Lightsail box, add it to **`backend/.env`**, not `deploy.env`. The backend
+   container reads only `backend/.env`; `deploy.env` goes to Postgres and the backup job.
+   ```
+   ADMIN_API_TOKEN=<the token>
+   METRICS_EXCLUDED_USER_IDS=user_xxxxxxxx,user_yyyyyyyy   # your self-trial and rehearsal user_ids
+   ```
+3. Restart the backend, then open `https://api.katha.life/admin/metrics/view`. The browser
+   asks for a username and password: any username, and the token as the password. Scripts
+   use `Authorization: Bearer <token>`.
+
+No Caddy change is needed: `api.katha.life` already proxies to FastAPI, and the token is the
+gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
+
 ## Step 4 — SES out of the sandbox *(start this first — it has a queue)*
 
 1. Verify the `katha.life` domain in SES **ap-south-1** (`core/auth.py` builds its client from

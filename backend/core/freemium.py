@@ -53,9 +53,9 @@ async def get_session_count(user_id: str, db: AsyncSession) -> int:
     result = await db.execute(
         select(func.count(Session.id))
         .where(Session.user_id == user_id)
+        # Shared with the admin metrics page, so the two never disagree.
         # The consent handshake is not one of the free conversations.
-        .where(Session.status != session_manager.CONSENT_SESSION_STATUS)
-        .where(Session.exchange_count > 0)
+        .where(session_manager.is_conversation())
     )
     return result.scalar_one()
 

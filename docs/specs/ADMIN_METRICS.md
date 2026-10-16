@@ -1,7 +1,7 @@
 # Admin metrics endpoint — spec
 
 **Status:** Ready to build · **Owner:** Krish · **Written:** 2026-10-16
-**Branch:** `feature/admin-metrics` (never commit to `main`; open a PR per `.claude/rules/git.md`)
+**Branch:** built on `feature/cost-to-serve` as part of `docs/specs/COST_TO_SERVE.md`, which amends this spec in its §12 (never commit to `main`; open a PR per `.claude/rules/git.md`)
 
 ## 1. Why
 
@@ -29,10 +29,9 @@ L3) and the pilot go/no-go in PRD §12.1 ("≥50% of pilot users complete 10+ se
   (`consolidation/pipeline.py`, `scripts/consolidate_stories.py`). Return the placeholder
   in §6.7 and add real numbers when the stories table from
   `docs/proposals/first-person-stories.md` §8 lands.
-- Sarvam STT/TTS cost. Audio duration is not recorded anywhere, so it cannot be computed.
-  Report LLM tokens only (§6.8) and flag the gap.
 - Charts, JavaScript, a Next.js page, PostHog or any third-party analytics.
-- New tables, migrations, or indexes. Plain aggregates are fast at pilot row counts.
+- New tables, migrations, or indexes of its own. The metrics code reads `api_usage`, which
+  `docs/specs/COST_TO_SERVE.md` adds. Plain aggregates are fast at pilot row counts.
 - Query parameters. Windows are fixed (7 and 30 days).
 
 ## 3. Non-negotiables
@@ -60,8 +59,6 @@ New settings in `config.py`:
 |---|---|---|
 | `ADMIN_API_TOKEN` | `""` | Operator token. Empty → routes 404. |
 | `METRICS_EXCLUDED_USER_IDS` | `""` | Comma-separated `user_id`s left out of every metric (Krish's self-trial accounts, rehearsal users). |
-| `LLM_PRICE_INPUT_PER_MTOK_USD` | `3.0` | For the cost estimate in §6.8. Verify against current Anthropic pricing for `claude-sonnet-4-6` before trusting the number. |
-| `LLM_PRICE_OUTPUT_PER_MTOK_USD` | `15.0` | As above. |
 
 Dependency `require_admin_token` (put it in `core/auth.py` next to the family auth):
 - Accept either `Authorization: Bearer <token>` or `Authorization: Basic <b64(any-username:token)>`.
@@ -195,14 +192,23 @@ This is a proxy (sign-ins, not visits). Label it that way.
 Return `{"available": false, "reason": "Stories are not persisted yet (consolidation Phase A)."}`
 and show the same sentence on the page.
 
-### 6.8 Cost (LLM only)
+### 6.8 Cost (all vendors)
+
+*Replaced by `docs/specs/COST_TO_SERVE.md` §12.*
+
+Computed at read time from `api_usage` units multiplied by `core/pricing.py`. Price changes then need no backfill, and the page states which price table it used.
 
 | Key | Definition |
 |---|---|
-| `input_tokens`, `output_tokens` | Sums of `turns.input_tokens` / `output_tokens` (nulls as 0). These include the dialogue call, its retry, and extraction (see `core/orchestrator.py`). Memory-card and consolidation calls are not on turns and are not counted. |
-| `est_llm_usd` | From the two price settings |
-| `est_llm_usd_per_conversation` | ÷ conversations in the same window |
-| `not_tracked` | Fixed list: `["sarvam_stt", "sarvam_tts", "memory_card_llm"]`, shown as a note |
+| `inr_total` | Sum over rows `{all_time, last_7d, last_30d}`, fixed hosting excluded |
+| `inr_per_conversation` | ÷ conversations (§5.1 predicate), same window |
+| `by_component` | `{claude_dialogue, claude_extraction, claude_entities, claude_other, sarvam_stt, sarvam_tts, twilio, meta}`, each `{inr, share}` |
+| `units` | Claude tokens by operation (including cache read and write), `stt_minutes_received`, `stt_minutes_billed`, `tts_characters`, `messages_in`, `messages_out` |
+| `dialogue_cache_hit_rate` | `cache_read / (cache_read + cache_creation + uncached input)` over dialogue rows, last 7 days. Target > 0.6. |
+| `dialogue_input_tokens_by_tenure` | Median dialogue input tokens per call, bucketed by session number (1–10, 11–30, 31–100, 100+). After C2 this should stay flat. |
+| `wasted_outbound` | Outbound rows with status `failed` or `undelivered`: `{count, inr}` by `error_code`, last 30 days |
+| `unpriced` | Any `(vendor, model)` with no price in `core/pricing.py`, with row counts. So a model switch can't silently read as ₹0. |
+| `prices_as_of`, `usd_inr_rate` | From `core/pricing.py` and settings |
 
 ### 6.9 Safety
 
@@ -226,7 +232,7 @@ One row per storyteller, sorted by last conversation (most recent first, never-t
 `user_id`, `onboarded_at_ist` (profile `created_at`), `parent_consented` (bool),
 `parent_consent_asks`, `plan`, `conversations_total`, `conversations_7d`,
 `last_conversation_at_ist`, `atoms_total`, `avg_completeness`, `domains_covered`
-(`"5/8"`), `cards_delivered`, `cards_failed`.
+(`"5/8"`), `cards_delivered`, `cards_failed`, `cost_30d_inr`, `cost_per_conversation_30d_inr`.
 
 ## 7. Response shape
 
@@ -254,10 +260,11 @@ Key names as in §6. Report `excluded_user_count`, never the excluded IDs themse
 ## 8. HTML page layout (`/admin/metrics/view`)
 
 Top to bottom: generated-at time (IST) and excluded count → **health strip**
-(empty sessions 7d, failed cards 7d, crisis events 7d, active now) → funnel as a vertical
+(empty sessions 7d, failed cards 7d, crisis events 7d, active now, ₹ per conversation 7d,
+wasted outbound 7d) → funnel as a vertical
 list with counts and step-to-step % → conversations (headline numbers + the 30-day daily
 table, with a CSS width bar per row) → engagement and retention (rates **with** cohort
-sizes) → atoms → cards → dashboard → stories placeholder → cost with the not-tracked note
+sizes) → atoms → cards → dashboard → stories placeholder → cost, with `by_component` as a CSS-bar list
 → per-family table (horizontally scrollable on mobile). Plain, legible, system font.
 
 ## 9. Tests
@@ -312,5 +319,4 @@ Follow `.claude/rules/testing.md`. Run targeted tests during the build.
 ## 12. Later (not this PR)
 
 - Stories section once the §8 stories table exists (promoted, pending approval, approved, fidelity failed)
-- Record audio seconds per turn so Sarvam cost per conversation can be computed
 - Optional: storyteller first names in the per-family table if the pseudonymous IDs prove impractical (deliberately omitted for now)
