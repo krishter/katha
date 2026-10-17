@@ -73,7 +73,7 @@ Decided 2026-10-16:
 | `SCHEDULED_OPENER_ENABLED` | `false` | C5. `true` restores today's daily voice opener and nudge. |
 | `TTS_MODEL` | `bulbul:v3` | Flip to `bulbul:v4-flash` only after the listening test in §10 |
 | `STT_TRIM_PAUSES` | `true` | C7 |
-| `STT_MAX_PAUSE_SECONDS` | `1.0` | Pauses longer than this are shortened to 0.5 s |
+| `STT_MAX_PAUSE_SECONDS` | `0.5` | Every pause longer than this is cut to this length (amended 2026-10-17, see §11) |
 | `USD_INR_RATE` | `95.06` | Used only for reporting |
 
 Remove `LLM_PRICE_INPUT_PER_MTOK_USD` and `LLM_PRICE_OUTPUT_PER_MTOK_USD` from `ADMIN_METRICS.md` §4. Prices now live in `core/pricing.py` (§12.1).
@@ -235,7 +235,7 @@ Keep the `_send_followups` code and the `followup_sent_at` column. They sit behi
 ## 11. Change C7: shorten long pauses before STT
 
 - Add `media/audio_split.compress_pauses(audio_bytes) -> (bytes, seconds_in, seconds_out)`. Call it in `sarvam_stt.transcribe` before `split_for_stt`.
-- **What it does:** pauses longer than `STT_MAX_PAUSE_SECONDS` are shortened to 0.5 s, using ffmpeg `silenceremove` (`stop_periods=-1`, `stop_duration=<max>`, `stop_silence=0.5`).
+- **What it does:** every pause longer than `STT_MAX_PAUSE_SECONDS` (0.5 s) is cut to that length, using ffmpeg `silenceremove` (`stop_periods=-1`, `stop_duration=<max>`, `stop_silence=0`). *Amended 2026-10-17:* this first read "pauses over 1 s shortened to 0.5 s", but `silenceremove` keeps `stop_duration + stop_silence` of each long pause, so one pass cannot express that; the single-number rule was chosen.
 - **Threshold:** tune `stop_threshold` on fixtures. Start at `-35dB`, which is quieter than the split's `-25dB`, so soft speech is never treated as silence.
 - **Failure:** on any ffmpeg failure, pass the original through (the existing pattern).
 - **Audio handling:** in memory only, as today. Nothing is stored; the privacy page promises that voice notes are discarded after transcription.

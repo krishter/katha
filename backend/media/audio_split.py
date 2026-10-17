@@ -217,20 +217,26 @@ async def split_for_stt_measured(
 # had 35 silences. Long pauses are shortened, never removed, so a cut can
 # never join two words, and speech itself is never touched.
 #
+# ffmpeg's silenceremove keeps stop_duration + stop_silence of every pause
+# longer than stop_duration (measured on ffmpeg 9, 2026-10-17: a 3 s gap
+# came out 1.5 s with 1.0 + 0.5). One pass therefore cannot do "only pauses
+# over 1 s, down to 0.5 s", the spec's first wording. Decided 2026-10-17:
+# every pause longer than the setting is cut to the setting, 0.5 s by
+# default, with stop_silence 0.
+#
 # Quieter than the split's -25dB on purpose: a soft-spoken word must never
 # be mistaken for silence, so only near-true silence is shortened. Tune on
 # fixtures before lowering it.
 _PAUSE_THRESHOLD_DB = "-35dB"
-_KEPT_PAUSE_SECONDS = 0.5
 # A result less than this much shorter is not worth a re-encode.
 _MIN_SAVING_SECONDS = 0.25
 
 
 async def compress_pauses(
-    audio_bytes: bytes, max_pause_seconds: float = 1.0
+    audio_bytes: bytes, max_pause_seconds: float = 0.5
 ) -> tuple[bytes, float | None, float | None]:
     """
-    Shorten every pause longer than `max_pause_seconds` to half a second.
+    Cut every pause longer than `max_pause_seconds` down to that length.
 
     Returns (audio, seconds_in, seconds_out). In memory only, like the
     split: nothing is stored, as the privacy page promises voice notes are
@@ -265,7 +271,7 @@ async def compress_pauses(
                     "silenceremove="
                     "stop_periods=-1"
                     f":stop_duration={max_pause_seconds}"
-                    f":stop_silence={_KEPT_PAUSE_SECONDS}"
+                    ":stop_silence=0"
                     f":stop_threshold={_PAUSE_THRESHOLD_DB}"
                 ),
                 "-c:a",

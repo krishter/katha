@@ -429,7 +429,7 @@ async def test_stt_bills_the_compressed_seconds_and_keeps_the_original(
     ):
         await transcribe(b"original")
 
-    compress.assert_awaited_once_with(b"original", 1.0)
+    compress.assert_awaited_once_with(b"original", 0.5)
     split.assert_awaited_once_with(b"shorter")  # the shortened audio is sent
     assert usage_rows[0]["units"] == {
         "seconds_received": 90.0,

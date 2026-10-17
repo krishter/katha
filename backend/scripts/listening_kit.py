@@ -474,7 +474,7 @@ async def cmd_pauses(source: pathlib.Path, out: pathlib.Path) -> None:
     lines = [
         "# Pause compression check (C7)",
         "",
-        f"Pauses longer than {max_pause}s shortened to 0.5s. Acceptance: word "
+        f"Pauses longer than {max_pause}s cut to {max_pause}s. Acceptance: word "
         "count within 2% and no word lost at a cut "
         "(docs/specs/COST_TO_SERVE.md §11).",
         "",

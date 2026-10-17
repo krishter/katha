@@ -158,10 +158,11 @@ class Settings(BaseSettings):
     TTS_MODEL: str = "bulbul:v3"
 
     # C7: shorten long pauses before STT, which bills by the second sent.
-    # Pauses longer than STT_MAX_PAUSE_SECONDS become 0.5 s; speech is
-    # never cut. false sends the note exactly as received.
+    # Every pause longer than STT_MAX_PAUSE_SECONDS is cut to that length
+    # (see media/audio_split.py for why it is one number); speech is never
+    # cut. false sends the note exactly as received.
     STT_TRIM_PAUSES: bool = True
-    STT_MAX_PAUSE_SECONDS: float = 1.0
+    STT_MAX_PAUSE_SECONDS: float = 0.5
 
     # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
     # /admin/metrics and /admin/metrics/view answer 404, as if they did not

@@ -248,7 +248,7 @@ async def test_a_long_pause_is_shortened_to_about_half_a_second():
         path = Path(tmp) / "gap.ogg"
         _make_audio(path, _speech_gap_speech(3.0))
         original = path.read_bytes()
-        audio, seconds_in, seconds_out = await compress_pauses(original, 1.0)
+        audio, seconds_in, seconds_out = await compress_pauses(original, 0.5)
 
     assert seconds_in == pytest.approx(7.0, abs=0.2)
     # 2 + 0.5 + 2: the speech is all kept, the pause is cut to half a second.
@@ -262,7 +262,7 @@ async def test_speech_without_long_pauses_comes_back_byte_identical():
         path = Path(tmp) / "short-gap.ogg"
         _make_audio(path, _speech_gap_speech(0.6))
         original = path.read_bytes()
-    audio, seconds_in, seconds_out = await compress_pauses(original, 1.0)
+    audio, seconds_in, seconds_out = await compress_pauses(original, 0.5)
     assert audio == original
     assert seconds_out == seconds_in
 
