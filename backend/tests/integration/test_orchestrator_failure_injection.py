@@ -76,7 +76,7 @@ _stt_ok = AsyncMock(
 )
 
 
-async def _llm_ok(messages, system=None, max_tokens=500):
+async def _llm_ok(messages, system=None, max_tokens=500, **_kwargs):
     return SimpleNamespace(
         content=_DIALOGUE_CONTENT,
         input_tokens=10,

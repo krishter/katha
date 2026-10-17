@@ -315,7 +315,15 @@ def _voice_turn_patches(stack: ExitStack, session_state, llm_content) -> None:
     Patch every external dependency of process_voice_turn for the
     successful-turn path. record_turn returns session_state unchanged
     (exchange_count bookkeeping isn't the point of these tests).
+
+    The Layer 3 snapshot is off here: it adds its own commit on a session's
+    first turn, and these tests count commits to prove the turn is saved
+    before TTS. The snapshot has its own tests
+    (tests/integration/test_prior_context_freeze.py).
     """
+    stack.enter_context(
+        patch("core.orchestrator.settings.LAYER3_FREEZE_PER_SESSION", False)
+    )
     stack.enter_context(
         patch(
             "core.orchestrator.session_manager.get_session",
@@ -613,7 +621,7 @@ async def test_process_voice_turn_stt_failure_returns_fallback_audio():
 
     assert result.response_audio == b"pre-synthesized-stt-fallback"
     assert result.response_mime_type == "audio/ogg"
-    mock_get_audio.assert_called_once_with(FailureStage.STT, "ta-IN")
+    mock_get_audio.assert_called_once_with(FailureStage.STT, "ta-IN", "female")
     # No turn is persisted for a total STT failure — nothing was said.
     db.add.assert_not_called()
 
@@ -684,7 +692,9 @@ async def test_process_voice_turn_llm_failure_returns_fallback_audio():
         result = await process_voice_turn(b"audio", _SESSION_ID, _make_profile(), db)
 
     assert result.response_audio == b"pre-synthesized-llm-fallback"
-    mock_get_audio.assert_called_once_with(FailureStage.LLM, "hi-IN")
+    # The profile's language and persona, not the language STT detected
+    # in this note (hi-IN): she hears the voice she always hears.
+    mock_get_audio.assert_called_once_with(FailureStage.LLM, "ta-IN", "female")
     db.add.assert_not_called()
 
 

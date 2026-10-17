@@ -45,6 +45,11 @@ class UserProfile:
     # Empty means not stated — see _layer1_persona, which then tells the
     # model to avoid gendered forms rather than infer them.
     pronouns: str = ""
+    # Katha's own persona, chosen by the family at setup: "female" or
+    # "male". It decides the voice (media/voices.py) and, through Layer 1,
+    # the gendered forms Katha uses for herself or himself, so the words
+    # match the voice saying them.
+    katha_gender: str = "female"
 
 
 @dataclass
@@ -108,6 +113,19 @@ def _pronoun_line(pronouns: str) -> str:
     )
 
 
+def _katha_gender_line(katha_gender: str) -> str:
+    """How Katha refers to itself, matching the voice the family chose."""
+    if katha_gender == "male":
+        return (
+            "\nYou speak in a man's voice. Where a language marks the speaker's "
+            'gender, use masculine forms for yourself (in Hindi, "मैं सुन रहा हूँ").'
+        )
+    return (
+        "\nYou speak in a woman's voice. Where a language marks the speaker's "
+        'gender, use feminine forms for yourself (in Hindi, "मैं सुन रही हूँ").'
+    )
+
+
 def _layer1_persona(user_profile: UserProfile) -> str:
     lang = _language_name(user_profile.preferred_language)
     return f"""LAYER 1 — PERSONA & TONE
@@ -116,6 +134,7 @@ You are patient, unhurried, genuinely interested, and never judgmental. \
 You speak in a mix of English and {lang} as feels natural. \
 You have the manner of a respectful younger person listening to an elder \
 — curious, deferential, and deeply engaged.\
+{_katha_gender_line(user_profile.katha_gender)}\
 {_pronoun_line(user_profile.pronouns)}"""
 
 
@@ -125,7 +144,8 @@ Your goal is to guide the user through a structured reminiscence conversation. \
 Each session focuses on one life domain. Follow these principles at all times:
 
 1. Open before factual: Ask sensory and emotional questions before dates and facts. \
-"What did your street smell like in the mornings?" before "What year did you move?"
+"What did your street smell like in the mornings?" before "What year did you move?" \
+That is for opening a topic; once a story has begun, principle 8 picks the question.
 
 2. Ordinary magic: Surface the richness in everyday memories. \
 "You mentioned your mother's kitchen — what did she cook on Sundays?" \
@@ -135,8 +155,12 @@ is more valuable than asking about achievements.
 never signal frustration. Acknowledge it warmly and redirect: \
 "You've mentioned that before — today I'd love to hear what came after."
 
-4. Mood adaptation: If the user's response is short or they say they are tired, \
-shorten the session. Ask one light question. Do not push for a full session.
+4. Mood adaptation: If the user says they are tired, or their replies turn short, \
+flat or reluctant, put how they are feeling ahead of the story. Respond with \
+empathy, not curiosity: acknowledge how they seem, and ask whether they would \
+like to talk a little today or rest and talk another day. Ask no memory question \
+in that reply. Only if they want to go on, ask one light question; if they would \
+rather rest, close warmly and leave the door open. Never push for a full session.
 
 5. Cultural modesty reframe: When a user says "My life was ordinary, nothing special," \
 respond warmly: "That's exactly the kind of life I want to learn about. \
@@ -158,10 +182,92 @@ memory, not just having it, is what builds the user's trust that they are truly 
 being listened to.
 
 8. Progress through an incomplete story, don't repeat: if the user's last answer \
-left out who, what, when, where, or why, look at your own most recent question in \
-the conversation above before asking again. Never re-ask about the same missing \
-piece in different words — pick a different one of the five each turn, until the \
-story feels complete."""
+left out who, what, when, where, or why, ask for one of those missing pieces by \
+name — "What was her name?", "Roughly what year was that?" — warmly, but \
+specifically; "Tell me more about that" doesn't move the story on. Check your \
+own last question in the conversation above before asking again. Never re-ask \
+about the same missing piece in different words — pick a different one of the \
+five each turn, until the story feels complete."""
+
+
+# How much of the fact store Layer 3 shows (COST_TO_SERVE.md C2). The store
+# only grows: entity extraction appends every new name, place and date after
+# every session, so rendering all of it made the dialogue prompt grow with
+# tenure — about 18,300 characters at session 100, paid on every turn.
+#
+# The earliest people are kept because entries are appended in the order they
+# were first mentioned, and the first people anyone talks about are usually
+# the closest family. The latest are kept because they are what she is
+# talking about now. Dates keep only the latest; institutions only the first.
+# (first, last) per category; 0 means nothing is kept from that end.
+_FACT_CAPS: dict[str, tuple[int, int]] = {
+    "people": (10, 5),
+    "places": (5, 5),
+    "dates": (0, 8),
+    "institutions": (5, 0),
+}
+_OTHER_FACT_CAP = 5
+_FACT_LABELS = {
+    "people": "People",
+    "places": "Places",
+    "dates": "Dates",
+    "institutions": "Institutions",
+}
+
+
+def _fact_value_text(value) -> str:
+    """One fact as plain words: a person as "Kamala (sister)", else str()."""
+    if isinstance(value, dict):
+        name = str(value.get("name") or "").strip()
+        relationship = str(value.get("relationship") or "").strip()
+        if name and relationship:
+            return f"{name} ({relationship})"
+        return name or relationship
+    return str(value).strip()
+
+
+def _dedupe(values: list) -> list[str]:
+    """Rendered text, without blanks or case-insensitive repeats, order kept."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        text = _fact_value_text(value)
+        if text and text.lower() not in seen:
+            seen.add(text.lower())
+            out.append(text)
+    return out
+
+
+def _first_and_last(values: list[str], first: int, last: int) -> list[str]:
+    if len(values) <= first + last:
+        return values
+    return values[:first] + (values[-last:] if last else [])
+
+
+def render_facts(facts: dict) -> list[str]:
+    """
+    The fact store as compact lines, one per category, e.g.
+    "People: Kamala (sister); Mr. Iyer (teacher)".
+
+    Replaces the Python reprs Layer 3 used to show — a list of dicts with
+    quotes and braces costs tokens and reads worse — and caps each category
+    (see _FACT_CAPS) so the prompt stops growing with tenure. Always on: it
+    is how facts are rendered, not a behaviour that needs a rollback flag.
+    """
+    lines: list[str] = []
+    for key, value in facts.items():
+        label = _FACT_LABELS.get(key, str(key).replace("_", " ").capitalize())
+        if isinstance(value, list):
+            values = _dedupe(value)
+            first, last = _FACT_CAPS.get(key, (_OTHER_FACT_CAP, 0))
+            values = _first_and_last(values, first, last)
+            if values:
+                lines.append(f"{label}: " + "; ".join(values))
+        else:
+            text = _fact_value_text(value)
+            if text:
+                lines.append(f"{label}: {text}")
+    return lines
 
 
 def _layer3_life_context(
@@ -187,7 +293,7 @@ def _layer3_life_context(
         )
     else:
         facts_formatted = "\n".join(
-            f"  - {k}: {v}" for k, v in prior_context.facts.items()
+            f"  - {line}" for line in render_facts(prior_context.facts)
         )
         context_block = (
             f"What you already know about {user_profile.name}:\n{facts_formatted}"
@@ -482,7 +588,9 @@ def _layer4_session_state(
             f"one sentence to ask about {anchor} now — even if the connection "
             f"to what the user just said is only loose (family, feelings, "
             f"people, and place all count as a bridge). Do this before the "
-            f"conversation moves further away from the opening."
+            f"conversation moves further away from the opening. Ask what "
+            f"made them matter so much to the user — the feeling, not a fact "
+            f"about them or the part they played in events."
         )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
@@ -512,14 +620,62 @@ This is what will be spoken aloud.]
 </response>
 
 Keep it to two to four sentences — this is a voice note an elderly person \
-listens to, not a letter they read. End on a single question, unless you are \
-closing the session, which ends warmly instead.
+listens to, not a letter they read. End on exactly one question, about one \
+thing: not two questions joined by "and", and no second question after the \
+first. A reply that closes the session ends warmly instead.
+
+Vary how you begin. Do not open with an exclamation of delight ("Wow", "वाह", \
+"अरे वाह") or by praising the picture they painted, and never begin two replies \
+in a session the same way — check your earlier replies above. Often the best \
+start is the detail they just gave you.
+
+No emoji: every word is spoken aloud.
 
 Begin your output with <response>. No reasoning, planning or preamble before \
 it, in <thinking> tags or otherwise.
 
 Return only the <response> block above. Structured extraction is handled by a \
 separate pass — do not include JSON or any other tags or commentary here."""
+
+
+@dataclass
+class SystemPromptParts:
+    """
+    The dialogue system prompt in two halves (COST_TO_SERVE.md C3).
+
+    `stable` is Layers 1-3: the persona, the protocol, and what Katha knows
+    about her. With Layer 3 frozen per session (C2) it is identical on every
+    turn of a session, so it is what gets cached. `per_turn` is Layers 4-5,
+    which change every turn and always come last.
+    """
+
+    stable: str
+    per_turn: str
+
+    def joined(self) -> str:
+        return f"{self.stable}\n\n{self.per_turn}"
+
+
+def build_system_prompt_parts(
+    user_profile: UserProfile,
+    session_state: SessionState,
+    prior_context: PriorContext,
+) -> SystemPromptParts:
+    """The dialogue system prompt, split for caching; see build_system_prompt."""
+    stable = "\n\n".join(
+        [
+            _layer1_persona(user_profile),
+            _layer2_therapeutic(),
+            _layer3_life_context(user_profile, session_state, prior_context),
+        ]
+    )
+    per_turn = "\n\n".join(
+        [
+            _layer4_session_state(session_state, prior_context),
+            _layer5_output_format(),
+        ]
+    )
+    return SystemPromptParts(stable=stable, per_turn=per_turn)
 
 
 def build_system_prompt(
@@ -531,15 +687,14 @@ def build_system_prompt(
     Assembles the dialogue system prompt — the fast, low-token-budget call
     on the critical path. Returns <response> only; see build_extraction_prompt
     for the separate, latency-tolerant structured-extraction call.
+
+    One string, for callers that want it whole (the eval runner, tests).
+    The dialogue call itself sends the two parts separately so the stable
+    half can be cached.
     """
-    layers = [
-        _layer1_persona(user_profile),
-        _layer2_therapeutic(),
-        _layer3_life_context(user_profile, session_state, prior_context),
-        _layer4_session_state(session_state, prior_context),
-        _layer5_output_format(),
-    ]
-    return "\n\n".join(layers)
+    return build_system_prompt_parts(
+        user_profile, session_state, prior_context
+    ).joined()
 
 
 # The eight ids, rendered into the extraction prompt. The prompt used to

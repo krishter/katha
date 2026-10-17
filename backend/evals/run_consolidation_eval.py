@@ -29,6 +29,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from adapters import llm  # noqa: E402
 from adapters.llm import Message  # noqa: E402
 from consolidation.pipeline import Thread, Usage, consolidate_session  # noqa: E402
+from scripts.consolidate_stories import CONSOLIDATION_MODEL  # noqa: E402
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / (
     "tests/fixtures/consolidation"
@@ -45,7 +46,11 @@ def _has_indic(text: str) -> bool:
 
 async def _call_llm(prompt: str, *, step: str, max_tokens: int):
     response = await llm.chat(
-        [Message(role="user", content=prompt)], system=None, max_tokens=max_tokens
+        [Message(role="user", content=prompt)],
+        system=None,
+        max_tokens=max_tokens,
+        model=CONSOLIDATION_MODEL,
+        purpose="eval",
     )
     return response.content, response.input_tokens, response.output_tokens
 

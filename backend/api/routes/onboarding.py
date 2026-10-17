@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from core import auth
 from core.auth import get_current_user
+from media import voices
 from models.consent_record import ConsentRecord
 from models.db import get_db
 from models.family_account import FamilyAccount
@@ -113,10 +114,17 @@ async def onboarding_profile(
     session_time: str = Form(...),
     pronouns: str = Form(default=""),
     onboarding_context: str = Form(default=""),
+    # Katha's persona. Defaulted so an older client that never sends it
+    # keeps the voice every parent has heard so far.
+    katha_gender: str = Form(default=voices.DEFAULT_GENDER),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Steps 2 + 3 combined: parent profile + seed context."""
+    if katha_gender not in voices.GENDERS:
+        raise HTTPException(
+            status_code=422, detail="katha_gender must be 'female' or 'male'"
+        )
     _validate_e164(whatsapp_number, "whatsapp_number")
     _validate_e164(family_whatsapp_number, "family_whatsapp_number")
     scheduled_time = _validate_session_time(session_time)
@@ -140,6 +148,7 @@ async def onboarding_profile(
     # prompt handles by not using gendered forms at all — a blank is a
     # safer record than a guess, so nothing here coerces a choice.
     profile.pronouns = pronouns.strip()
+    profile.katha_gender = katha_gender
     profile.onboarding_context = onboarding_context
 
     await db.commit()

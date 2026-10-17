@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_tts
 from adapters.whatsapp_stub import get_whatsapp_adapter
-from core import freemium, orchestrator, parent_consent, session_manager
+from config import settings
+from core import freemium, orchestrator, parent_consent, session_manager, usage
+from media.audio_convert import convert_wav_to_ogg
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
 from prompts.domains import get_domain
@@ -23,6 +25,15 @@ _IST = pytz.timezone("Asia/Kolkata")
 async def initiate_sessions(db_session_factory) -> None:
     """
     Runs every minute (cron: * * * * *).
+
+    The parent starts every conversation (SCHEDULED_OPENER_ENABLED=false,
+    the default): Katha cannot message first — Meta rejects a free-form
+    message outside the 24-hour window and throttled the first-contact
+    template (63049) — so a session opens when her voice note arrives, on
+    the webhook's on-demand path. With the opener off, only steps 0 and 4
+    run: the stale sweep, and outputs for the sessions it abandoned.
+
+    With it on (rollback), the old daily opener runs too:
 
     1. Query user_profiles WHERE scheduled_time matches current minute in IST.
     2. For each user:
@@ -46,24 +57,54 @@ async def initiate_sessions(db_session_factory) -> None:
         # extraction into the next cron minute.
         abandoned = await session_manager.abandon_stale_sessions(db)
 
-        # 1. Find users scheduled for this minute
-        result = await db.execute(
-            select(UserProfile).where(
-                UserProfile.scheduled_time
-                == datetime(2000, 1, 1, current_hour, current_minute).time()
-            )
-        )
-        due_profiles = result.scalars().all()
-        logger.info(
-            "Scheduler: %d user(s) scheduled at %02d:%02d IST",
-            len(due_profiles),
-            current_hour,
-            current_minute,
-        )
+        if settings.SCHEDULED_OPENER_ENABLED:
+            await _open_scheduled_sessions(db, current_hour, current_minute)
 
-        whatsapp = get_whatsapp_adapter()
+        # 4. Outputs for the sessions swept at step 0. A conversation that
+        # simply stopped is still a conversation the family is owed a card
+        # for (PRD §7.3); before this the sweep was a dead end and those
+        # sessions produced nothing at all. Wrapped because this runs every
+        # minute and must never take the scheduler down.
+        if abandoned:
+            try:
+                processed = await orchestrator.process_abandoned_sessions(abandoned, db)
+                logger.info(
+                    "Scheduler: produced outputs for %d of %d abandoned session(s)",
+                    processed,
+                    len(abandoned),
+                )
+            except Exception:
+                logger.exception("Scheduler: failed processing abandoned sessions")
 
-        for profile in due_profiles:
+
+async def _open_scheduled_sessions(
+    db: AsyncSession, current_hour: int, current_minute: int
+) -> None:
+    """
+    The daily voice opener and its 30-minute nudge (steps 1-3). Runs only
+    with SCHEDULED_OPENER_ENABLED=true, the rollback path; kept intact so a
+    rollback restores something that works.
+    """
+    # 1. Find users scheduled for this minute
+    result = await db.execute(
+        select(UserProfile).where(
+            UserProfile.scheduled_time
+            == datetime(2000, 1, 1, current_hour, current_minute).time()
+        )
+    )
+    due_profiles = result.scalars().all()
+    logger.info(
+        "Scheduler: %d user(s) scheduled at %02d:%02d IST",
+        len(due_profiles),
+        current_hour,
+        current_minute,
+    )
+
+    whatsapp = get_whatsapp_adapter()
+
+    for profile in due_profiles:
+        # Every paid call for this parent's opener is attributed to her.
+        with usage.usage_scope(user_id=profile.user_id):
             try:
                 # Check for existing active session today
                 active = await session_manager.get_active_session_by_number(
@@ -104,6 +145,7 @@ async def initiate_sessions(db_session_factory) -> None:
                 # Create new session — session_number and domain are chosen
                 # by start_session based on the user's actual progress.
                 state = await session_manager.start_session(profile.user_id, db)
+                usage.enter_scope(session_id=state.session_id)
 
                 # Build opening message from the session's actual domain
                 domain_name = state.domain
@@ -115,10 +157,16 @@ async def initiate_sessions(db_session_factory) -> None:
                     f"{domain.entry_prompt}"
                 )
 
-                # Synthesize
-                audio_bytes = await sarvam_tts.synthesize(
-                    opening_text, language_code=profile.preferred_language
+                # Synthesize, then convert. Bulbul returns WAV, and this
+                # used to send the raw WAV labelled audio/ogg — so a
+                # rollback restored an opener WhatsApp could not play.
+                wav_bytes = await sarvam_tts.synthesize(
+                    opening_text,
+                    language_code=profile.preferred_language,
+                    gender=profile.katha_gender,
+                    purpose="tts_opener",
                 )
+                audio_bytes = await convert_wav_to_ogg(wav_bytes)
 
                 # Send voice note
                 message_sid, audio_s3_key = await whatsapp.send_voice_note(
@@ -148,27 +196,12 @@ async def initiate_sessions(db_session_factory) -> None:
 
             except Exception:
                 logger.exception(
-                    "Scheduler: failed to initiate session for user %s", profile.user_id
+                    "Scheduler: failed to initiate session for user %s",
+                    profile.user_id,
                 )
 
-        # 3. 30-minute no-response follow-up
-        await _send_followups(db, whatsapp)
-
-        # 4. Outputs for the sessions swept at step 0. A conversation that
-        # simply stopped is still a conversation the family is owed a card
-        # for (PRD §7.3); before this the sweep was a dead end and those
-        # sessions produced nothing at all. Wrapped because this runs every
-        # minute and must never take the scheduler down.
-        if abandoned:
-            try:
-                processed = await orchestrator.process_abandoned_sessions(abandoned, db)
-                logger.info(
-                    "Scheduler: produced outputs for %d of %d abandoned session(s)",
-                    processed,
-                    len(abandoned),
-                )
-            except Exception:
-                logger.exception("Scheduler: failed processing abandoned sessions")
+    # 3. 30-minute no-response follow-up
+    await _send_followups(db, whatsapp)
 
 
 async def _send_followups(db: AsyncSession, whatsapp) -> None:
@@ -204,26 +237,30 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
     rows = result.all()
 
     for session_row, profile in rows:
-        # Claim the session before sending. If the send raises, the stamp is
-        # already committed and no retry storm can start.
-        session_row.followup_sent_at = datetime.now(timezone.utc)
-        db.add(session_row)
-        await db.commit()
+        with usage.usage_scope(user_id=profile.user_id, session_id=session_row.id):
+            # Claim the session before sending. If the send raises, the stamp is
+            # already committed and no retry storm can start.
+            session_row.followup_sent_at = datetime.now(timezone.utc)
+            db.add(session_row)
+            await db.commit()
 
-        try:
-            followup_text = (
-                f"Hi {profile.name} ji, just checking in — no pressure at all. "
-                "Whenever you're ready, just send me a voice note and we'll continue. "
-                "I'm here. \U0001f64f"
-            )
-            await whatsapp.send_text(profile.whatsapp_number, followup_text)
-            logger.info("Scheduler: sent 30-min follow-up to user %s", profile.user_id)
-        except Exception:
-            logger.exception(
-                "Scheduler: failed to send follow-up for user %s (not retried — "
-                "the stamp is already set; see _send_followups docstring)",
-                profile.user_id,
-            )
+            try:
+                followup_text = (
+                    f"Hi {profile.name} ji, just checking in — no pressure at all. "
+                    "Whenever you're ready, just send me a voice note and "
+                    "we'll continue. "
+                    "I'm here. \U0001f64f"
+                )
+                await whatsapp.send_text(profile.whatsapp_number, followup_text)
+                logger.info(
+                    "Scheduler: sent 30-min follow-up to user %s", profile.user_id
+                )
+            except Exception:
+                logger.exception(
+                    "Scheduler: failed to send follow-up for user %s (not retried — "
+                    "the stamp is already set; see _send_followups docstring)",
+                    profile.user_id,
+                )
 
 
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:

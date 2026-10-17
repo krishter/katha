@@ -103,6 +103,77 @@ class Settings(BaseSettings):
     # DELETE /user/{user_id} is a DPDP problem, not a cosmetic one.
     COOKIE_DOMAIN: str = ""
 
+    # Cost to serve (docs/specs/COST_TO_SERVE.md). Prices live in
+    # core/pricing.py; these are only what the ledger needs to report.
+    #
+    # USD to INR, for reporting Anthropic and Twilio costs in rupees. Not
+    # used to charge anyone.
+    USD_INR_RATE: float = 95.06
+    # Meta category of each approved template, as a JSON object keyed by
+    # template SID: {"HX...": "utility", "HX...": "marketing"}. Meta, not
+    # us, decides a template's category, and it charges per category, so
+    # the adapter cannot infer it. A template missing from this map is
+    # recorded as "unknown" and shows up as unpriced on the admin page
+    # rather than silently reading as free.
+    META_TEMPLATE_CATEGORIES: str = ""
+
+    # C2: build Layer 3 once per session, on its first turn, and reuse it
+    # for every later turn. Keeps the start of the dialogue prompt identical
+    # within a session, which is what lets prompt caching work. false
+    # rebuilds it every turn, as before. The rendering caps apply either way.
+    LAYER3_FREEZE_PER_SESSION: bool = True
+
+    # Which Claude model each call runs on (COST_TO_SERVE.md C1, C4). Every
+    # one rolls back with an env change and a restart: the old path stays in
+    # the code until the pilot has run a month on the new one.
+    #   Dialogue — rollback value claude-sonnet-4-6.
+    LLM_DIALOGUE_MODEL: str = "claude-sonnet-5-5"
+    # output_config.effort for dialogue. low: the eval passed as well as
+    # medium at lower cost (evals/results/20261016T170550Z.json against
+    # 20261016T170401Z.json), which is the spec's rule for choosing.
+    LLM_DIALOGUE_EFFORT: str = "low"
+    #   Per-turn extraction, its retry, and entity extraction — rollback
+    #   value claude-sonnet-4-6.
+    LLM_EXTRACTION_MODEL: str = "claude-haiku-5-5"
+    LLM_EXTRACTION_EFFORT: str = "low"
+
+    # C3: cache the stable start of the dialogue system prompt (Layers 1-3).
+    PROMPT_CACHE_ENABLED: bool = True
+    # "5m" or "1h". Parents take minutes between voice notes, so the
+    # five-minute cache would usually expire between turns.
+    PROMPT_CACHE_TTL: str = "1h"
+
+    # C5: the parent starts every conversation (decided 2026-10-16, Option B
+    # in docs/proposals/outbound-messaging-window.md). Off, the scheduler
+    # only sweeps stale sessions and produces outputs for abandoned ones; a
+    # session opens when she sends a voice note. true restores the daily
+    # voice opener and the 30-minute nudge, which Meta rejects outside the
+    # 24-hour window — a rollback, not a mode to run in.
+    SCHEDULED_OPENER_ENABLED: bool = False
+
+    # C6: the Sarvam TTS model. v4 Flash since 2026-10-17: preferred in 19 of
+    # 20 blind pairs (COST_TO_SERVE.md §10). The parent's language and Katha's
+    # persona then pick the model and voice per media/voices.py, which keeps
+    # a language on v3 where v4 has no conversation voice for the persona.
+    # bulbul:v3 is the rollback: every persona on v3.
+    TTS_MODEL: str = "bulbul:v4-flash"
+
+    # C7: shorten long pauses before STT, which bills by the second sent.
+    # Every pause longer than STT_MAX_PAUSE_SECONDS is cut to that length
+    # (see media/audio_split.py for why it is one number); speech is never
+    # cut. false sends the note exactly as received.
+    STT_TRIM_PAUSES: bool = True
+    STT_MAX_PAUSE_SECONDS: float = 0.5
+
+    # Operator metrics page (docs/specs/ADMIN_METRICS.md). Empty token means
+    # /admin/metrics and /admin/metrics/view answer 404, as if they did not
+    # exist. Generate with:
+    #   python -c "import secrets; print(secrets.token_urlsafe(32))"
+    ADMIN_API_TOKEN: str = ""
+    # Comma-separated user_ids left out of every metric: self-trial accounts
+    # and rehearsal users. The page reports how many, never which.
+    METRICS_EXCLUDED_USER_IDS: str = ""
+
 
 settings = Settings()
 
@@ -122,6 +193,11 @@ def validate_production_config(s: Settings = settings) -> None:
 
     if s.JWT_SECRET == _DEFAULT_JWT_SECRET or len(s.JWT_SECRET) < 32:
         problems.append("JWT_SECRET is the default value or shorter than 32 characters")
+    if s.ADMIN_API_TOKEN and len(s.ADMIN_API_TOKEN) < 32:
+        problems.append(
+            "ADMIN_API_TOKEN is set but shorter than 32 characters — it is the "
+            "only thing guarding the operator metrics page"
+        )
     if s.SES_MOCK:
         problems.append("SES_MOCK is True — magic link emails would never send")
     if s.WHATSAPP_ADAPTER == "stub":

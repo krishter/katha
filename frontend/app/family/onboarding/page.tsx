@@ -38,6 +38,9 @@ export default function OnboardingPage() {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [familyWhatsappNumber, setFamilyWhatsappNumber] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState("hi-IN");
+  // Katha's own persona. With the language it decides the voice the parent
+  // hears (backend/media/voices.py) and how Katha speaks of itself.
+  const [kathaGender, setKathaGender] = useState<"female" | "male">("female");
   // "" means not stated, which the backend records as-is: Katha then
   // avoids gendered forms rather than inferring any. The free-text box
   // exists because a closed list is the wrong shape for this.
@@ -96,6 +99,7 @@ export default function OnboardingPage() {
         whatsapp_number: whatsappNumber,
         family_whatsapp_number: familyWhatsappNumber,
         preferred_language: preferredLanguage,
+        katha_gender: kathaGender,
         session_time: sessionTime,
         // "unset" is the unchosen placeholder and never reaches the API;
         // "" is a deliberate "prefer not to say" and does.
@@ -245,6 +249,30 @@ export default function OnboardingPage() {
                 ))}
               </select>
             </div>
+            <fieldset>
+              <legend className={LABEL_CLASS}>Katha&apos;s voice</legend>
+              <div className="mt-1 flex gap-6">
+                {(["female", "male"] as const).map((g) => (
+                  <label
+                    key={g}
+                    className="flex items-center gap-2 text-sm text-ink"
+                  >
+                    <input
+                      type="radio"
+                      name="katha_gender"
+                      value={g}
+                      checked={kathaGender === g}
+                      onChange={() => setKathaGender(g)}
+                    />
+                    {g === "female" ? "Female" : "Male"}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-ink-mid">
+                Choose whoever your parent would feel most at ease talking to.
+                Katha keeps this voice in every conversation.
+              </p>
+            </fieldset>
             <div>
               <label htmlFor="session_time" className={LABEL_CLASS}>
                 Best time to call (IST)
@@ -291,7 +319,7 @@ export default function OnboardingPage() {
               <p className="mt-1 text-xs text-ink-mid">
                 Many Indian languages change the verb depending on gender, so
                 Katha needs this to speak to them correctly. If you prefer not
-                to say, she will avoid gendered wording where the language
+                to say, Katha will avoid gendered wording where the language
                 allows it — though in Hindi and similar languages some
                 sentences cannot avoid it.
               </p>

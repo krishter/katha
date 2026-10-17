@@ -101,7 +101,7 @@ class _Harness:
         app.dependency_overrides[get_db] = _override_get_db
         app.dependency_overrides[get_whatsapp_adapter] = lambda: self.adapter
 
-        async def _capture_tts(text, language_code=None):
+        async def _capture_tts(text, language_code=None, **_kwargs):
             self.spoken.append(text)
             return b"wav"
 
@@ -129,7 +129,8 @@ class _Harness:
         return self
 
     async def __aexit__(self, *exc):
-        for p in self._patches:
+        # Reverse order, so overlapping patches unwind to the real function.
+        for p in reversed(self._patches):
             p.stop()
         from adapters.whatsapp_stub import get_whatsapp_adapter
 

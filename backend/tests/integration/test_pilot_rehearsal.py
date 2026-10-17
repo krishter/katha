@@ -110,7 +110,7 @@ async def test_full_session_pilot_rehearsal(real_db):
 
     extraction_queue = list(_EXTRACTIONS_BY_TURN[i] for i in range(1, 6))
 
-    async def fake_llm_chat(messages, system=None, max_tokens=500):
+    async def fake_llm_chat(messages, system=None, max_tokens=500, **_kwargs):
         if system is not None:
             # The dialogue call.
             return SimpleNamespace(

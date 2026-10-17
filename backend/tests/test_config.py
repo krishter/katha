@@ -22,6 +22,8 @@ _SAFE_KWARGS = dict(
     # both unset and the pairing is asserted separately below.
     TWILIO_TEMPLATE_MEMORY_CARD="",
     TWILIO_TEMPLATE_MEDIA_HOST="",
+    # Unset means the operator metrics routes 404 — safe.
+    ADMIN_API_TOKEN="",
 )
 
 
@@ -159,3 +161,13 @@ def test_a_card_template_with_its_media_host_is_fine():
             TWILIO_TEMPLATE_MEDIA_HOST="katha-media.s3.ap-south-1.amazonaws.com",
         )
     )
+
+
+def test_a_short_admin_token_raises_in_production():
+    """It is the only thing guarding the operator metrics page."""
+    with pytest.raises(RuntimeError, match="ADMIN_API_TOKEN"):
+        validate_production_config(_settings(ADMIN_API_TOKEN="too-short"))
+
+
+def test_a_long_admin_token_is_fine():
+    validate_production_config(_settings(ADMIN_API_TOKEN="x" * 32))

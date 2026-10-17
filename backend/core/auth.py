@@ -261,3 +261,60 @@ async def send_email_ses(to: str, subject: str, body_text: str, body_html: str) 
         },
     )
     logger.info("Sent magic link email via SES")
+
+
+# ── Operator auth (docs/specs/ADMIN_METRICS.md §4) ───────────────────────────
+
+
+def _admin_token_from(request: Request) -> str | None:
+    """
+    The token an operator presented, from either Authorization scheme.
+
+    Bearer is for scripts. Basic exists so the HTML page works in a browser
+    through its native login prompt; the username is ignored and the
+    password is the token. Nothing else is read — in particular never the
+    family session cookie, so a logged-in family is just as locked out as
+    anyone else.
+    """
+    import base64
+    import binascii
+
+    header = request.headers.get("Authorization", "")
+    scheme, _, value = header.partition(" ")
+    if scheme.lower() == "bearer" and value:
+        return value.strip()
+    if scheme.lower() == "basic" and value:
+        try:
+            decoded = base64.b64decode(value.strip(), validate=True).decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError):
+            return None
+        _user, sep, password = decoded.partition(":")
+        return password if sep else None
+    return None
+
+
+def _check_admin_token(request: Request, *, prompt_browser: bool) -> None:
+    expected = settings.ADMIN_API_TOKEN
+    if not expected:
+        # Off by default: with no token configured the routes do not exist.
+        raise HTTPException(status_code=404, detail="Not Found")
+    presented = _admin_token_from(request)
+    if presented is None or not secrets.compare_digest(
+        presented.encode("utf-8"), expected.encode("utf-8")
+    ):
+        headers = (
+            {"WWW-Authenticate": 'Basic realm="katha-admin"'}
+            if prompt_browser
+            else None
+        )
+        raise HTTPException(status_code=401, detail="Unauthorized", headers=headers)
+
+
+def require_admin_token(request: Request) -> None:
+    """FastAPI dependency for the operator JSON route."""
+    _check_admin_token(request, prompt_browser=False)
+
+
+def require_admin_token_browser(request: Request) -> None:
+    """The same check for the HTML page, which asks the browser to prompt."""
+    _check_admin_token(request, prompt_browser=True)

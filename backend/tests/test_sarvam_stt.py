@@ -98,8 +98,8 @@ async def test_transcribe_joins_chunk_transcripts_in_order():
     ]
     with (
         patch(
-            "adapters.sarvam_stt.audio_split.split_for_stt",
-            new=AsyncMock(return_value=[b"a", b"b", b"c"]),
+            "adapters.sarvam_stt.audio_split.split_for_stt_measured",
+            new=AsyncMock(return_value=([b"a", b"b", b"c"], 70.0)),
         ),
         patch("adapters.sarvam_stt.httpx.AsyncClient") as client_cls,
         patch(
@@ -134,8 +134,8 @@ async def test_transcribe_reports_the_most_confident_language():
     ]
     with (
         patch(
-            "adapters.sarvam_stt.audio_split.split_for_stt",
-            new=AsyncMock(return_value=[b"a", b"b"]),
+            "adapters.sarvam_stt.audio_split.split_for_stt_measured",
+            new=AsyncMock(return_value=([b"a", b"b"], 70.0)),
         ),
         patch("adapters.sarvam_stt.httpx.AsyncClient") as client_cls,
         patch(
@@ -162,8 +162,8 @@ async def test_a_failed_chunk_fails_the_turn():
     """
     with (
         patch(
-            "adapters.sarvam_stt.audio_split.split_for_stt",
-            new=AsyncMock(return_value=[b"a", b"b"]),
+            "adapters.sarvam_stt.audio_split.split_for_stt_measured",
+            new=AsyncMock(return_value=([b"a", b"b"], 70.0)),
         ),
         patch("adapters.sarvam_stt.httpx.AsyncClient") as client_cls,
         patch(
@@ -189,8 +189,8 @@ async def test_short_audio_still_makes_exactly_one_call(mock_stt_response):
     """No extra calls, no ffmpeg, for the common short reply."""
     with (
         patch(
-            "adapters.sarvam_stt.audio_split.split_for_stt",
-            new=AsyncMock(return_value=[b"short"]),
+            "adapters.sarvam_stt.audio_split.split_for_stt_measured",
+            new=AsyncMock(return_value=([b"short"], 70.0)),
         ),
         patch("adapters.sarvam_stt.httpx.AsyncClient") as client_cls,
         patch(

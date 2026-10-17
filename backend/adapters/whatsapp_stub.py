@@ -4,6 +4,8 @@ import logging
 import uuid
 from pathlib import Path
 
+from core import usage
+
 logger = logging.getLogger(__name__)
 
 _FIXTURE_AUDIO = Path(__file__).parent.parent / "tests" / "fixtures" / "sample.ogg"
@@ -35,6 +37,8 @@ class StubWhatsAppAdapter:
             sid,
             s3_key,
         )
+        # Recorded like a real send, so tests can assert on the ledger.
+        await usage.record_outbound("outbound_voice", sid)
         return sid, s3_key
 
     async def send_image(
@@ -56,6 +60,7 @@ class StubWhatsAppAdapter:
             template_variables,
             sid,
         )
+        await usage.record_outbound("outbound_card", sid, template_sid)
         return sid
 
     async def send_text(
@@ -73,6 +78,9 @@ class StubWhatsAppAdapter:
             text[:80],
             template_name,
             sid,
+        )
+        await usage.record_outbound(
+            "outbound_template" if template_sid else "outbound_text", sid, template_sid
         )
         return sid
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -6,11 +8,13 @@ import httpx
 
 from adapters.retry import post_with_retry
 from config import settings
+from core import usage
 from media import audio_split
 
 logger = logging.getLogger(__name__)
 
 _SARVAM_STT_URL = "https://api.sarvam.ai/speech-to-text"
+_STT_MODEL = "saaras:v3"
 
 
 @dataclass
@@ -37,7 +41,7 @@ async def _transcribe_one(
         headers={"api-subscription-key": settings.SARVAM_API_KEY},
         files={"file": (filename, audio_bytes)},
         data={
-            "model": "saaras:v3",
+            "model": _STT_MODEL,
             "language_code": "unknown",
             "mode": "transcribe",
         },
@@ -54,8 +58,38 @@ async def _transcribe_one(
     )
 
 
+async def _record(
+    received: float | None, billed: float | None, *, chunks: int, purpose: str = "stt"
+) -> None:
+    """
+    One ledger row per transcribed note. Recorded only once every chunk has
+    come back, which is also the only case where the turn goes on to use
+    it. `seconds_received` is the note as she sent it; `seconds_billed` is
+    what went to Sarvam after long pauses were shortened (C7). A duration
+    ffprobe could not read is left out, and the row then shows as unpriced.
+    """
+
+    def _r(value):
+        return round(value, 2) if value is not None else None
+
+    await usage.record(
+        "sarvam",
+        purpose,
+        {
+            "seconds_received": _r(received),
+            "seconds_billed": _r(billed),
+            "chunks": chunks,
+        },
+        model=_STT_MODEL,
+    )
+
+
 async def transcribe(
-    audio_bytes: bytes, filename: str = "audio.ogg"
+    audio_bytes: bytes,
+    filename: str = "audio.ogg",
+    *,
+    trim_pauses: bool | None = None,
+    purpose: str = "stt",
 ) -> TranscriptResult:
     """
     Transcribe a voice note of any length.
@@ -70,11 +104,23 @@ async def transcribe(
     language for a five-minute answer, and the language chosen here is what
     the reply is spoken back in.
     """
-    pieces = await audio_split.split_for_stt(audio_bytes)
+    received = None
+    # trim_pauses and purpose exist for the operator listening kit, which
+    # transcribes the same note with and without trimming, billed as eval.
+    # Production passes neither.
+    if settings.STT_TRIM_PAUSES if trim_pauses is None else trim_pauses:
+        audio_bytes, received, _shortened = await audio_split.compress_pauses(
+            audio_bytes, settings.STT_MAX_PAUSE_SECONDS
+        )
+    pieces, seconds = await audio_split.split_for_stt_measured(audio_bytes)
+    if received is None:
+        received = seconds
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         if len(pieces) == 1:
-            return await _transcribe_one(client, pieces[0], filename)
+            result = await _transcribe_one(client, pieces[0], filename)
+            await _record(received, seconds, chunks=1, purpose=purpose)
+            return result
 
         semaphore = asyncio.Semaphore(_MAX_CONCURRENT_CHUNKS)
 
@@ -89,6 +135,8 @@ async def transcribe(
     # Every chunk has to land. A silently dropped middle is worse than a
     # failed turn: she would be told her story was heard, and a hole in it
     # is not visible to anyone until the family reads the archive.
+    await _record(received, seconds, chunks=len(results), purpose=purpose)
+
     best = max(results, key=lambda r: r.language_probability)
     transcript = " ".join(r.transcript.strip() for r in results if r.transcript.strip())
 

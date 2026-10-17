@@ -11,6 +11,7 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client as TwilioClient
 
 from config import settings
+from core import usage
 from media import storage
 
 if TYPE_CHECKING:
@@ -187,6 +188,7 @@ class TwilioWhatsAppAdapter:
             **self._status_callback(),
         )
         logger.info("Sent voice note to %s: %s", to_number, msg.sid)
+        await usage.record_outbound("outbound_voice", msg.sid)
         return msg.sid, s3_key
 
     async def send_image(
@@ -226,6 +228,7 @@ class TwilioWhatsAppAdapter:
             msg.sid,
             template_sid or "none — free-form, needs an open 24h window",
         )
+        await usage.record_outbound("outbound_card", msg.sid, template_sid)
         return msg.sid
 
     async def send_text(
@@ -253,6 +256,11 @@ class TwilioWhatsAppAdapter:
             kwargs["body"] = text
         msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
         logger.info("Sent text to %s: %s", to_number, msg.sid)
+        await usage.record_outbound(
+            "outbound_template" if template_sid else "outbound_text",
+            msg.sid,
+            template_sid,
+        )
         return msg.sid
 
     async def download_voice_note(self, media_url: str) -> bytes:

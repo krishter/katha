@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import re
@@ -8,13 +9,13 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from fastapi import BackgroundTasks
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from adapters import llm, sarvam_stt, sarvam_tts
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
-from core import conversation_policy, session_manager
+from core import conversation_policy, session_manager, usage
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
 from extraction import entity_extractor, story_extractor
@@ -25,6 +26,7 @@ from memory_cards import generator as memory_card_generator
 from memory_cards.generator import MemoryCardResult
 from models.crisis_event import CrisisEvent
 from models.memory_card import MemoryCard
+from models.session import Session
 from models.turn import Turn
 from models.user_profile import UserProfileModel
 from prompts.domains import domain_label
@@ -32,7 +34,7 @@ from prompts.system_prompt import (
     PriorContext,
     UserProfile,
     build_extraction_prompt,
-    build_system_prompt,
+    build_system_prompt_parts,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,8 +76,12 @@ _RETRIEVAL_TOP_K = 25
 # The cap only costs latency when the model actually generates into it, so
 # headroom here is close to free; what keeps replies short is Layer 5's
 # length instruction, not this number.
-_DIALOGUE_MAX_TOKENS = 1200
-_EXTRACTION_MAX_TOKENS = 2000
+#
+# Raised for the 5.5 models (COST_TO_SERVE.md §6): thinking counts toward
+# max_tokens, and their tokenizer yields about 30% more tokens for the same
+# text. Extraction on Haiku thinks adaptively, so it gets the most room.
+_DIALOGUE_MAX_TOKENS = 1600
+_EXTRACTION_MAX_TOKENS = 4000
 _EXTRACTION_RETRY_INSTRUCTION = (
     "\n\nIMPORTANT: Your previous reply did not match the required format. "
     "Return ONLY the <extraction>{...}</extraction> block with syntactically "
@@ -203,6 +209,70 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
         open_threads=open_threads,
         significant_people=significant_people,
     )
+
+
+async def prior_context_for_session(
+    session_id: str, user_id: str, domain: str, db
+) -> PriorContext:
+    """
+    Layer 3 for this turn: built on the session's first turn and reused for
+    the rest of it (COST_TO_SERVE.md C2), unless LAYER3_FREEZE_PER_SESSION
+    is off.
+
+    Freezing is what makes the dialogue prompt's opening layers identical
+    from one turn to the next, so they can be cached. What it gives up is
+    small: atoms extracted mid-session are already in the conversation
+    itself, and the next session picks them up. A session that started
+    before the snapshot existed has none, and gets one on its next turn.
+
+    The snapshot is bookkeeping. If reading or writing it fails, the turn
+    goes ahead on a freshly built Layer 3, exactly as before.
+    """
+    if not settings.LAYER3_FREEZE_PER_SESSION:
+        return await build_prior_context(user_id, domain, db)
+
+    try:
+        stored = (
+            await db.execute(
+                select(Session.prior_context).where(
+                    Session.id == uuid.UUID(str(session_id))
+                )
+            )
+        ).scalar_one_or_none()
+        if isinstance(stored, dict):
+            return PriorContext(
+                facts=stored.get("facts") or {},
+                open_threads=stored.get("open_threads") or [],
+                significant_people=stored.get("significant_people") or [],
+            )
+    except Exception:
+        logger.warning(
+            "Could not read the Layer 3 snapshot for session %s — rebuilding",
+            session_id,
+            exc_info=True,
+        )
+        await db.rollback()
+
+    prior_context = await build_prior_context(user_id, domain, db)
+    try:
+        # Only where none exists yet, so two turns racing on a new session
+        # cannot leave it with two different snapshots over its lifetime.
+        await db.execute(
+            update(Session)
+            .where(Session.id == uuid.UUID(str(session_id)))
+            .where(Session.prior_context.is_(None))
+            .values(prior_context=dataclasses.asdict(prior_context))
+        )
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Could not store the Layer 3 snapshot for session %s — this turn "
+            "goes ahead, the next one rebuilds",
+            session_id,
+            exc_info=True,
+        )
+        await db.rollback()
+    return prior_context
 
 
 async def _log_crisis_event(
@@ -424,6 +494,17 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
 
 async def produce_session_outputs(session_id: str, user_id: str, db) -> None:
     """
+    See _produce_session_outputs. Runs from a background task or the
+    scheduler, so the usage-ledger scope is set here explicitly rather than
+    inherited — entity extraction and the card's send belong to this
+    session.
+    """
+    with usage.usage_scope(user_id=user_id, session_id=session_id):
+        await _produce_session_outputs(session_id, user_id, db)
+
+
+async def _produce_session_outputs(session_id: str, user_id: str, db) -> None:
+    """
     Everything a finished session owes the family: entity extraction over
     the whole transcript, then the memory card.
 
@@ -560,10 +641,14 @@ async def set_turn_audio_key(turn_id: uuid.UUID, s3_key: str, db) -> None:
     await db.commit()
 
 
-async def _synthesize_and_convert(text: str, language_code: str) -> bytes:
+async def _synthesize_and_convert(
+    text: str, language_code: str, katha_gender: str
+) -> bytes:
     """TTS then OGG conversion — the two steps that must succeed together
     for a voice note to go out, or degrade to text (see _send_or_degrade)."""
-    audio_out = await sarvam_tts.synthesize(text, language_code=language_code)
+    audio_out = await sarvam_tts.synthesize(
+        text, language_code=language_code, gender=katha_gender, purpose="tts_reply"
+    )
     return await convert_wav_to_ogg(audio_out)
 
 
@@ -575,6 +660,8 @@ async def _send_or_degrade(
     extraction_json: dict,
     crisis_detected: bool,
     turn_id: Optional[uuid.UUID] = None,
+    *,
+    user_profile: UserProfile,
 ) -> TurnResult:
     """
     Try to synthesize voice for response_text. If TTS or the WAV->OGG
@@ -583,7 +670,11 @@ async def _send_or_degrade(
     spoken (P2: never silence).
     """
     try:
-        audio_out = await _synthesize_and_convert(response_text, detected_language)
+        # The voice comes from the profile, never the detected language,
+        # so she hears the same voice on every turn (media/voices.py).
+        audio_out = await _synthesize_and_convert(
+            response_text, user_profile.preferred_language, user_profile.katha_gender
+        )
         return TurnResult(
             response_audio=audio_out,
             response_text=response_text,
@@ -620,6 +711,8 @@ async def _fallback_turn_result(
     session_state: SessionState,
     transcript: str,
     detected_language: str,
+    *,
+    user_profile: UserProfile,
 ) -> TurnResult:
     """
     Build the reply for an STT or LLM failure using pre-synthesized audio —
@@ -627,7 +720,9 @@ async def _fallback_turn_result(
     even the pre-synthesized clip is unavailable.
     """
     text = get_fallback_text(stage)
-    audio = get_fallback_audio(stage, detected_language)
+    audio = get_fallback_audio(
+        stage, user_profile.preferred_language, user_profile.katha_gender
+    )
     if audio is not None:
         return TurnResult(
             response_audio=audio,
@@ -703,6 +798,7 @@ async def process_voice_turn(
             state,
             transcript="",
             detected_language=user_profile.preferred_language,
+            user_profile=user_profile,
         )
     logger.info(
         "STT: transcript=%r language=%s",
@@ -726,21 +822,33 @@ async def process_voice_turn(
             state,
             dict(_EMPTY_EXTRACTION),
             crisis_detected=True,
+            user_profile=user_profile,
         )
 
     # 4. Build real prior context from fact store + vector store
-    prior_context = await build_prior_context(state.user_id, state.domain, db)
+    prior_context = await prior_context_for_session(
+        session_id, state.user_id, state.domain, db
+    )
 
     # 5. Build dialogue prompt and call the dialogue LLM. The immediately
     # preceding turn's raw exchange is included directly (not just via the
     # deferred fact/vector-store pipeline) so a story that unfolds over two
     # turns keeps continuity even if that turn's extraction hasn't run yet.
-    dialogue_prompt = build_system_prompt(user_profile, state, prior_context)
+    #
+    # The prompt goes in two parts so its stable half (Layers 1-3) can be
+    # cached across the session's turns (C3).
+    prompt_parts = build_system_prompt_parts(user_profile, state, prior_context)
     messages = await _load_last_turn_messages(session_id, db)
     messages.append(Message(role="user", content=stt_result.transcript))
     try:
         llm_response = await llm.chat(
-            messages, system=dialogue_prompt, max_tokens=_DIALOGUE_MAX_TOKENS
+            messages,
+            system=prompt_parts.per_turn,
+            cache_system_prefix=prompt_parts.stable,
+            max_tokens=_DIALOGUE_MAX_TOKENS,
+            model=settings.LLM_DIALOGUE_MODEL,
+            effort=settings.LLM_DIALOGUE_EFFORT,
+            purpose="dialogue",
         )
     except Exception:
         logger.error(
@@ -750,7 +858,11 @@ async def process_voice_turn(
             exc_info=True,
         )
         return await _fallback_turn_result(
-            FailureStage.LLM, state, stt_result.transcript, stt_result.language_code
+            FailureStage.LLM,
+            state,
+            stt_result.transcript,
+            stt_result.language_code,
+            user_profile=user_profile,
         )
     logger.info(
         "LLM: tokens in=%d out=%d",
@@ -791,6 +903,7 @@ async def process_voice_turn(
             state,
             dict(_EMPTY_EXTRACTION),
             crisis_detected=False,
+            user_profile=user_profile,
         )
 
     # 7. The dialogue response — as the policy decided it, with any
@@ -826,39 +939,42 @@ async def process_voice_turn(
         db,
     )
 
-    if crisis_detected:
-        await _log_crisis_event(
-            session_id,
-            turn.id,
-            "assistant_response",
-            response_crisis.matched_pattern or "",
-            db,
-        )
+    # From here on, paid calls (the reply's TTS) belong to this turn.
+    with usage.usage_scope(turn_id=turn.id):
+        if crisis_detected:
+            await _log_crisis_event(
+                session_id,
+                turn.id,
+                "assistant_response",
+                response_crisis.matched_pattern or "",
+                db,
+            )
 
-    # 11. Schedule structured extraction off the critical path.
-    if background_tasks is not None:
-        background_tasks.add_task(
-            run_extraction_for_turn,
-            turn.id,
-            session_id,
-            state,
-            user_profile,
-            prior_context,
-            stt_result.transcript,
+        # 11. Schedule structured extraction off the critical path.
+        if background_tasks is not None:
+            background_tasks.add_task(
+                run_extraction_for_turn,
+                turn.id,
+                session_id,
+                state,
+                user_profile,
+                prior_context,
+                stt_result.transcript,
+                response_text,
+                db,
+            )
+
+        # 12. Synthesize the reply (or degrade to text if TTS/conversion fails).
+        return await _send_or_degrade(
             response_text,
-            db,
+            stt_result.language_code,
+            stt_result.transcript,
+            state,
+            dict(_EMPTY_EXTRACTION),
+            crisis_detected=crisis_detected,
+            turn_id=turn.id,
+            user_profile=user_profile,
         )
-
-    # 12. Synthesize the reply (or degrade to text if TTS/conversion fails).
-    return await _send_or_degrade(
-        response_text,
-        stt_result.language_code,
-        stt_result.transcript,
-        state,
-        dict(_EMPTY_EXTRACTION),
-        crisis_detected=crisis_detected,
-        turn_id=turn.id,
-    )
 
 
 async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
@@ -872,6 +988,9 @@ async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
         [Message(role="user", content=prompt)],
         system=None,
         max_tokens=_EXTRACTION_MAX_TOKENS,
+        model=settings.LLM_EXTRACTION_MODEL,
+        effort=settings.LLM_EXTRACTION_EFFORT,
+        purpose="extraction",
     )
     if conversation_policy.check_extraction_response(llm_response.content):
         return (
@@ -885,6 +1004,9 @@ async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
         [Message(role="user", content=prompt + _EXTRACTION_RETRY_INSTRUCTION)],
         system=None,
         max_tokens=_EXTRACTION_MAX_TOKENS,
+        model=settings.LLM_EXTRACTION_MODEL,
+        effort=settings.LLM_EXTRACTION_EFFORT,
+        purpose="extraction_retry",
     )
     total_input = llm_response.input_tokens + retry_response.input_tokens
     total_output = llm_response.output_tokens + retry_response.output_tokens
@@ -900,6 +1022,36 @@ async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
 
 
 async def run_extraction_for_turn(
+    turn_id: uuid.UUID,
+    session_id: str,
+    session_state: SessionState,
+    user_profile: UserProfile,
+    prior_context: PriorContext,
+    transcript: str,
+    response_text: str,
+    db,
+) -> None:
+    """
+    See _run_extraction_for_turn. A background task, so the usage-ledger
+    scope is set explicitly: a task scheduled from the webhook must not rely
+    on inheriting the request's context.
+    """
+    with usage.usage_scope(
+        user_id=session_state.user_id, session_id=session_id, turn_id=turn_id
+    ):
+        await _run_extraction_for_turn(
+            turn_id,
+            session_id,
+            session_state,
+            user_profile,
+            prior_context,
+            transcript,
+            response_text,
+            db,
+        )
+
+
+async def _run_extraction_for_turn(
     turn_id: uuid.UUID,
     session_id: str,
     session_state: SessionState,
