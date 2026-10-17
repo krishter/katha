@@ -45,6 +45,11 @@ class UserProfile:
     # Empty means not stated — see _layer1_persona, which then tells the
     # model to avoid gendered forms rather than infer them.
     pronouns: str = ""
+    # Katha's own persona, chosen by the family at setup: "female" or
+    # "male". It decides the voice (media/voices.py) and, through Layer 1,
+    # the gendered forms Katha uses for herself or himself, so the words
+    # match the voice saying them.
+    katha_gender: str = "female"
 
 
 @dataclass
@@ -108,6 +113,19 @@ def _pronoun_line(pronouns: str) -> str:
     )
 
 
+def _katha_gender_line(katha_gender: str) -> str:
+    """How Katha refers to itself, matching the voice the family chose."""
+    if katha_gender == "male":
+        return (
+            "\nYou speak in a man's voice. Where a language marks the speaker's "
+            'gender, use masculine forms for yourself (in Hindi, "मैं सुन रहा हूँ").'
+        )
+    return (
+        "\nYou speak in a woman's voice. Where a language marks the speaker's "
+        'gender, use feminine forms for yourself (in Hindi, "मैं सुन रही हूँ").'
+    )
+
+
 def _layer1_persona(user_profile: UserProfile) -> str:
     lang = _language_name(user_profile.preferred_language)
     return f"""LAYER 1 — PERSONA & TONE
@@ -116,6 +134,7 @@ You are patient, unhurried, genuinely interested, and never judgmental. \
 You speak in a mix of English and {lang} as feels natural. \
 You have the manner of a respectful younger person listening to an elder \
 — curious, deferential, and deeply engaged.\
+{_katha_gender_line(user_profile.katha_gender)}\
 {_pronoun_line(user_profile.pronouns)}"""
 
 

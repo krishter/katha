@@ -196,14 +196,17 @@ async def _speak(
             from media import system_speech
 
             audio = await system_speech.get_system_speech(
-                text, profile.preferred_language
+                text, profile.preferred_language, gender=profile.katha_gender
             )
         else:
             from adapters import sarvam_tts
             from media.audio_convert import convert_wav_to_ogg
 
             audio = await sarvam_tts.synthesize(
-                text, language_code=profile.preferred_language, purpose="tts_system"
+                text,
+                language_code=profile.preferred_language,
+                gender=profile.katha_gender,
+                purpose="tts_system",
             )
             audio = await convert_wav_to_ogg(audio)
         await whatsapp.send_voice_note(
@@ -332,6 +335,7 @@ async def _load_user_profile_for_session(
         preferred_language=row.preferred_language,
         onboarding_context=row.onboarding_context or "",
         pronouns=row.pronouns or "",
+        katha_gender=row.katha_gender,
     )
 
 

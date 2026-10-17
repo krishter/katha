@@ -80,9 +80,9 @@ export default function StorytellerSettingsPage() {
       </h2>
       <p className="mt-2 text-sm text-ink-mid">
         Many Indian languages change the verb depending on gender. Telling
-        Katha which to use is the only reliable way for her to get it right
-        — without it she has to guess, and in Hindi, Tamil and others she
-        cannot avoid guessing.
+        Katha which to use is the only reliable way to get it right —
+        without it Katha has to guess, and in Hindi, Tamil and others cannot
+        avoid guessing.
       </p>
 
       <form onSubmit={handleSave} className="mt-6 flex flex-col gap-3">
@@ -125,7 +125,7 @@ export default function StorytellerSettingsPage() {
           <p className="max-w-sm text-xs text-ink-mid">
             Katha will avoid gendered wording where the language allows it.
             In Hindi and similar languages some sentences cannot avoid it,
-            so she may still get it wrong.
+            so Katha may still get it wrong.
           </p>
         )}
 

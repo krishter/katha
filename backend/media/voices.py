@@ -1,61 +1,111 @@
 """
-Which Sarvam voice speaks each language (docs/specs/COST_TO_SERVE.md C6).
+Which Sarvam model and voice speak for Katha (docs/specs/COST_TO_SERVE.md C6).
 
-bulbul:v3 uses one short voice name for every language. bulbul:v4-flash
-voices are per language and style ("<name>_<language>_<style>") and reject
-v3's short names, so v4 needs this map.
+The parent's profile language and Katha's persona (female or male, chosen by
+the family at setup) decide both, once, for every voice note. Neither comes
+from the language detected in a voice note: a parent who mixes Hindi and
+English would otherwise hear a different speaker whenever a note was
+detected as English.
 
-Chosen from Sarvam's v4 Flash catalog
-(https://docs.sarvam.ai/api/api-guides-tutorials/text-to-speech/voices,
-checked 2026-10-16): a conversational style, and where the catalog has one,
-the same speaker as v3's "ritu", so the voice a parent knows does not change
-character. The catalog states no gender; the choices follow the speaker
-names and must be confirmed by ear before a language is moved to v4.
+The rule, from Sarvam's v4 Flash catalog
+(https://docs.sarvam.ai/api/api-guides-tutorials/text-to-speech/voices and
+.../best-practices, checked 2026-10-17):
 
-Only Hindi and English were heard in the blind A/B of 2026-10-17 (v4 Flash
-preferred in 19 of 20 pairs), so only they are in V4_FLASH_VOICES. The
-other choices wait in V4_FLASH_CANDIDATES, unused, until someone has
-listened to them; until then those languages stay on v3 with TTS_MODEL set
-to v4 Flash.
+- v4 Flash, where it has a voice for that language and gender in a
+  conversation style ("conversation" or "conversational").
+- Otherwise v3: "ritu" for a female persona, "shubh" for a male one. That
+  covers Malayalam and Odia (no v4 voices yet), Tamil (its only v4 voices
+  are ads and narration), a male Telugu persona and a female Punjabi one.
 
-Deliberately unmapped, so they stay on v3 and its "ritu":
-- ta-IN and pa-IN: every v4 Flash voice for them carries a male speaker
-  name, which would change the voice a parent knows.
-- ml-IN and or-IN: not offered on v4 Flash yet.
-- as-IN and ur-IN: not in the v4 Flash catalog.
+Sarvam labels no voice's gender. The best-practices page groups some names
+as female or male (simran; shubh, sunny, rohan, ratan); the rest follow the
+speaker's name. Only the female Hindi and English voices have been heard
+(blind A/B, 2026-10-17). Every other choice must be confirmed by ear with
+the listening kit's `voices` subcommand before a family uses it.
+
+Assamese and Urdu need beta access from Sarvam; until it is granted every
+synthesis for them fails and the reply goes out as text.
+
+TTS_MODEL=bulbul:v3 is the rollback: every persona then speaks on v3.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 V3_MODEL = "bulbul:v3"
 V4_FLASH_MODEL = "bulbul:v4-flash"
-V3_VOICE = "ritu"
 
-V4_FLASH_VOICES: dict[str, str] = {
-    "hi-IN": "ritu_hi_conversation",
-    "en-IN": "simran_en_conversation",
+GENDERS = ("female", "male")
+DEFAULT_GENDER = "female"
+
+V3_VOICES: dict[str, str] = {"female": "ritu", "male": "shubh"}
+
+# (language, gender) -> v4 Flash conversation-style voice. A pair missing
+# here is spoken on v3.
+V4_FLASH_VOICES: dict[tuple[str, str], str] = {
+    ("hi-IN", "female"): "ritu_hi_conversation",
+    ("hi-IN", "male"): "aditya_hi_conversational",
+    ("en-IN", "female"): "simran_en_conversation",
+    ("en-IN", "male"): "dev_en_conversational",
+    ("mr-IN", "female"): "ishita_mr_conversational",
+    ("mr-IN", "male"): "nilesh_mr_conversation",
+    ("kn-IN", "female"): "chaitra_kn_conversation",
+    ("kn-IN", "male"): "chetan_kn_conversation",
+    ("te-IN", "female"): "kavitha_te_conversation",
+    ("gu-IN", "female"): "pooja_gu_conversational",
+    ("gu-IN", "male"): "bhavik_gu_conversation",
+    ("bn-IN", "female"): "roopa_bn_conversational",
+    ("bn-IN", "male"): "arnab_bn_conversation",
+    ("pa-IN", "male"): "anand_pa_conversation",
 }
 
-# Chosen but not yet heard. Move a language up into V4_FLASH_VOICES once
-# it has been through the listening kit's abtest.
-V4_FLASH_CANDIDATES: dict[str, str] = {
-    "mr-IN": "ritu_mr_narration",
-    "te-IN": "kavitha_te_conversation",
-    "kn-IN": "chaitra_kn_conversation",
-    "bn-IN": "roopa_bn_conversational",
-    "gu-IN": "pooja_gu_conversational",
-}
+# Heard by a person and judged right for the persona. Everything else in
+# V4_FLASH_VOICES is the catalog's best match on paper.
+HEARD: set[tuple[str, str]] = {("hi-IN", "female"), ("en-IN", "female")}
+
+# Katha's language codes that Sarvam spells differently. Odia is "or-IN"
+# everywhere in Katha and "od-IN" at Sarvam, which rejects "or-IN".
+_SARVAM_LANGUAGE_CODES: dict[str, str] = {"or-IN": "od-IN"}
 
 
-def voice_for(requested_model: str, language_code: str) -> tuple[str, str]:
+@dataclass(frozen=True)
+class Voice:
+    model: str
+    speaker: str
+    # The code Sarvam accepts for the language.
+    language_code: str
+
+
+def normalise_gender(gender: str | None) -> str:
+    """'female' or 'male'; anything else, including empty, is the default."""
+    return gender if gender in GENDERS else DEFAULT_GENDER
+
+
+def sarvam_language_code(language_code: str) -> str:
+    return _SARVAM_LANGUAGE_CODES.get(language_code, language_code)
+
+
+def v3_voice(language_code: str, gender: str | None) -> Voice:
+    return Voice(
+        V3_MODEL,
+        V3_VOICES[normalise_gender(gender)],
+        sarvam_language_code(language_code),
+    )
+
+
+def voice_for(
+    language_code: str, gender: str | None, tts_model: str = V4_FLASH_MODEL
+) -> Voice:
     """
-    (model, voice) to synthesise `language_code` with.
+    The model and voice for a persona speaking `language_code`.
 
-    A language with no v4 voice falls back to v3 for that call, so turning
-    v4 Flash on can never leave a parent with no voice at all.
+    `tts_model` is settings.TTS_MODEL: v4 Flash applies the table above,
+    and v3 puts every persona on v3.
     """
-    if requested_model == V4_FLASH_MODEL:
-        voice = V4_FLASH_VOICES.get(language_code)
-        if voice is not None:
-            return V4_FLASH_MODEL, voice
-    return V3_MODEL, V3_VOICE
+    gender = normalise_gender(gender)
+    if tts_model == V4_FLASH_MODEL:
+        speaker = V4_FLASH_VOICES.get((language_code, gender))
+        if speaker is not None:
+            return Voice(V4_FLASH_MODEL, speaker, sarvam_language_code(language_code))
+    return v3_voice(language_code, gender)

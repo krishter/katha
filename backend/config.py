@@ -152,9 +152,10 @@ class Settings(BaseSettings):
     SCHEDULED_OPENER_ENABLED: bool = False
 
     # C6: the Sarvam TTS model. v4 Flash since 2026-10-17: preferred in 19 of
-    # 20 blind pairs (COST_TO_SERVE.md §10). Only languages heard in that test
-    # have a v4 voice in media/voices.py; every other language stays on v3.
-    # bulbul:v3 is the rollback.
+    # 20 blind pairs (COST_TO_SERVE.md §10). The parent's language and Katha's
+    # persona then pick the model and voice per media/voices.py, which keeps
+    # a language on v3 where v4 has no conversation voice for the persona.
+    # bulbul:v3 is the rollback: every persona on v3.
     TTS_MODEL: str = "bulbul:v4-flash"
 
     # C7: shorten long pauses before STT, which bills by the second sent.

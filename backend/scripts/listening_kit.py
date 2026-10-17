@@ -2,13 +2,17 @@
 """
 Operator listening kit for the human checks in docs/specs/COST_TO_SERVE.md.
 
-Three subcommands, one per check the eval harness cannot do:
+Four subcommands, one per check the eval harness cannot do:
 
     # §8: hear how the dialogue model sounds in a parent's language
     python scripts/listening_kit.py replies --lang hi-IN --n 10 --out ~/kit/hi
 
     # §10: blind A/B of Bulbul v3 against v4 Flash on identical text
     python scripts/listening_kit.py abtest --langs hi-IN,en-IN --out ~/kit/ab
+
+    # §10: one clip per language and persona, to confirm each mapped voice
+    # sounds like the persona it was chosen for
+    python scripts/listening_kit.py voices --out ~/kit/voices
 
     # §11 (C7): does shortening pauses lose any words?
     python scripts/listening_kit.py pauses --in ~/self-trial-notes --out ~/kit/p
@@ -49,8 +53,10 @@ from core import conversation_policy, orchestrator, usage  # noqa: E402
 from core.session_manager import SessionState  # noqa: E402
 from media import audio_convert, audio_split, voices  # noqa: E402
 from prompts.system_prompt import (  # noqa: E402
+    SUPPORTED_LANGUAGES,
     PriorContext,
     UserProfile,
+    _language_name,
     build_system_prompt_parts,
 )
 
@@ -58,6 +64,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 LEDGER_USER = "eval-listening-kit"
 PURPOSE = "eval"
 GLOSS_MODEL = "claude-haiku-5-5"
+# Haiku 5.5 thinks before answering; at 400 tokens it once spent the whole
+# budget thinking and returned no translation at all.
+GLOSS_MAX_TOKENS = 2000
 AUDIO_SUFFIXES = {".ogg", ".opus", ".oga", ".m4a", ".mp3", ".wav", ".aac", ".amr"}
 
 
@@ -236,12 +245,13 @@ _PROFILES = {
 }
 
 
-def _profile(language: str) -> UserProfile:
+def _profile(language: str, gender: str = voices.DEFAULT_GENDER) -> UserProfile:
     return UserProfile(
         name=_PROFILES.get(language, "Lakshmi"),
         preferred_language=language,
         onboarding_context="Retired schoolteacher. Grew up in a small town.",
         pronouns="she/her",
+        katha_gender=gender,
     )
 
 
@@ -313,10 +323,12 @@ def _samples(language: str, n: int) -> list[Sample]:
     return SAMPLES[language][:n]
 
 
-async def dialogue_reply(language: str, sample: Sample, index: int) -> str:
+async def dialogue_reply(
+    language: str, sample: Sample, index: int, gender: str = voices.DEFAULT_GENDER
+) -> str:
     """The reply production would give: real prompt, model and policy."""
     state = _state(sample.domain, index)
-    parts = build_system_prompt_parts(_profile(language), state, _PRIOR)
+    parts = build_system_prompt_parts(_profile(language, gender), state, _PRIOR)
     response = await llm.chat(
         [Message(role="user", content=sample.transcript)],
         system=parts.per_turn,
@@ -346,7 +358,7 @@ async def english_gloss(text: str, language: str) -> str:
                 ),
             )
         ],
-        max_tokens=800,
+        max_tokens=GLOSS_MAX_TOKENS,
         model=GLOSS_MODEL,
         effort="low",
         purpose=PURPOSE,
@@ -354,32 +366,36 @@ async def english_gloss(text: str, language: str) -> str:
     return response.content.strip()
 
 
-async def speak(text: str, language: str, model: str | None = None) -> bytes:
-    wav = await sarvam_tts.synthesize(text, language, purpose=PURPOSE, model=model)
+async def speak(
+    text: str, language: str, gender: str, model: str | None = None
+) -> bytes:
+    wav = await sarvam_tts.synthesize(
+        text, language, gender=gender, purpose=PURPOSE, model=model
+    )
     return await audio_convert.convert_wav_to_ogg(wav)
 
 
 # ── replies ──────────────────────────────────────────────────────────────────
 
 
-async def cmd_replies(language: str, n: int, out: pathlib.Path) -> None:
+async def cmd_replies(language: str, gender: str, n: int, out: pathlib.Path) -> None:
     out = ensure_outside_repo(out)
-    tts_model, voice = voices.voice_for(settings.TTS_MODEL, language)
+    voice = voices.voice_for(language, gender, settings.TTS_MODEL)
     lines = [
-        f"# Listening check: {language}",
+        f"# Listening check: {language}, {gender} Katha",
         "",
         f"Dialogue model `{settings.LLM_DIALOGUE_MODEL}` at effort "
-        f"`{settings.LLM_DIALOGUE_EFFORT}`; speech `{tts_model}` voice "
-        f"`{voice}`. Session 5, synthetic profile (she/her).",
+        f"`{settings.LLM_DIALOGUE_EFFORT}`; speech `{voice.model}` voice "
+        f"`{voice.speaker}`. Session 5, synthetic profile (she/her).",
         "",
         "Listen for warmth and register, not just correctness "
         "(docs/specs/COST_TO_SERVE.md §8).",
         "",
     ]
     for i, sample in enumerate(_samples(language, n), start=1):
-        reply = await dialogue_reply(language, sample, i)
+        reply = await dialogue_reply(language, sample, i, gender)
         gloss = await english_gloss(reply, language)
-        (out / f"{i:02d}.ogg").write_bytes(await speak(reply, language))
+        (out / f"{i:02d}.ogg").write_bytes(await speak(reply, language, gender))
         lines += [
             f"## {i:02d} · {sample.domain} · {sample.note}",
             "",
@@ -399,7 +415,7 @@ async def cmd_replies(language: str, n: int, out: pathlib.Path) -> None:
 
 
 async def cmd_abtest(
-    languages: list[str], n: int, out: pathlib.Path, seed: int | None
+    languages: list[str], gender: str, n: int, out: pathlib.Path, seed: int | None
 ) -> None:
     out = ensure_outside_repo(out)
     rng = random.Random(seed)
@@ -412,25 +428,25 @@ async def cmd_abtest(
         "",
     ]
     for language in languages:
-        v4_model, _ = voices.voice_for(voices.V4_FLASH_MODEL, language)
-        if v4_model != voices.V4_FLASH_MODEL:
+        if voices.voice_for(language, gender).model != voices.V4_FLASH_MODEL:
             print(f"{language}: no v4 Flash voice, both sides would be v3 — skipped")
             continue
         for i, sample in enumerate(_samples(language, n), start=1):
             pair = f"{language}-{i:02d}"
-            text = await dialogue_reply(language, sample, i)
+            text = await dialogue_reply(language, sample, i, gender)
             clips = {
-                voices.V3_MODEL: await speak(text, language, voices.V3_MODEL),
-                voices.V4_FLASH_MODEL: await speak(
-                    text, language, voices.V4_FLASH_MODEL
-                ),
+                model: await speak(text, language, gender, model)
+                for model in (voices.V3_MODEL, voices.V4_FLASH_MODEL)
             }
             order = [voices.V3_MODEL, voices.V4_FLASH_MODEL]
             rng.shuffle(order)
             for side, model in zip("AB", order):
                 (out / f"{pair}-{side}.ogg").write_bytes(clips[model])
             key[pair] = {
-                side: {"model": model, "voice": voices.voice_for(model, language)[1]}
+                side: {
+                    "model": model,
+                    "voice": voices.voice_for(language, gender, model).speaker,
+                }
                 for side, model in zip("AB", order)
             }
             listing += [f"## {pair}", "", text, ""]
@@ -443,6 +459,99 @@ async def cmd_abtest(
             writer.writerow([pair, "", "", ""])
     (out / "pairs.md").write_text("\n".join(listing), encoding="utf-8")
     print(f"Wrote {len(key)} pairs to {out}")
+
+
+# ── voices ───────────────────────────────────────────────────────────────────
+
+# Said by every persona in every language, so the voices can be compared on
+# the same words.
+VOICE_LINE = (
+    "Namaste! I'm Katha. I'd love to hear about the house you grew up in. "
+    "What do you remember about it?"
+)
+# Assamese and Urdu need beta access from Sarvam; synthesis fails without it.
+_NO_SPEECH = {"as-IN", "ur-IN"}
+
+
+async def voice_line(language: str, gender: str) -> str:
+    """VOICE_LINE in `language`, with Katha's own forms in the persona's gender."""
+    if language == "en-IN":
+        return VOICE_LINE
+    response = await llm.chat(
+        [
+            Message(
+                role="user",
+                content=(
+                    f"Translate into natural spoken {_language_name(language)}, "
+                    "as a respectful "
+                    f"younger {'man' if gender == 'male' else 'woman'} speaking to "
+                    "an elder: use that gender's forms where the speaker refers to "
+                    "themselves, and the respectful form of address. Return only "
+                    "the translation.\n\n" + VOICE_LINE
+                ),
+            )
+        ],
+        max_tokens=GLOSS_MAX_TOKENS,
+        model=GLOSS_MODEL,
+        effort="low",
+        purpose=PURPOSE,
+    )
+    text = response.content.strip()
+    if not text:
+        raise RuntimeError(f"no translation came back for {language}")
+    return text
+
+
+async def cmd_voices(languages: list[str], out: pathlib.Path) -> None:
+    out = ensure_outside_repo(out)
+    lines = [
+        "# Katha's voices, one per language and persona",
+        "",
+        f"`TTS_MODEL={settings.TTS_MODEL}`. For each clip: does the voice sound "
+        "like the persona it was chosen for, and would a parent enjoy talking to "
+        "it? Note anything off in voices.csv; a wrong voice is a one-line change "
+        "in backend/media/voices.py.",
+        "",
+        "| Clip | Model | Voice | Heard before |",
+        "|---|---|---|---|",
+    ]
+    rows = []
+    texts = []
+    for language in languages:
+        for gender in voices.GENDERS:
+            voice = voices.voice_for(language, gender, settings.TTS_MODEL)
+            clip = f"{language}-{gender}.ogg"
+            # One failure is reported and the rest still run: the point is
+            # to hear every voice, and a rerun would pay for them all again.
+            try:
+                text = await voice_line(language, gender)
+                (out / clip).write_bytes(await speak(text, language, gender))
+            except Exception as exc:
+                print(f"{clip} FAILED: {exc}")
+                lines.append(
+                    f"| `{clip}` | {voice.model} | {voice.speaker} | FAILED: {exc} |"
+                )
+                continue
+            heard = "yes" if (language, gender) in voices.HEARD else "no"
+            lines.append(f"| `{clip}` | {voice.model} | {voice.speaker} | {heard} |")
+            texts += [f"## {clip}", "", text, ""]
+            rows.append([clip, voice.model, voice.speaker, "", "", ""])
+            print(f"{clip} done ({voice.model} {voice.speaker})")
+    (out / "voices.md").write_text("\n".join(lines + [""] + texts), encoding="utf-8")
+    with open(out / "voices.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "clip",
+                "model",
+                "voice",
+                "sounds female/male",
+                "good for Katha (Y/N)",
+                "note",
+            ]
+        )
+        writer.writerows(rows)
+    print(f"Wrote {len(rows)} clips to {out}")
 
 
 # ── pauses ───────────────────────────────────────────────────────────────────
@@ -520,15 +629,26 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     replies = sub.add_parser("replies", help="dialogue replies to listen to (§8)")
-    replies.add_argument("--lang", required=True, choices=["hi-IN", "ta-IN"])
+    replies.add_argument("--lang", required=True, choices=sorted(SAMPLES))
+    replies.add_argument("--gender", choices=voices.GENDERS, default="female")
     replies.add_argument("--n", type=int, default=10)
     replies.add_argument("--out", type=pathlib.Path, required=True)
 
     abtest = sub.add_parser("abtest", help="blind Bulbul v3 vs v4 Flash (§10)")
     abtest.add_argument("--langs", default="hi-IN,en-IN")
+    abtest.add_argument("--gender", choices=voices.GENDERS, default="female")
     abtest.add_argument("--n", type=int, default=10)
     abtest.add_argument("--out", type=pathlib.Path, required=True)
     abtest.add_argument("--seed", type=int, default=None, help="fix the A/B order")
+
+    voices_cmd = sub.add_parser("voices", help="every language and persona (§10)")
+    voices_cmd.add_argument(
+        "--langs",
+        default=",".join(
+            lang for lang in SUPPORTED_LANGUAGES if lang not in _NO_SPEECH
+        ),
+    )
+    voices_cmd.add_argument("--out", type=pathlib.Path, required=True)
 
     pauses = sub.add_parser("pauses", help="transcripts with and without C7 (§11)")
     pauses.add_argument("--in", dest="source", type=pathlib.Path, required=True)
@@ -543,10 +663,13 @@ async def run(args: argparse.Namespace) -> None:
     try:
         with usage.usage_scope(user_id=LEDGER_USER):
             if args.command == "replies":
-                await cmd_replies(args.lang, args.n, args.out)
+                await cmd_replies(args.lang, args.gender, args.n, args.out)
             elif args.command == "abtest":
                 languages = [lang.strip() for lang in args.langs.split(",") if lang]
-                await cmd_abtest(languages, args.n, args.out, args.seed)
+                await cmd_abtest(languages, args.gender, args.n, args.out, args.seed)
+            elif args.command == "voices":
+                languages = [lang.strip() for lang in args.langs.split(",") if lang]
+                await cmd_voices(languages, args.out)
             else:
                 await cmd_pauses(args.source, args.out)
     finally:

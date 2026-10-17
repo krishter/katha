@@ -29,7 +29,9 @@ async def test_synthesize_returns_bytes(mock_tts_response):
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
 
-        result = await synthesize("Hello, how are you?", "en-IN", purpose="tts_reply")
+        result = await synthesize(
+            "Hello, how are you?", "en-IN", gender="female", purpose="tts_reply"
+        )
 
     assert isinstance(result, bytes)
     assert len(result) > 0
@@ -44,7 +46,9 @@ async def test_synthesize_decodes_base64(mock_tts_response):
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
 
-        result = await synthesize("Hello", "en-IN", purpose="tts_reply")
+        result = await synthesize(
+            "Hello", "en-IN", gender="female", purpose="tts_reply"
+        )
 
     assert result == _FAKE_WAV
     # Must not be the raw base64 string bytes
@@ -64,7 +68,7 @@ async def test_synthesize_raises_on_http_error():
         mock_client_cls.return_value = mock_client
 
         with pytest.raises(RuntimeError, match="Sarvam TTS error 422"):
-            await synthesize("Hello", "en-IN", purpose="tts_reply")
+            await synthesize("Hello", "en-IN", gender="female", purpose="tts_reply")
 
 
 async def test_synthesize_truncates_long_text(mock_tts_response):
@@ -77,7 +81,9 @@ async def test_synthesize_truncates_long_text(mock_tts_response):
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
 
-        result = await synthesize(long_text, "en-IN", purpose="tts_reply")
+        result = await synthesize(
+            long_text, "en-IN", gender="female", purpose="tts_reply"
+        )
 
     # Should succeed (not raise) and return bytes
     assert isinstance(result, bytes)
@@ -86,10 +92,12 @@ async def test_synthesize_truncates_long_text(mock_tts_response):
     assert len(call_kwargs["json"]["text"]) == 2500
 
 
-# ── C6: model, voice and field selection (COST_TO_SERVE.md §10) ───────────────
+# ── C6: model and voice from language and persona (COST_TO_SERVE.md §10) ─────
 
 
-async def _sent(monkeypatch, tts_model, language, mock_tts_response, **kwargs):
+async def _sent(
+    monkeypatch, tts_model, language, mock_tts_response, gender="female", **kwargs
+):
     monkeypatch.setattr("adapters.sarvam_tts.settings.TTS_MODEL", tts_model)
     with patch("adapters.sarvam_tts.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -97,55 +105,102 @@ async def _sent(monkeypatch, tts_model, language, mock_tts_response, **kwargs):
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client.post = AsyncMock(return_value=mock_tts_response)
         mock_client_cls.return_value = mock_client
-        await synthesize("नमस्ते", language, purpose="tts_reply", **kwargs)
+        await synthesize("नमस्ते", language, gender=gender, purpose="tts_reply", **kwargs)
     return mock_client.post.call_args.kwargs["json"]
 
 
-async def test_v3_by_default_with_ritu_and_its_original_field(
-    monkeypatch, mock_tts_response
+@pytest.mark.parametrize(
+    "gender,speaker", [("female", "ritu"), ("male", "shubh"), (None, "ritu")]
+)
+async def test_v3_rollback_puts_every_persona_on_v3_with_its_original_field(
+    monkeypatch, mock_tts_response, gender, speaker
 ):
-    body = await _sent(monkeypatch, "bulbul:v3", "hi-IN", mock_tts_response)
+    body = await _sent(
+        monkeypatch, "bulbul:v3", "hi-IN", mock_tts_response, gender=gender
+    )
     assert body["model"] == "bulbul:v3"
-    assert body["speaker"] == "ritu"
+    assert body["speaker"] == speaker
     # Unchanged from what production has always sent.
     assert body["target_language_code"] == "hi-IN"
     assert "language_code" not in body
 
 
-async def test_v4_flash_uses_the_per_language_voice_and_language_code(
-    monkeypatch, mock_tts_response, usage_rows
+@pytest.mark.parametrize(
+    "language,gender,speaker",
+    [
+        ("hi-IN", "female", "ritu_hi_conversation"),
+        ("hi-IN", "male", "aditya_hi_conversational"),
+        ("en-IN", "female", "simran_en_conversation"),
+        ("en-IN", "male", "dev_en_conversational"),
+        ("bn-IN", "male", "arnab_bn_conversation"),
+    ],
+)
+async def test_v4_flash_uses_the_persona_voice_for_the_language(
+    monkeypatch, mock_tts_response, usage_rows, language, gender, speaker
 ):
-    body = await _sent(monkeypatch, "bulbul:v4-flash", "hi-IN", mock_tts_response)
+    body = await _sent(
+        monkeypatch, "bulbul:v4-flash", language, mock_tts_response, gender=gender
+    )
     assert body["model"] == "bulbul:v4-flash"
-    assert body["speaker"] == "ritu_hi_conversation"
-    assert body["language_code"] == "hi-IN"
+    assert body["speaker"] == speaker
+    assert body["language_code"] == language
     assert "target_language_code" not in body
     assert usage_rows[0]["model"] == "bulbul:v4-flash"
 
 
 @pytest.mark.parametrize(
-    "language",
-    # The first five have v4 candidates nobody has listened to yet.
-    ["mr-IN", "te-IN", "kn-IN", "bn-IN", "gu-IN", "ml-IN", "or-IN", "ta-IN", "pa-IN"],
+    "language,gender,speaker",
+    [
+        # No v4 voices yet.
+        ("ml-IN", "female", "ritu"),
+        ("ml-IN", "male", "shubh"),
+        # Tamil's v4 voices are ads and narration only.
+        ("ta-IN", "female", "ritu"),
+        ("ta-IN", "male", "shubh"),
+        # No conversation-style voice for this persona.
+        ("te-IN", "male", "shubh"),
+        ("pa-IN", "female", "ritu"),
+    ],
 )
-async def test_v4_flash_falls_back_to_v3_for_an_unmapped_language(
-    monkeypatch, mock_tts_response, usage_rows, language
+async def test_a_persona_without_a_conversation_voice_stays_on_v3(
+    monkeypatch, mock_tts_response, usage_rows, language, gender, speaker
 ):
-    body = await _sent(monkeypatch, "bulbul:v4-flash", language, mock_tts_response)
+    body = await _sent(
+        monkeypatch, "bulbul:v4-flash", language, mock_tts_response, gender=gender
+    )
     assert body["model"] == "bulbul:v3"
-    assert body["speaker"] == "ritu"
+    assert body["speaker"] == speaker
     assert body["target_language_code"] == language
     # The ledger prices what was actually used.
     assert usage_rows[0]["model"] == "bulbul:v3"
 
 
-def test_every_v4_voice_belongs_to_its_language():
-    from media.voices import V4_FLASH_CANDIDATES, V4_FLASH_VOICES
+async def test_odia_is_sent_with_the_code_sarvam_accepts(
+    monkeypatch, mock_tts_response
+):
+    # Sarvam rejects "or-IN" with a 400 (checked live 2026-10-17).
+    body = await _sent(monkeypatch, "bulbul:v4-flash", "or-IN", mock_tts_response)
+    assert body["target_language_code"] == "od-IN"
+
+
+def test_every_v4_voice_belongs_to_its_language_and_is_conversational():
+    from media.voices import GENDERS, V4_FLASH_VOICES
     from prompts.system_prompt import SUPPORTED_LANGUAGES
 
-    for language, voice in {**V4_FLASH_VOICES, **V4_FLASH_CANDIDATES}.items():
+    for (language, gender), voice in V4_FLASH_VOICES.items():
         assert language in SUPPORTED_LANGUAGES
+        assert gender in GENDERS
         assert f"_{language.split('-')[0]}_" in voice, (language, voice)
+        assert voice.endswith(("_conversation", "_conversational")), voice
+
+
+def test_every_supported_language_has_a_voice_for_both_personas():
+    from media.voices import GENDERS, voice_for
+    from prompts.system_prompt import SUPPORTED_LANGUAGES
+
+    for language in SUPPORTED_LANGUAGES:
+        for gender in GENDERS:
+            assert voice_for(language, gender).speaker
 
 
 # ── Speech check and emoji (2026-10-17 listening results) ─────────────────────
@@ -174,7 +229,9 @@ async def _speak(monkeypatch, tts_model, *clips, language="hi-IN"):
     monkeypatch.setattr("adapters.sarvam_tts.settings.TTS_MODEL", tts_model)
     client = _replying(*clips)
     with patch("adapters.sarvam_tts.httpx.AsyncClient", return_value=client):
-        audio = await synthesize("x" * 80, language, purpose="tts_reply")
+        audio = await synthesize(
+            "x" * 80, language, gender="female", purpose="tts_reply"
+        )
     sent = [call.kwargs["json"] for call in client.post.call_args_list]
     return audio, sent
 
@@ -216,7 +273,9 @@ async def test_emoji_never_reach_the_speech_engine(monkeypatch, usage_rows):
     monkeypatch.setattr("adapters.sarvam_tts.settings.TTS_MODEL", "bulbul:v3")
     client = _replying(_GOOD)
     with patch("adapters.sarvam_tts.httpx.AsyncClient", return_value=client):
-        await synthesize("दादाजी! 😊 उनका नाम क्या था?", "hi-IN", purpose="tts_reply")
+        await synthesize(
+            "दादाजी! 😊 उनका नाम क्या था?", "hi-IN", gender="female", purpose="tts_reply"
+        )
     assert client.post.call_args.kwargs["json"]["text"] == "दादाजी! उनका नाम क्या था?"
 
 
@@ -228,9 +287,7 @@ def test_speakable_removes_emoji_sequences_and_keeps_indic_joiners():
     assert speakable("₹180 मिले") == "₹180 मिले"
 
 
-def test_v4_flash_is_the_default_and_only_heard_languages_use_it():
+def test_v4_flash_is_the_default():
     from config import Settings
-    from media.voices import V4_FLASH_VOICES
 
     assert Settings.model_fields["TTS_MODEL"].default == "bulbul:v4-flash"
-    assert set(V4_FLASH_VOICES) == {"hi-IN", "en-IN"}

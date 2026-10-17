@@ -229,7 +229,28 @@ Keep the `_send_followups` code and the `followup_sent_at` column. They sit behi
   - The one English loss was a broken v4 clip: 60 s long, with 51 s of silence and the reply cut short. A further 150 v4 clips over the same texts had no failures, so about 1 in 170.
   - Every clip is now checked before it is sent (`media/tts_check.py`). A clip with more than 3 s of silence, or fewer than 5 characters a second, is synthesised again once; if v4 fails twice the reply is said on v3. Both limits sit well clear of normal clips, which pause at most 0.6 s and run 12.5–20.4 characters a second.
   - Tamil was not tested: its v4 voices are all male, so it stays on v3. The two pilot parents have not listened yet; their verdict can still roll the flag back.
-  - Only Hindi and English get v4 voices. Marathi, Telugu, Kannada, Bengali and Gujarati stay on v3 until someone has heard them.
+  - Only Hindi and English get v4 voices. Marathi, Telugu, Kannada, Bengali and Gujarati stay on v3 until someone has heard them. *(Superseded the same day by the persona rule below.)*
+- **Voice by language and persona, 2026-10-17:**
+  - The family chooses a female or male Katha at setup (`user_profiles.katha_gender`, default female). The parent's profile language and that persona pick the model and voice for every voice note, fallback clip and system phrase. The language detected in a voice note no longer affects the voice, so a parent who mixes Hindi and English hears one speaker throughout.
+  - The rule (`media/voices.py`): v4 Flash where Sarvam has a conversation-style voice for that language and gender; otherwise v3, with `ritu` (female) or `shubh` (male). From Sarvam's catalog on 2026-10-17:
+
+    | Language | Female | Male |
+    |---|---|---|
+    | Hindi | v4 `ritu_hi_conversation` ✓ heard | v4 `aditya_hi_conversational` |
+    | English | v4 `simran_en_conversation` ✓ heard | v4 `dev_en_conversational` |
+    | Marathi | v4 `ishita_mr_conversational` | v4 `nilesh_mr_conversation` |
+    | Kannada | v4 `chaitra_kn_conversation` | v4 `chetan_kn_conversation` |
+    | Telugu | v4 `kavitha_te_conversation` | v3 `shubh` (no male conversation voice) |
+    | Gujarati | v4 `pooja_gu_conversational` | v4 `bhavik_gu_conversation` |
+    | Bengali | v4 `roopa_bn_conversational` | v4 `arnab_bn_conversation` |
+    | Punjabi | v3 `ritu` (no female conversation voice) | v4 `anand_pa_conversation` |
+    | Tamil | v3 `ritu` | v3 `shubh` (v4 has ads and narration voices only) |
+    | Malayalam, Odia | v3 `ritu` | v3 `shubh` (no v4 voices yet) |
+    | Assamese, Urdu | none | none (Sarvam beta access needed; replies go out as text) |
+
+  - Sarvam labels no voice's gender; except where its best-practices page groups names, the persona follows the speaker's name. Every unheard voice must be checked with `listening_kit.py voices` before a family with that language and persona starts.
+  - Katha's grammar follows the persona too: Layer 1 tells the model which forms to use for itself (Hindi "मैं सुन रही हूँ" or "रहा हूँ").
+  - Odia is sent to Sarvam as `od-IN`. Sarvam rejects `or-IN`, so before this every Odia voice note failed and went out as text.
   - Listener notes for v4: question intonation sometimes off; one mispronunciation in Hindi; one reply too energetic for a tired parent.
 
 **Cached system speech**

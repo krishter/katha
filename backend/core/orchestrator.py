@@ -641,11 +641,13 @@ async def set_turn_audio_key(turn_id: uuid.UUID, s3_key: str, db) -> None:
     await db.commit()
 
 
-async def _synthesize_and_convert(text: str, language_code: str) -> bytes:
+async def _synthesize_and_convert(
+    text: str, language_code: str, katha_gender: str
+) -> bytes:
     """TTS then OGG conversion — the two steps that must succeed together
     for a voice note to go out, or degrade to text (see _send_or_degrade)."""
     audio_out = await sarvam_tts.synthesize(
-        text, language_code=language_code, purpose="tts_reply"
+        text, language_code=language_code, gender=katha_gender, purpose="tts_reply"
     )
     return await convert_wav_to_ogg(audio_out)
 
@@ -658,6 +660,8 @@ async def _send_or_degrade(
     extraction_json: dict,
     crisis_detected: bool,
     turn_id: Optional[uuid.UUID] = None,
+    *,
+    user_profile: UserProfile,
 ) -> TurnResult:
     """
     Try to synthesize voice for response_text. If TTS or the WAV->OGG
@@ -666,7 +670,11 @@ async def _send_or_degrade(
     spoken (P2: never silence).
     """
     try:
-        audio_out = await _synthesize_and_convert(response_text, detected_language)
+        # The voice comes from the profile, never the detected language,
+        # so she hears the same voice on every turn (media/voices.py).
+        audio_out = await _synthesize_and_convert(
+            response_text, user_profile.preferred_language, user_profile.katha_gender
+        )
         return TurnResult(
             response_audio=audio_out,
             response_text=response_text,
@@ -703,6 +711,8 @@ async def _fallback_turn_result(
     session_state: SessionState,
     transcript: str,
     detected_language: str,
+    *,
+    user_profile: UserProfile,
 ) -> TurnResult:
     """
     Build the reply for an STT or LLM failure using pre-synthesized audio —
@@ -710,7 +720,9 @@ async def _fallback_turn_result(
     even the pre-synthesized clip is unavailable.
     """
     text = get_fallback_text(stage)
-    audio = get_fallback_audio(stage, detected_language)
+    audio = get_fallback_audio(
+        stage, user_profile.preferred_language, user_profile.katha_gender
+    )
     if audio is not None:
         return TurnResult(
             response_audio=audio,
@@ -786,6 +798,7 @@ async def process_voice_turn(
             state,
             transcript="",
             detected_language=user_profile.preferred_language,
+            user_profile=user_profile,
         )
     logger.info(
         "STT: transcript=%r language=%s",
@@ -809,6 +822,7 @@ async def process_voice_turn(
             state,
             dict(_EMPTY_EXTRACTION),
             crisis_detected=True,
+            user_profile=user_profile,
         )
 
     # 4. Build real prior context from fact store + vector store
@@ -844,7 +858,11 @@ async def process_voice_turn(
             exc_info=True,
         )
         return await _fallback_turn_result(
-            FailureStage.LLM, state, stt_result.transcript, stt_result.language_code
+            FailureStage.LLM,
+            state,
+            stt_result.transcript,
+            stt_result.language_code,
+            user_profile=user_profile,
         )
     logger.info(
         "LLM: tokens in=%d out=%d",
@@ -885,6 +903,7 @@ async def process_voice_turn(
             state,
             dict(_EMPTY_EXTRACTION),
             crisis_detected=False,
+            user_profile=user_profile,
         )
 
     # 7. The dialogue response — as the policy decided it, with any
@@ -954,6 +973,7 @@ async def process_voice_turn(
             dict(_EMPTY_EXTRACTION),
             crisis_detected=crisis_detected,
             turn_id=turn.id,
+            user_profile=user_profile,
         )
 
 

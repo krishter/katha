@@ -11,7 +11,8 @@ synthesised on a miss. Changing any of the four makes a new key, so a
 reworded phrase or a voice change can never replay stale audio.
 
 These objects hold no user data (no names, nothing a parent said), so they
-sit outside DPDP deletion under system/speech/.
+sit outside DPDP deletion under system/speech/. The key includes the
+voice, so the two personas never share a clip.
 
 The cache never costs a reply: if S3 cannot be read or written, the phrase
 is synthesised live exactly as before.
@@ -31,11 +32,11 @@ logger = logging.getLogger(__name__)
 _memory: dict[str, bytes] = {}
 
 
-def speech_key(text: str, language_code: str) -> str:
-    """The S3 key for a phrase as the current TTS model and voice would say it."""
-    model, voice = voices.voice_for(settings.TTS_MODEL, language_code)
+def speech_key(text: str, language_code: str, gender: str | None) -> str:
+    """The S3 key for a phrase as the current model and persona voice would say it."""
+    voice = voices.voice_for(language_code, gender, settings.TTS_MODEL)
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
-    return f"system/speech/{model}/{voice}/{language_code}/{digest}.ogg"
+    return f"system/speech/{voice.model}/{voice.speaker}/{language_code}/{digest}.ogg"
 
 
 async def _s3_get(key: str) -> bytes | None:
@@ -49,15 +50,20 @@ async def _s3_put(key: str, data: bytes) -> None:
 
 
 async def get_system_speech(
-    text: str, language_code: str, *, purpose: str = "tts_system"
+    text: str,
+    language_code: str,
+    *,
+    gender: str | None,
+    purpose: str = "tts_system",
 ) -> bytes:
     """
-    OGG audio of `text` in `language_code`, synthesised at most once.
+    OGG audio of `text` in `language_code`, in the persona's voice,
+    synthesised at most once per voice.
 
     Raises only if a live synthesis is needed and fails, which is what a
     direct TTS call would do; callers already degrade to text on that.
     """
-    key = speech_key(text, language_code)
+    key = speech_key(text, language_code, gender)
     if key in _memory:
         return _memory[key]
 
@@ -71,7 +77,7 @@ async def get_system_speech(
         return stored
 
     wav = await sarvam_tts.synthesize(
-        text, language_code=language_code, purpose=purpose
+        text, language_code=language_code, gender=gender, purpose=purpose
     )
     ogg = await audio_convert.convert_wav_to_ogg(wav)
     _memory[key] = ogg

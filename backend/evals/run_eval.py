@@ -150,6 +150,7 @@ def to_prompt_profile(row: UserProfileModel) -> UserProfile:
         preferred_language=row.preferred_language,
         onboarding_context=row.onboarding_context,
         pronouns=row.pronouns or "",
+        katha_gender=row.katha_gender,
     )
 
 

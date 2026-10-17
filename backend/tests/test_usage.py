@@ -348,7 +348,7 @@ async def test_tts_records_characters_actually_sent(usage_rows):
     client.__aexit__ = AsyncMock(return_value=None)
     client.post = AsyncMock(return_value=ok)
     with patch("adapters.sarvam_tts.httpx.AsyncClient", return_value=client):
-        await synthesize("a" * 3000, "hi-IN", purpose="tts_reply")
+        await synthesize("a" * 3000, "hi-IN", gender="female", purpose="tts_reply")
 
     (row,) = usage_rows
     assert (row["operation"], row["model"]) == ("tts_reply", "bulbul:v4-flash")

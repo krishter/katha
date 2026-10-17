@@ -824,3 +824,29 @@ def test_the_stable_half_does_not_change_between_turns_of_a_session():
     later = build_system_prompt_parts(_PROFILE, turn_5, prior)
     assert first.stable == later.stable
     assert first.per_turn != later.per_turn
+
+
+# ── Katha's persona (Layer 1) ────────────────────────────────────────────────
+
+
+def test_a_male_katha_uses_masculine_forms_for_himself():
+    profile = UserProfile(
+        name="Savitri",
+        preferred_language="hi-IN",
+        onboarding_context="",
+        pronouns="she/her",
+        katha_gender="male",
+    )
+    layer1 = build_system_prompt(profile, _pronoun_state(1, 0), PriorContext()).split(
+        "LAYER 2"
+    )[0]
+    assert "man's voice" in layer1 and "रहा हूँ" in layer1
+    # The parent's own pronouns are a separate line and still there.
+    assert "she/her" in layer1
+
+
+def test_katha_is_female_unless_the_family_chose_otherwise():
+    layer1 = build_system_prompt(
+        _profile("she/her"), _pronoun_state(1, 0), PriorContext()
+    ).split("LAYER 2")[0]
+    assert "woman's voice" in layer1 and "रही हूँ" in layer1

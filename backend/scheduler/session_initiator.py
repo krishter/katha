@@ -163,6 +163,7 @@ async def _open_scheduled_sessions(
                 wav_bytes = await sarvam_tts.synthesize(
                     opening_text,
                     language_code=profile.preferred_language,
+                    gender=profile.katha_gender,
                     purpose="tts_opener",
                 )
                 audio_bytes = await convert_wav_to_ogg(wav_bytes)

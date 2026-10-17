@@ -29,7 +29,9 @@ def tts(monkeypatch):
 
 
 async def test_a_miss_synthesises_once_and_stores_in_s3(tts, system_speech_store):
-    audio = await system_speech.get_system_speech("We already talked today.", "hi-IN")
+    audio = await system_speech.get_system_speech(
+        "We already talked today.", "hi-IN", gender="female"
+    )
     assert audio == b"OGG:WAV"
     tts.assert_awaited_once()
     assert tts.await_args.kwargs["purpose"] == "tts_system"
@@ -37,30 +39,43 @@ async def test_a_miss_synthesises_once_and_stores_in_s3(tts, system_speech_store
 
 
 async def test_a_hit_skips_synthesis(tts):
-    await system_speech.get_system_speech("We already talked today.", "hi-IN")
-    again = await system_speech.get_system_speech("We already talked today.", "hi-IN")
+    await system_speech.get_system_speech(
+        "We already talked today.", "hi-IN", gender="female"
+    )
+    again = await system_speech.get_system_speech(
+        "We already talked today.", "hi-IN", gender="female"
+    )
     assert again == b"OGG:WAV"
     tts.assert_awaited_once()
 
 
 async def test_after_a_restart_s3_answers_without_synthesis(tts, system_speech_store):
-    await system_speech.get_system_speech("Sorry, I couldn't hear that.", "ta-IN")
+    await system_speech.get_system_speech(
+        "Sorry, I couldn't hear that.", "ta-IN", gender="female"
+    )
     system_speech.clear_memory()  # a fresh process
-    await system_speech.get_system_speech("Sorry, I couldn't hear that.", "ta-IN")
+    await system_speech.get_system_speech(
+        "Sorry, I couldn't hear that.", "ta-IN", gender="female"
+    )
     tts.assert_awaited_once()
 
 
 def test_key_includes_model_voice_language_and_text_hash(monkeypatch):
     monkeypatch.setattr("media.system_speech.settings.TTS_MODEL", "bulbul:v3")
-    key = system_speech.speech_key("Hello", "hi-IN")
+    key = system_speech.speech_key("Hello", "hi-IN", "female")
     assert key.startswith("system/speech/bulbul:v3/ritu/hi-IN/")
     assert key.endswith(".ogg") and len(key.rsplit("/", 1)[1]) == len(
         "0123456789ab.ogg"
     )
-    assert system_speech.speech_key("Hello!", "hi-IN") != key  # text changes key
+    # Text changes the key.
+    assert system_speech.speech_key("Hello!", "hi-IN", "female") != key
+    # So does the persona: the two never share a clip.
+    assert system_speech.speech_key("Hello", "hi-IN", "male").startswith(
+        "system/speech/bulbul:v3/shubh/hi-IN/"
+    )
 
     monkeypatch.setattr("media.system_speech.settings.TTS_MODEL", "bulbul:v4-flash")
-    assert system_speech.speech_key("Hello", "hi-IN").startswith(
+    assert system_speech.speech_key("Hello", "hi-IN", "female").startswith(
         "system/speech/bulbul:v4-flash/ritu_hi_conversation/hi-IN/"
     )
 
@@ -71,7 +86,9 @@ async def test_s3_failures_never_cost_the_phrase(tts, monkeypatch):
 
     monkeypatch.setattr(system_speech, "_s3_get", _down)
     monkeypatch.setattr(system_speech, "_s3_put", _down)
-    audio = await system_speech.get_system_speech("Thank you.", "en-IN")
+    audio = await system_speech.get_system_speech(
+        "Thank you.", "en-IN", gender="female"
+    )
     assert audio == b"OGG:WAV"
 
 

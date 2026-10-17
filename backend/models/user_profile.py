@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, time
 from typing import Optional
 
-from sqlalchemy import DateTime, Integer, String, Text, Time, func
+from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text, Time, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,6 +13,12 @@ from models.db import Base
 
 class UserProfileModel(Base):
     __tablename__ = "user_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "katha_gender IN ('female', 'male')",
+            name="ck_user_profiles_katha_gender",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -36,6 +42,12 @@ class UserProfileModel(Base):
     # mistake that misgenders someone, and the name is the one signal that
     # looks reliable and is not.
     pronouns: Mapped[str] = mapped_column(String, nullable=False, server_default="")
+    # Katha's persona for this parent, "female" or "male", chosen by the
+    # family at setup. With preferred_language it picks the Sarvam model and
+    # voice (media/voices.py) and the gendered forms Katha uses for itself.
+    katha_gender: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="female"
+    )
     onboarding_context: Mapped[str] = mapped_column(Text, nullable=False, default="")
     family_whatsapp_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     scheduled_time: Mapped[time] = mapped_column(Time, nullable=False)

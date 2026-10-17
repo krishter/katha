@@ -53,7 +53,7 @@ def test_output_inside_the_repo_is_refused(tmp_path):
 
 
 async def test_replies_writes_audio_and_a_review_sheet(tmp_path, vendors):
-    await kit.cmd_replies("hi-IN", 3, tmp_path)
+    await kit.cmd_replies("hi-IN", "male", 3, tmp_path)
 
     assert sorted(p.name for p in tmp_path.glob("*.ogg")) == [
         "01.ogg",
@@ -70,12 +70,16 @@ async def test_replies_writes_audio_and_a_review_sheet(tmp_path, vendors):
     ]
     assert dialogue[0].kwargs["cache_system_prefix"]  # the real two-part prompt
     assert {c.kwargs["purpose"] for c in vendors.tts.await_args_list} == {"eval"}
+    # The persona reaches both the voice and the prompt.
+    assert {c.kwargs["gender"] for c in vendors.tts.await_args_list} == {"male"}
+    assert "man's voice" in dialogue[0].kwargs["cache_system_prefix"]
+    assert "aditya_hi_conversational" in sheet
 
 
 async def test_abtest_randomises_pairs_and_writes_a_key_and_blank_scores(
     tmp_path, vendors
 ):
-    await kit.cmd_abtest(["hi-IN", "ta-IN", "en-IN"], 2, tmp_path, seed=7)
+    await kit.cmd_abtest(["hi-IN", "ta-IN", "en-IN"], "female", 2, tmp_path, seed=7)
 
     key = json.loads((tmp_path / "key.json").read_text())
     # Tamil has no v4 Flash voice, so it is skipped rather than compared to itself.
@@ -143,6 +147,28 @@ def test_cli_parses_each_subcommand(tmp_path):
     assert args.langs == "hi-IN,en-IN"
     args = parser.parse_args(["pauses", "--in", str(tmp_path), "--out", str(tmp_path)])
     assert args.source == tmp_path
+    args = parser.parse_args(["voices", "--out", str(tmp_path)])
+    # Assamese and Urdu are left out: Sarvam needs beta access for them.
+    assert "as-IN" not in args.langs and "ur-IN" not in args.langs
+    assert "ml-IN" in args.langs
+
+
+async def test_voices_writes_a_clip_per_language_and_persona(tmp_path, vendors):
+    await kit.cmd_voices(["hi-IN", "ta-IN"], tmp_path)
+
+    assert sorted(p.name for p in tmp_path.glob("*.ogg")) == [
+        "hi-IN-female.ogg",
+        "hi-IN-male.ogg",
+        "ta-IN-female.ogg",
+        "ta-IN-male.ogg",
+    ]
+    sheet = (tmp_path / "voices.md").read_text()
+    assert "aditya_hi_conversational" in sheet and "shubh" in sheet
+    with open(tmp_path / "voices.csv") as f:
+        rows = list(csv.reader(f))
+    assert len(rows) == 5 and rows[1][0] == "hi-IN-female.ogg"
+    genders = [c.kwargs["gender"] for c in vendors.tts.await_args_list]
+    assert genders == ["female", "male", "female", "male"]
 
 
 async def test_a_missing_ffmpeg_stops_before_any_billed_call(tmp_path, vendors):
