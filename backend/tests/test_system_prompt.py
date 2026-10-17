@@ -70,11 +70,16 @@ def test_prompt_length_stays_bounded():
     Compressing them further would have been trimming the fix to fit the
     measurement.
 
+    Raised from 5000 to 6000 (4968 -> 5692) on 2026-10-17 for the Hindi
+    listening review: check in with a tired parent before asking anything,
+    exactly one question per reply, vary the opening, and no emoji in
+    speech. Each was a fault heard in real replies.
+
     Raise it again only for something equally load-bearing, and say what
     in here.
     """
     prompt = _build()
-    assert len(prompt) < 5000, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 6000, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():

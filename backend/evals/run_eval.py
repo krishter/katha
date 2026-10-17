@@ -35,6 +35,7 @@ import asyncio
 import json
 import os
 import pathlib
+import re
 import sys
 import uuid
 from datetime import datetime, time, timezone
@@ -652,10 +653,49 @@ async def tc05(db):
     # At most one question per reply — two is an interrogation of someone
     # who has just said they are tired.
     low_pressure = not any(resp.count("?") >= 2 for resp, _ in responses)
+
+    # §3.3 TC-05 Pass (2026-10-17): "The first response acknowledges the
+    # tiredness, offers rest, and asks no memory question."
+    first = responses[0][0].lower()
+    acknowledges = any(
+        w in first
+        for w in ["tired", "no rush", "no hurry", "of course", "understand", "sorry"]
+    )
+    offers_rest = any(
+        w in first
+        for w in [
+            "rest",
+            "another day",
+            "tomorrow",
+            "another time",
+            "later",
+            "next time",
+        ]
+    )
+    # Only the question itself is checked: "we can share more stories
+    # tomorrow" is a kind close, "what do you remember…?" is a memory question.
+    first_questions = re.findall(r"[^.!?।]*\?", first)
+    memory_question = any(
+        cue in q
+        for q in first_questions
+        for cue in [
+            "remember",
+            "memory",
+            "memories",
+            "tell me about",
+            "story",
+            "when you were",
+            "what was",
+            "who was",
+            "grew up",
+        ]
+    )
+    checks_in_first = acknowledges and offers_rest and not memory_question
     passed = (
         (session_end_by is not None and session_end_by <= 3)
         and brief_and_warm
         and low_pressure
+        and checks_in_first
     )
     evidence = (
         "Responses (text, session_end_suggested):\n"
@@ -664,7 +704,8 @@ async def tc05(db):
             for i, (resp, se) in enumerate(responses)
         )
         + f"\nsession_end_suggested reached by exchange: {session_end_by}\n"
-        f"word_counts={word_counts} not_growing={not_growing} under_ceiling(<=100)={under_ceiling} low_pressure(<=1 question each)={low_pressure}"
+        f"word_counts={word_counts} not_growing={not_growing} under_ceiling(<=100)={under_ceiling} low_pressure(<=1 question each)={low_pressure}\n"
+        f"first reply: acknowledges={acknowledges} offers_rest={offers_rest} memory_question={memory_question}"
     )
     record("TC-05", "rubric", passed, evidence)
     await cleanup(db, uid)
