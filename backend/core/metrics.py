@@ -565,7 +565,12 @@ def _dashboard(world: _World, w: _Windows) -> dict:
 
 def _usage_row(u) -> SimpleNamespace:
     return SimpleNamespace(
-        vendor=u.vendor, operation=u.operation, model=u.model, units=u.units or {}
+        vendor=u.vendor,
+        operation=u.operation,
+        model=u.model,
+        units=u.units or {},
+        # Some prices depend on the day of the call (Gemini TTS).
+        created_at=u.created_at,
     )
 
 

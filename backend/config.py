@@ -14,6 +14,10 @@ class Settings(BaseSettings):
 
     SARVAM_API_KEY: str
     ANTHROPIC_API_KEY: str
+    # Gemini TTS, for the operator listening kit's blind A/B only
+    # (scripts/listening_kit.py abtest --compare sarvam-gemini). Production
+    # never calls Google; empty is the normal state.
+    GEMINI_API_KEY: str = ""
 
     # WhatsApp / Twilio
     WHATSAPP_ADAPTER: str = "twilio"  # "stub" in dev/test

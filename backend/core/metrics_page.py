@@ -254,6 +254,7 @@ def _cost(c: dict) -> str:
         "claude_other": "Claude · other",
         "sarvam_stt": "Sarvam · speech to text",
         "sarvam_tts": "Sarvam · text to speech",
+        "google_tts": "Google · text to speech",
         "twilio": "Twilio",
         "meta": "Meta templates",
     }

@@ -5,8 +5,14 @@ subcommand writes what it promises, outside the repository, billed as eval.
 
 from __future__ import annotations
 
+import array
 import csv
+import io
 import json
+import math
+import shutil
+import subprocess
+import wave
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -26,16 +32,22 @@ def vendors():
         )
 
     chat = AsyncMock(side_effect=_chat)
-    tts = AsyncMock(return_value=b"WAV")
+    tts = AsyncMock(return_value=b"SARVAM-WAV")
+    gemini = AsyncMock(return_value=b"GEMINI-WAV")
+    # abtest writes loudness-matched clips; tag them so a test can tell
+    # which vendor's clip landed on which side.
+    matched = AsyncMock(side_effect=lambda wav: b"OGG:" + wav)
     with (
         patch("scripts.listening_kit.llm.chat", new=chat),
         patch("scripts.listening_kit.sarvam_tts.synthesize", new=tts),
+        patch("scripts.listening_kit.gemini_tts.synthesize", new=gemini),
+        patch("scripts.listening_kit.matched_ogg", new=matched),
         patch(
             "scripts.listening_kit.audio_convert.convert_wav_to_ogg",
             new=AsyncMock(side_effect=lambda wav: b"OGG"),
         ),
     ):
-        yield SimpleNamespace(chat=chat, tts=tts)
+        yield SimpleNamespace(chat=chat, tts=tts, gemini=gemini, matched=matched)
 
 
 def test_every_language_has_ten_samples_with_the_required_mix():
@@ -96,10 +108,19 @@ async def test_abtest_randomises_pairs_and_writes_a_key_and_blank_scores(
     assert texts[0] == texts[1]
     with open(tmp_path / "scores.csv") as f:
         rows = list(csv.reader(f))
-    assert rows[0] == ["pair", "listener", "preferred (A/B/same)", "clarity note"]
+    assert rows[0] == [
+        "pair",
+        "listener",
+        "listener age",
+        "preferred (A/B/same)",
+        "understood every word (y/n)",
+        "clarity note",
+    ]
     assert [r[0] for r in rows[1:]] == list(key) and all(
-        r[1:] == ["", "", ""] for r in rows[1:]
+        r[1:] == [""] * 5 for r in rows[1:]
     )
+    # Every clip written was loudness-matched first.
+    assert vendors.matched.await_count == 2 * len(key)
 
 
 async def test_pauses_reports_counts_and_a_word_diff(tmp_path):
@@ -183,3 +204,262 @@ async def test_a_missing_ffmpeg_stops_before_any_billed_call(tmp_path, vendors):
         )
     vendors.chat.assert_not_awaited()
     vendors.tts.assert_not_awaited()
+
+
+# ── --compare and abscore (docs/proposals/tts-strategy.md §5) ────────────────
+
+
+@pytest.mark.parametrize(
+    "compare,language,gender,expected",
+    [
+        (
+            "sarvam-gemini",
+            "hi-IN",
+            "female",
+            [
+                ("sarvam", "bulbul:v4-flash", "ritu_hi_conversation"),
+                ("google", "gemini-3.8-flash-tts", "Sulafat"),
+            ],
+        ),
+        (
+            "sarvam-gemini",
+            "en-IN",
+            "male",
+            [
+                ("sarvam", "bulbul:v4-flash", "dev_en_conversational"),
+                ("google", "gemini-3.8-flash-tts", "Achird"),
+            ],
+        ),
+        # Tamil, Malayalam and Odia have no v4 voice: production says them on
+        # v3, so that is what Gemini is compared against.
+        (
+            "sarvam-gemini",
+            "ta-IN",
+            "female",
+            [
+                ("sarvam", "bulbul:v3", "ritu"),
+                ("google", "gemini-3.8-flash-tts", "Sulafat"),
+            ],
+        ),
+        (
+            "sarvam-gemini",
+            "or-IN",
+            "male",
+            [
+                ("sarvam", "bulbul:v3", "shubh"),
+                ("google", "gemini-3.8-flash-tts", "Achird"),
+            ],
+        ),
+        (
+            "v3-v4",
+            "hi-IN",
+            "female",
+            [
+                ("sarvam", "bulbul:v3", "ritu"),
+                ("sarvam", "bulbul:v4-flash", "ritu_hi_conversation"),
+            ],
+        ),
+        ("v3-v4", "ta-IN", "female", None),
+    ],
+)
+def test_compare_picks_the_two_sides(monkeypatch, compare, language, gender, expected):
+    monkeypatch.setattr("scripts.listening_kit.settings.TTS_MODEL", "bulbul:v4-flash")
+    sides = kit.sides_for(compare, language, gender)
+    if expected is None:
+        assert sides is None
+    else:
+        assert [(s.vendor, s.model, s.voice) for s in sides] == expected
+
+
+async def test_sarvam_gemini_abtest_records_the_real_sides(
+    tmp_path, vendors, monkeypatch
+):
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "k")
+    monkeypatch.setattr("scripts.listening_kit.settings.TTS_MODEL", "bulbul:v4-flash")
+    await kit.cmd_abtest(
+        ["hi-IN", "ta-IN"], "female", 2, tmp_path, seed=3, compare="sarvam-gemini"
+    )
+
+    key = json.loads((tmp_path / "key.json").read_text())
+    # Tamil is not skipped here: its Sarvam side is v3.
+    assert sorted(key) == ["hi-IN-01", "hi-IN-02", "ta-IN-01", "ta-IN-02"]
+    assert key["ta-IN-01"]["A"]["model"] in {"bulbul:v3", "gemini-3.8-flash-tts"}
+    for pair, sides in key.items():
+        labels = {(s["vendor"], s["model"], s["voice"]) for s in sides.values()}
+        sarvam = (
+            ("sarvam", "bulbul:v4-flash", "ritu_hi_conversation")
+            if pair.startswith("hi")
+            else ("sarvam", "bulbul:v3", "ritu")
+        )
+        assert labels == {sarvam, ("google", "gemini-3.8-flash-tts", "Sulafat")}
+        # The file on each side is that side's vendor's clip.
+        for letter, side in sides.items():
+            clip = (tmp_path / f"{pair}-{letter}.ogg").read_bytes()
+            tag = b"GEMINI" if side["vendor"] == "google" else b"SARVAM"
+            assert clip == b"OGG:" + tag + b"-WAV"
+    # Same text to both vendors, with the persona.
+    sarvam_texts = [c.args[0] for c in vendors.tts.await_args_list]
+    gemini_texts = [c.args[0] for c in vendors.gemini.await_args_list]
+    assert sarvam_texts == gemini_texts
+    assert {c.kwargs["gender"] for c in vendors.gemini.await_args_list} == {"female"}
+    assert {c.kwargs["purpose"] for c in vendors.gemini.await_args_list} == {"eval"}
+
+
+async def test_the_ab_order_is_seeded(tmp_path, vendors, monkeypatch):
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "k")
+    first, second = tmp_path / "1", tmp_path / "2"
+    for out in (first, second):
+        await kit.cmd_abtest(
+            ["en-IN"], "female", 4, out, seed=11, compare="sarvam-gemini"
+        )
+    assert (first / "key.json").read_text() == (second / "key.json").read_text()
+
+
+async def test_sarvam_gemini_without_a_key_stops_before_any_call(
+    tmp_path, vendors, monkeypatch
+):
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "")
+    with pytest.raises(SystemExit, match="GEMINI_API_KEY"):
+        await kit.cmd_abtest(
+            ["hi-IN"], "female", 1, tmp_path, seed=1, compare="sarvam-gemini"
+        )
+    vendors.chat.assert_not_called()
+    vendors.tts.assert_not_called()
+
+
+def test_new_languages_have_samples_flagged_for_a_native_check():
+    for language in ("ml-IN", "or-IN"):
+        assert len(kit.SAMPLES[language]) == 10
+        assert language in kit.NEEDS_NATIVE_CHECK
+    assert [s.domain for s in kit.SAMPLES["ml-IN"]] == [
+        s.domain for s in kit.SAMPLES["ta-IN"]
+    ]
+
+
+async def test_flagged_languages_are_marked_in_the_pair_listing(
+    tmp_path, vendors, monkeypatch
+):
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "k")
+    await kit.cmd_abtest(
+        ["ml-IN"], "female", 1, tmp_path, seed=1, compare="sarvam-gemini"
+    )
+    assert "drafted by Claude" in (tmp_path / "pairs.md").read_text()
+
+
+_KEY = {
+    "hi-IN-01": {
+        "A": {"vendor": "sarvam", "model": "bulbul:v4-flash", "voice": "v4"},
+        "B": {"vendor": "google", "model": "gemini-3.8-flash-tts", "voice": "S"},
+    },
+    "hi-IN-02": {
+        "A": {"vendor": "google", "model": "gemini-3.8-flash-tts", "voice": "S"},
+        "B": {"vendor": "sarvam", "model": "bulbul:v4-flash", "voice": "v4"},
+    },
+    "ta-IN-01": {
+        "A": {"vendor": "sarvam", "model": "bulbul:v3", "voice": "ritu"},
+        "B": {"vendor": "google", "model": "gemini-3.8-flash-tts", "voice": "S"},
+    },
+}
+
+
+def _write_scores(folder, rows):
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "key.json").write_text(json.dumps(_KEY))
+    with open(folder / "scores.csv", "w", newline="") as f:
+        csv.writer(f).writerows(rows)
+
+
+def test_abscore_tallies_wins_same_and_clarity_per_language(tmp_path, capsys):
+    _write_scores(
+        tmp_path,
+        [
+            kit.SCORE_COLUMNS,
+            ["hi-IN-01", "Krish", "45", "B", "y", ""],
+            ["hi-IN-01", "Amma", "72", "a", "n", "A mumbled the name"],
+            ["hi-IN-02", "Krish", "45", "A", "y", ""],
+            ["hi-IN-02", "Amma", "72", "same", "y", ""],
+            ["ta-IN-01", "Paati", "80", "", "", ""],
+        ],
+    )
+    result = kit.cmd_abscore(tmp_path)
+
+    hi = result["hi-IN"]
+    # hi-IN-01 B and hi-IN-02 A are both Gemini; hi-IN-01 "a" is Sarvam.
+    assert hi["wins"] == {"bulbul:v4-flash": 1, "gemini-3.8-flash-tts": 2}
+    assert hi["same"] == 1
+    assert hi["understood"] == {"y": 3, "n": 1}
+    assert hi["notes"] == [
+        {
+            "pair": "hi-IN-01",
+            "listener": "Amma",
+            "preferred": "bulbul:v4-flash",
+            "note": "A mumbled the name",
+        }
+    ]
+    ta = result["ta-IN"]
+    assert ta["wins"] == {"bulbul:v3": 0, "gemini-3.8-flash-tts": 0}
+    assert ta["unscored"] == 1
+
+    printed = capsys.readouterr().out
+    assert "gemini-3.8-flash-tts" in printed and "2 wins" in printed
+    assert "understood every word    y 3 · n 1" in printed
+
+
+def test_abscore_reads_a_sheet_from_before_the_new_columns(tmp_path):
+    _write_scores(
+        tmp_path,
+        [
+            ["pair", "listener", "preferred (A/B/same)", "clarity note"],
+            ["hi-IN-01", "Krish", "A", "clearer"],
+            ["hi-IN-02", "Krish", "B", ""],
+        ],
+    )
+    hi = kit.cmd_abscore(tmp_path)["hi-IN"]
+    assert hi["wins"] == {"bulbul:v4-flash": 2, "gemini-3.8-flash-tts": 0}
+    assert hi["understood"] == {"y": 0, "n": 0}
+
+
+def test_abscore_needs_no_ffmpeg_or_database(tmp_path):
+    _write_scores(tmp_path, [kit.SCORE_COLUMNS, ["hi-IN-01", "K", "", "A", "y", ""]])
+    with (
+        patch("scripts.listening_kit.require_ffmpeg") as ffmpeg,
+        patch("scripts.listening_kit.run") as run,
+    ):
+        assert kit.main(["abscore", "--in", str(tmp_path)]) == 0
+    ffmpeg.assert_not_called()
+    run.assert_not_called()
+
+
+def _tone_wav(amplitude: int, seconds: float = 3.0) -> bytes:
+    rate = 22050
+    samples = array.array(
+        "h",
+        (
+            int(amplitude * math.sin(2 * math.pi * 220 * i / rate))
+            for i in range(int(rate * seconds))
+        ),
+    )
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(samples.tobytes())
+    return buffer.getvalue()
+
+
+def _mean_db(ogg: bytes) -> float:
+    out = subprocess.run(
+        ["ffmpeg", "-i", "pipe:0", "-af", "volumedetect", "-f", "null", "-"],
+        input=ogg,
+        capture_output=True,
+    ).stderr.decode()
+    return float(out.split("mean_volume:")[1].split("dB")[0])
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+async def test_matched_ogg_brings_a_quiet_and_a_loud_clip_to_the_same_level():
+    loud = await kit.matched_ogg(_tone_wav(8000))
+    quiet = await kit.matched_ogg(_tone_wav(800))
+    # 20 dB apart going in; within 1 dB coming out.
+    assert abs(_mean_db(loud) - _mean_db(quiet)) < 1.0
