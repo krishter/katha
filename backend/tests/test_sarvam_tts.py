@@ -142,3 +142,83 @@ def test_every_v4_voice_belongs_to_its_language():
     for language, voice in V4_FLASH_VOICES.items():
         assert language in SUPPORTED_LANGUAGES
         assert f"_{language.split('-')[0]}_" in voice, (language, voice)
+
+
+# ── Speech check and emoji (2026-10-17 listening results) ─────────────────────
+
+from adapters.sarvam_tts import speakable  # noqa: E402
+from tests.test_tts_check import make_wav  # noqa: E402
+
+_GOOD = make_wav(("tone", 6))
+_BROKEN = make_wav(("tone", 0.5), ("silence", 20), ("tone", 3))
+
+
+def _replying(*clips):
+    responses = []
+    for clip in clips:
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"audios": [base64.b64encode(clip).decode()]}
+        responses.append(response)
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    client.post = AsyncMock(side_effect=responses)
+    return client
+
+
+async def _speak(monkeypatch, tts_model, *clips, language="hi-IN"):
+    monkeypatch.setattr("adapters.sarvam_tts.settings.TTS_MODEL", tts_model)
+    client = _replying(*clips)
+    with patch("adapters.sarvam_tts.httpx.AsyncClient", return_value=client):
+        audio = await synthesize("x" * 80, language, purpose="tts_reply")
+    sent = [call.kwargs["json"] for call in client.post.call_args_list]
+    return audio, sent
+
+
+async def test_a_good_clip_is_sent_after_one_call(monkeypatch, usage_rows):
+    audio, sent = await _speak(monkeypatch, "bulbul:v4-flash", _GOOD)
+    assert audio == _GOOD
+    assert len(sent) == 1
+
+
+async def test_a_broken_v4_clip_is_synthesised_again(monkeypatch, usage_rows):
+    audio, sent = await _speak(monkeypatch, "bulbul:v4-flash", _BROKEN, _GOOD)
+    assert audio == _GOOD
+    assert [body["model"] for body in sent] == ["bulbul:v4-flash"] * 2
+    # Both attempts were paid for, so both are on the ledger.
+    assert [row["model"] for row in usage_rows] == ["bulbul:v4-flash"] * 2
+
+
+async def test_v4_failing_twice_falls_back_to_v3(monkeypatch, usage_rows):
+    audio, sent = await _speak(monkeypatch, "bulbul:v4-flash", _BROKEN, _BROKEN, _GOOD)
+    assert audio == _GOOD
+    assert [body["model"] for body in sent] == [
+        "bulbul:v4-flash",
+        "bulbul:v4-flash",
+        "bulbul:v3",
+    ]
+    assert sent[2]["speaker"] == "ritu"
+    assert sent[2]["target_language_code"] == "hi-IN"
+    assert [row["model"] for row in usage_rows][-1] == "bulbul:v3"
+
+
+async def test_a_clip_failing_every_attempt_is_still_returned(monkeypatch, usage_rows):
+    audio, sent = await _speak(monkeypatch, "bulbul:v3", _BROKEN, _BROKEN)
+    assert audio == _BROKEN
+    assert len(sent) == 2
+
+
+async def test_emoji_never_reach_the_speech_engine(monkeypatch, usage_rows):
+    monkeypatch.setattr("adapters.sarvam_tts.settings.TTS_MODEL", "bulbul:v3")
+    client = _replying(_GOOD)
+    with patch("adapters.sarvam_tts.httpx.AsyncClient", return_value=client):
+        await synthesize("दादाजी! 😊 उनका नाम क्या था?", "hi-IN", purpose="tts_reply")
+    assert client.post.call_args.kwargs["json"]["text"] == "दादाजी! उनका नाम क्या था?"
+
+
+def test_speakable_removes_emoji_sequences_and_keeps_indic_joiners():
+    assert speakable("Hi 👍🏽 there 👨‍👩‍👧 ok") == "Hi there ok"
+    assert speakable("so lovely ❤️.") == "so lovely."
+    # ZWJ inside Devanagari shapes the letters and must survive.
+    assert speakable("क्‍या") == "क्‍या"
+    assert speakable("₹180 मिले") == "₹180 मिले"
