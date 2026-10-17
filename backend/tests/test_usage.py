@@ -351,7 +351,7 @@ async def test_tts_records_characters_actually_sent(usage_rows):
         await synthesize("a" * 3000, "hi-IN", purpose="tts_reply")
 
     (row,) = usage_rows
-    assert (row["operation"], row["model"]) == ("tts_reply", "bulbul:v3")
+    assert (row["operation"], row["model"]) == ("tts_reply", "bulbul:v4-flash")
     # Truncated to 2,500 before sending, and billed on what was sent.
     assert row["units"] == {"characters": 2500}
 

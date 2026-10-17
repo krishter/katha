@@ -71,7 +71,7 @@ Decided 2026-10-16:
 | `PROMPT_CACHE_TTL` | `1h` | `5m` or `1h`. Parents take minutes between voice notes. |
 | `LAYER3_FREEZE_PER_SESSION` | `true` | C2 snapshot. `false` rebuilds per turn as today. Rendering caps always apply. |
 | `SCHEDULED_OPENER_ENABLED` | `false` | C5. `true` restores today's daily voice opener and nudge. |
-| `TTS_MODEL` | `bulbul:v3` | Flip to `bulbul:v4-flash` only after the listening test in §10 |
+| `TTS_MODEL` | `bulbul:v4-flash` | Flipped 2026-10-17 after the listening test in §10; `bulbul:v3` rolls back |
 | `STT_TRIM_PAUSES` | `true` | C7 |
 | `STT_MAX_PAUSE_SECONDS` | `0.5` | Every pause longer than this is cut to this length (amended 2026-10-17, see §11) |
 | `USD_INR_RATE` | `95.06` | Used only for reporting |
@@ -224,6 +224,13 @@ Keep the `_send_followups` code and the `followup_sent_at` column. They sit behi
   - Run a blind A/B on 10 replies each in Hindi, Tamil and English.
   - Listeners: Krish plus two pilot parents.
   - Flip only if v4 Flash is at least as good.
+- **Result, 2026-10-17 (flag flipped):**
+  - Blind A/B, Krish listening, 10 pairs each in Hindi and English: v4 Flash preferred in 10 of 10 Hindi pairs and 9 of 10 English.
+  - The one English loss was a broken v4 clip: 60 s long, with 51 s of silence and the reply cut short. A further 150 v4 clips over the same texts had no failures, so about 1 in 170.
+  - Every clip is now checked before it is sent (`media/tts_check.py`). A clip with more than 3 s of silence, or fewer than 5 characters a second, is synthesised again once; if v4 fails twice the reply is said on v3. Both limits sit well clear of normal clips, which pause at most 0.6 s and run 12.5–20.4 characters a second.
+  - Tamil was not tested: its v4 voices are all male, so it stays on v3. The two pilot parents have not listened yet; their verdict can still roll the flag back.
+  - Only Hindi and English get v4 voices. Marathi, Telugu, Kannada, Bengali and Gujarati stay on v3 until someone has heard them.
+  - Listener notes for v4: question intonation sometimes off; one mispronunciation in Hindi; one reply too energetic for a tired parent.
 
 **Cached system speech**
 - Text with no name in it should be synthesised once, not on every use. That covers the fallback clips, `_ALREADY_TALKED_TEXT` and the consent prompts.

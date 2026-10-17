@@ -123,7 +123,11 @@ async def test_v4_flash_uses_the_per_language_voice_and_language_code(
     assert usage_rows[0]["model"] == "bulbul:v4-flash"
 
 
-@pytest.mark.parametrize("language", ["ml-IN", "or-IN", "ta-IN", "pa-IN", "as-IN"])
+@pytest.mark.parametrize(
+    "language",
+    # The first five have v4 candidates nobody has listened to yet.
+    ["mr-IN", "te-IN", "kn-IN", "bn-IN", "gu-IN", "ml-IN", "or-IN", "ta-IN", "pa-IN"],
+)
 async def test_v4_flash_falls_back_to_v3_for_an_unmapped_language(
     monkeypatch, mock_tts_response, usage_rows, language
 ):
@@ -136,10 +140,10 @@ async def test_v4_flash_falls_back_to_v3_for_an_unmapped_language(
 
 
 def test_every_v4_voice_belongs_to_its_language():
-    from media.voices import V4_FLASH_VOICES
+    from media.voices import V4_FLASH_CANDIDATES, V4_FLASH_VOICES
     from prompts.system_prompt import SUPPORTED_LANGUAGES
 
-    for language, voice in V4_FLASH_VOICES.items():
+    for language, voice in {**V4_FLASH_VOICES, **V4_FLASH_CANDIDATES}.items():
         assert language in SUPPORTED_LANGUAGES
         assert f"_{language.split('-')[0]}_" in voice, (language, voice)
 
@@ -222,3 +226,11 @@ def test_speakable_removes_emoji_sequences_and_keeps_indic_joiners():
     # ZWJ inside Devanagari shapes the letters and must survive.
     assert speakable("क्‍या") == "क्‍या"
     assert speakable("₹180 मिले") == "₹180 मिले"
+
+
+def test_v4_flash_is_the_default_and_only_heard_languages_use_it():
+    from config import Settings
+    from media.voices import V4_FLASH_VOICES
+
+    assert Settings.model_fields["TTS_MODEL"].default == "bulbul:v4-flash"
+    assert set(V4_FLASH_VOICES) == {"hi-IN", "en-IN"}

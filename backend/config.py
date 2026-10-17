@@ -151,11 +151,11 @@ class Settings(BaseSettings):
     # 24-hour window — a rollback, not a mode to run in.
     SCHEDULED_OPENER_ENABLED: bool = False
 
-    # C6: the Sarvam TTS model. Flip to bulbul:v4-flash only after the blind
-    # A/B in COST_TO_SERVE.md §10 (Hindi, Tamil, English; Krish and two pilot
-    # parents) finds it at least as good. Voices per language are in
-    # media/voices.py; a language with no v4 voice stays on v3.
-    TTS_MODEL: str = "bulbul:v3"
+    # C6: the Sarvam TTS model. v4 Flash since 2026-10-17: preferred in 19 of
+    # 20 blind pairs (COST_TO_SERVE.md §10). Only languages heard in that test
+    # have a v4 voice in media/voices.py; every other language stays on v3.
+    # bulbul:v3 is the rollback.
+    TTS_MODEL: str = "bulbul:v4-flash"
 
     # C7: shorten long pauses before STT, which bills by the second sent.
     # Every pause longer than STT_MAX_PAUSE_SECONDS is cut to that length

@@ -10,8 +10,13 @@ Chosen from Sarvam's v4 Flash catalog
 checked 2026-10-16): a conversational style, and where the catalog has one,
 the same speaker as v3's "ritu", so the voice a parent knows does not change
 character. The catalog states no gender; the choices follow the speaker
-names and must be confirmed by ear in the blind A/B before TTS_MODEL is
-flipped.
+names and must be confirmed by ear before a language is moved to v4.
+
+Only Hindi and English were heard in the blind A/B of 2026-10-17 (v4 Flash
+preferred in 19 of 20 pairs), so only they are in V4_FLASH_VOICES. The
+other choices wait in V4_FLASH_CANDIDATES, unused, until someone has
+listened to them; until then those languages stay on v3 with TTS_MODEL set
+to v4 Flash.
 
 Deliberately unmapped, so they stay on v3 and its "ritu":
 - ta-IN and pa-IN: every v4 Flash voice for them carries a male speaker
@@ -29,6 +34,11 @@ V3_VOICE = "ritu"
 V4_FLASH_VOICES: dict[str, str] = {
     "hi-IN": "ritu_hi_conversation",
     "en-IN": "simran_en_conversation",
+}
+
+# Chosen but not yet heard. Move a language up into V4_FLASH_VOICES once
+# it has been through the listening kit's abtest.
+V4_FLASH_CANDIDATES: dict[str, str] = {
     "mr-IN": "ritu_mr_narration",
     "te-IN": "kavitha_te_conversation",
     "kn-IN": "chaitra_kn_conversation",
