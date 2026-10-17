@@ -36,6 +36,7 @@ import difflib
 import json
 import pathlib
 import random
+import shutil
 import sys
 from dataclasses import dataclass
 
@@ -290,6 +291,20 @@ def ensure_outside_repo(path: pathlib.Path) -> pathlib.Path:
     return resolved
 
 
+def require_ffmpeg() -> None:
+    """
+    Every subcommand needs ffmpeg: replies are converted to the OGG/Opus
+    parents actually receive, and pauses runs compress_pauses. Checked
+    before the first billed call, not discovered after it.
+    """
+    missing = [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
+    if missing:
+        raise SystemExit(
+            f"{' and '.join(missing)} not found. Install it first "
+            "(macOS: brew install ffmpeg); nothing has been called or billed."
+        )
+
+
 def _samples(language: str, n: int) -> list[Sample]:
     if language not in SAMPLES:
         raise SystemExit(f"No samples for {language}; have {', '.join(SAMPLES)}")
@@ -524,6 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
 async def run(args: argparse.Namespace) -> None:
     from models.db import engine
 
+    require_ffmpeg()
     try:
         with usage.usage_scope(user_id=LEDGER_USER):
             if args.command == "replies":

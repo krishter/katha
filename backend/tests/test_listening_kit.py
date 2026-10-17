@@ -143,3 +143,17 @@ def test_cli_parses_each_subcommand(tmp_path):
     assert args.langs == "hi-IN,en-IN"
     args = parser.parse_args(["pauses", "--in", str(tmp_path), "--out", str(tmp_path)])
     assert args.source == tmp_path
+
+
+async def test_a_missing_ffmpeg_stops_before_any_billed_call(tmp_path, vendors):
+    with (
+        patch("scripts.listening_kit.shutil.which", return_value=None),
+        pytest.raises(SystemExit, match="nothing has been called or billed"),
+    ):
+        await kit.run(
+            kit.build_parser().parse_args(
+                ["replies", "--lang", "hi-IN", "--out", str(tmp_path)]
+            )
+        )
+    vendors.chat.assert_not_awaited()
+    vendors.tts.assert_not_awaited()
