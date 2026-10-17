@@ -20,9 +20,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "user_profiles",
-        sa.Column(
-            "katha_gender", sa.String(), nullable=False, server_default="female"
-        ),
+        sa.Column("katha_gender", sa.String(), nullable=False, server_default="female"),
     )
     op.create_check_constraint(
         "ck_user_profiles_katha_gender",
@@ -32,7 +30,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_user_profiles_katha_gender", "user_profiles", type_="check"
-    )
+    op.drop_constraint("ck_user_profiles_katha_gender", "user_profiles", type_="check")
     op.drop_column("user_profiles", "katha_gender")
