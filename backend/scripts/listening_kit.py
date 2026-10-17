@@ -2,13 +2,19 @@
 """
 Operator listening kit for the human checks in docs/specs/COST_TO_SERVE.md.
 
-Four subcommands, one per check the eval harness cannot do:
+Five subcommands, one per check the eval harness cannot do:
 
     # §8: hear how the dialogue model sounds in a parent's language
     python scripts/listening_kit.py replies --lang hi-IN --n 10 --out ~/kit/hi
 
     # §10: blind A/B of Bulbul v3 against v4 Flash on identical text
     python scripts/listening_kit.py abtest --langs hi-IN,en-IN --out ~/kit/ab
+
+    # docs/proposals/tts-strategy.md §5: production Sarvam voice against
+    # Gemini 3.8 Flash TTS (needs GEMINI_API_KEY), then tally the scores
+    python scripts/listening_kit.py abtest --compare sarvam-gemini \\
+        --langs ta-IN,ml-IN,or-IN --out ~/kit/ab-gemini
+    python scripts/listening_kit.py abscore --in ~/kit/ab-gemini
 
     # §10: one clip per language and persona, to confirm each mapped voice
     # sounds like the persona it was chosen for
@@ -46,7 +52,7 @@ from dataclasses import dataclass
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from adapters import llm, sarvam_stt, sarvam_tts  # noqa: E402
+from adapters import gemini_tts, llm, sarvam_stt, sarvam_tts  # noqa: E402
 from adapters.llm import Message  # noqa: E402
 from config import settings  # noqa: E402
 from core import conversation_policy, orchestrator, usage  # noqa: E402
@@ -184,6 +190,107 @@ SAMPLES: dict[str, list[Sample]] = {
         Sample("wisdom", "இன்னைக்கு கொஞ்சம் சோர்வா இருக்கு.", "short, tired"),
         Sample("wisdom", "சரி... அவ்வளவுதான்.", "short, low energy"),
     ],
+    # ml-IN and or-IN: drafted by Claude on 2026-10-17, not yet checked by a
+    # native speaker (see NEEDS_NATIVE_CHECK). Synthetic, like every sample
+    # here: no real parent's words, so they are safe to send to any vendor.
+    "ml-IN": [
+        Sample(
+            "childhood",
+            "ഞങ്ങളുടെ വീട് പുഴയുടെ അടുത്തായിരുന്നു. രാവിലെ അമ്മ മുറ്റം "
+            "അടിച്ചുവാരും, ഞങ്ങൾ കുട്ടികൾ പുഴയിൽ കുളിക്കാൻ ഓടും.",
+            "childhood home",
+        ),
+        Sample(
+            "family_ancestors",
+            "എന്റെ അപ്പൂപ്പൻ ഒരു കർഷകനായിരുന്നു. വൈകുന്നേരം ഉമ്മറത്തിരുന്ന് "
+            "ഞങ്ങൾക്ക് രാമായണം വായിച്ചു തരുമായിരുന്നു.",
+            "grandparent",
+        ),
+        Sample(
+            "education",
+            "ഞാൻ പഠിച്ച സ്കൂൾ മൂന്നു കിലോമീറ്റർ ദൂരെയായിരുന്നു. മഴക്കാലത്ത് "
+            "വഴി മുഴുവൻ വെള്ളമായിരിക്കും, എന്നാലും ഞങ്ങൾ നടന്നുതന്നെ പോകും.",
+            "school",
+        ),
+        Sample(
+            "career",
+            "എന്റെ ആദ്യത്തെ ജോലി ഒരു സ്കൂളിൽ ടീച്ചറായിട്ടായിരുന്നു, ആയിരത്തി "
+            "തൊള്ളായിരത്തി എഴുപത്തിരണ്ടിൽ. ആദ്യത്തെ ശമ്പളം മുഴുവൻ അമ്മയുടെ "
+            "കയ്യിൽ കൊടുത്തു.",
+            "first job",
+        ),
+        Sample(
+            "love_marriage",
+            "ഞങ്ങളുടെ കല്യാണം വീട്ടുകാർ ഉറപ്പിച്ചതായിരുന്നു. പെണ്ണുകാണലിന് "
+            "വന്നപ്പോഴാണ് അദ്ദേഹത്തെ ആദ്യമായി കണ്ടത്.",
+            "marriage",
+        ),
+        Sample(
+            "historical_events",
+            "രണ്ടായിരത്തി പതിനെട്ടിലെ വെള്ളപ്പൊക്കത്തിൽ ഞങ്ങൾ ഒരാഴ്ച "
+            "ക്യാമ്പിലായിരുന്നു. അയൽക്കാരെല്ലാം ഒരുമിച്ചാണ് കഴിഞ്ഞത്.",
+            "historical event",
+        ),
+        Sample(
+            "hobbies",
+            "എനിക്ക് പാട്ട് വലിയ ഇഷ്ടമായിരുന്നു. ചെറുപ്പത്തിൽ അമ്പലത്തിൽ ഭജനയ്ക്ക് ഞാനായിരുന്നു പാടിയിരുന്നത്.",
+            "hobby",
+        ),
+        Sample(
+            "childhood",
+            "കമലേച്ചി ഇന്നലെ വിളിച്ചിരുന്നു. ചെറുപ്പത്തിൽ മാങ്ങ പറിക്കാൻ ഞങ്ങൾ "
+            "മരത്തിൽ കയറിയതൊക്കെ ഓർത്ത് ഞങ്ങൾ ചിരിച്ചു.",
+            "mentions a known person (Kamala, sister)",
+        ),
+        Sample("wisdom", "ഇന്ന് കുറച്ച് ക്ഷീണമുണ്ട്.", "short, tired"),
+        Sample("wisdom", "ഉം... ശരി, അത്രയൊക്കെയേ ഉള്ളൂ.", "short, low energy"),
+    ],
+    "or-IN": [
+        Sample(
+            "childhood",
+            "ଆମ ଘର ନଦୀ କୂଳରେ ଥିଲା। ସକାଳୁ ମା' ଅଗଣାରେ ଝୋଟି ପକାଉଥିଲେ, ଆମେ ପିଲାମାନେ ପାଖରେ ବସି ଦେଖୁଥିଲୁ।",
+            "childhood home",
+        ),
+        Sample(
+            "family_ancestors",
+            "ମୋ ଜେଜେବାପା ଜଣେ ଚାଷୀ ଥିଲେ। ସଞ୍ଜବେଳେ ସେ ଆମକୁ ଭାଗବତ ପଢ଼ି ଶୁଣାଉଥିଲେ।",
+            "grandparent",
+        ),
+        Sample(
+            "education",
+            "ମୁଁ ଯେଉଁ ସ୍କୁଲରେ ପଢ଼ୁଥିଲି ତାହା ଗାଁ ବାହାରେ ଥିଲା। ବର୍ଷାଦିନେ ନାଳ ପାର ହୋଇ ଯିବାକୁ ପଡୁଥିଲା।",
+            "school",
+        ),
+        Sample(
+            "career",
+            "ମୋର ପ୍ରଥମ ଚାକିରି ଉଣେଇଶି ଶହ ବାସ୍ତରୀରେ, ଗୋଟିଏ ସ୍କୁଲରେ ଶିକ୍ଷୟିତ୍ରୀ "
+            "ଭାବେ। ପ୍ରଥମ ଦରମା ସବୁ ମା'ଙ୍କ ହାତରେ ଦେଇଥିଲି।",
+            "first job",
+        ),
+        Sample(
+            "love_marriage",
+            "ଆମ ବାହାଘର ଘର ଲୋକେ ଠିକ୍ କରିଥିଲେ। ତାଙ୍କୁ ପ୍ରଥମ ଥର ବାହାଘର ଦିନ ହିଁ ଭଲ ଭାବେ ଦେଖିଥିଲି।",
+            "marriage",
+        ),
+        Sample(
+            "historical_events",
+            "ଉଣେଇଶି ଶହ ଅନେଶତ ମହାବାତ୍ୟା ବେଳେ ଆମେ କଟକରେ ଥିଲୁ। ଅନେକ ଦିନ ଯାଏଁ "
+            "ବିଜୁଳି ନ ଥିଲା, ପଡ଼ିଶାମାନେ ସମସ୍ତେ ଗୋଟିଏ ଘରେ ରହିଥିଲୁ।",
+            "historical event",
+        ),
+        Sample(
+            "hobbies",
+            "ମୋତେ ଭଜନ ଗାଇବାକୁ ବହୁତ ଭଲ ଲାଗୁଥିଲା। ଛୋଟବେଳେ ମନ୍ଦିରରେ ମୁଁ ହିଁ ଗାଉଥିଲି।",
+            "hobby",
+        ),
+        Sample(
+            "childhood",
+            "କମଳା ଅପା କାଲି ଫୋନ୍ କରିଥିଲେ। ଛୋଟବେଳେ ଆମ୍ବ ତୋଳିବାକୁ ଗଛରେ ଚଢ଼ିଥିବା କଥା ମନେ ପକାଇ ଆମେ ଦୁହେଁ ହସିଲୁ।",
+            "mentions a known person (Kamala, sister)",
+        ),
+        Sample("wisdom", "ଆଜି ଟିକିଏ କ୍ଲାନ୍ତ ଲାଗୁଛି।", "short, tired"),
+        Sample("wisdom", "ହଁ... ଠିକ୍ ଅଛି, ଏତିକି।", "short, low energy"),
+    ],
     "en-IN": [
         Sample(
             "childhood",
@@ -242,7 +349,13 @@ _PROFILES = {
     "hi-IN": "Savitri",
     "ta-IN": "Lakshmi",
     "en-IN": "Lakshmi",
+    "ml-IN": "Saraswathy",
+    "or-IN": "Sabitri",
 }
+
+# Sample sets drafted by Claude and not yet read by a native speaker. Every
+# sheet the kit writes for these languages says so at the top.
+NEEDS_NATIVE_CHECK = {"ml-IN", "or-IN"}
 
 
 def _profile(language: str, gender: str = voices.DEFAULT_GENDER) -> UserProfile:
@@ -414,51 +527,281 @@ async def cmd_replies(language: str, gender: str, n: int, out: pathlib.Path) -> 
 # ── abtest ───────────────────────────────────────────────────────────────────
 
 
+COMPARISONS = ("v3-v4", "sarvam-gemini")
+
+SCORE_COLUMNS = [
+    "pair",
+    "listener",
+    "listener age",
+    "preferred (A/B/same)",
+    "understood every word (y/n)",
+    "clarity note",
+]
+
+# Both clips of a pair are brought to the same integrated loudness, so the
+# louder one cannot win by being louder. -18 LUFS is a common target for
+# speech heard on a phone speaker.
+LOUDNESS_LUFS = -18
+
+
+@dataclass(frozen=True)
+class Side:
+    """One contender in a pair: what it is, and how it makes a WAV."""
+
+    vendor: str
+    model: str
+    voice: str
+
+    def label(self) -> dict:
+        return {"vendor": self.vendor, "model": self.model, "voice": self.voice}
+
+
+async def side_wav(side: Side, text: str, language: str, gender: str) -> bytes:
+    if side.vendor == "google":
+        return await gemini_tts.synthesize(
+            text, language, gender=gender, purpose=PURPOSE
+        )
+    return await sarvam_tts.synthesize(
+        text, language, gender=gender, purpose=PURPOSE, model=side.model
+    )
+
+
+def sides_for(compare: str, language: str, gender: str) -> list[Side] | None:
+    """
+    The two contenders for a language and persona, or None to skip it.
+
+    v3-v4: Sarvam's v3 voice against its v4 Flash voice; skipped where the
+    persona has no v4 voice, since both sides would be v3.
+    sarvam-gemini: whatever production would say this with
+    (voices.voice_for under TTS_MODEL: v4 Flash for Hindi and English, v3 for
+    Tamil, Malayalam and Odia) against Gemini's voice for the persona.
+    """
+    if compare == "v3-v4":
+        v4 = voices.voice_for(language, gender, voices.V4_FLASH_MODEL)
+        if v4.model != voices.V4_FLASH_MODEL:
+            return None
+        v3 = voices.v3_voice(language, gender)
+        return [
+            Side("sarvam", v3.model, v3.speaker),
+            Side("sarvam", v4.model, v4.speaker),
+        ]
+    sarvam = voices.voice_for(language, gender, settings.TTS_MODEL)
+    gemini = gemini_tts.VOICES[voices.normalise_gender(gender)]
+    return [
+        Side("sarvam", sarvam.model, sarvam.speaker),
+        Side("google", gemini_tts.MODEL, gemini),
+    ]
+
+
+async def matched_ogg(wav: bytes) -> bytes:
+    """WAV to OGG/Opus at LOUDNESS_LUFS, in one ffmpeg pass."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-f",
+        "wav",
+        "-i",
+        "pipe:0",
+        "-af",
+        f"loudnorm=I={LOUDNESS_LUFS}:TP=-2:LRA=11",
+        "-ar",
+        "48000",
+        "-c:a",
+        "libopus",
+        "-f",
+        "ogg",
+        "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(input=wav), timeout=30)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg loudness match failed: {stderr.decode()[:200]}")
+    return stdout
+
+
 async def cmd_abtest(
-    languages: list[str], gender: str, n: int, out: pathlib.Path, seed: int | None
+    languages: list[str],
+    gender: str,
+    n: int,
+    out: pathlib.Path,
+    seed: int | None,
+    compare: str = "v3-v4",
 ) -> None:
+    if compare == "sarvam-gemini" and not settings.GEMINI_API_KEY:
+        raise SystemExit(
+            "GEMINI_API_KEY is not set in backend/.env; nothing has been called "
+            "or billed."
+        )
     out = ensure_outside_repo(out)
     rng = random.Random(seed)
     key: dict[str, dict] = {}
+    title = (
+        "Bulbul v3 against v4 Flash"
+        if compare == "v3-v4"
+        else "Sarvam (production voice) against Gemini 3.8 Flash TTS"
+    )
     listing = [
-        "# Blind A/B: Bulbul v3 against v4 Flash",
+        f"# Blind A/B: {title}, {gender} persona",
         "",
-        "Each pair is the same text in two voices. Score each pair in scores.csv "
-        "without opening key.json.",
+        "Each pair is the same text in two voices, matched for loudness. Score "
+        "each pair in scores.csv without opening key.json.",
         "",
     ]
+
+    def save() -> None:
+        """Write the key, a blank score sheet and the listing for every pair
+        made so far. Called after each pair, so a run that stops partway
+        (a vendor's daily quota, a network error) leaves a usable folder."""
+        (out / "key.json").write_text(json.dumps(key, indent=2), encoding="utf-8")
+        with open(out / "scores.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(SCORE_COLUMNS)
+            for pair in key:
+                writer.writerow([pair] + [""] * (len(SCORE_COLUMNS) - 1))
+        (out / "pairs.md").write_text("\n".join(listing), encoding="utf-8")
+
     for language in languages:
-        if voices.voice_for(language, gender).model != voices.V4_FLASH_MODEL:
+        sides = sides_for(compare, language, gender)
+        if sides is None:
             print(f"{language}: no v4 Flash voice, both sides would be v3 — skipped")
             continue
+        print(
+            f"{language}: "
+            + " vs ".join(f"{side.model} {side.voice}" for side in sides)
+        )
+        if language in NEEDS_NATIVE_CHECK:
+            listing += [
+                f"> **{language}:** the parent lines behind these replies were "
+                "drafted by Claude and have not been checked by a native speaker.",
+                "",
+            ]
         for i, sample in enumerate(_samples(language, n), start=1):
             pair = f"{language}-{i:02d}"
             text = await dialogue_reply(language, sample, i, gender)
-            clips = {
-                model: await speak(text, language, gender, model)
-                for model in (voices.V3_MODEL, voices.V4_FLASH_MODEL)
-            }
-            order = [voices.V3_MODEL, voices.V4_FLASH_MODEL]
+            try:
+                clips = [
+                    await matched_ogg(await side_wav(side, text, language, gender))
+                    for side in sides
+                ]
+            except Exception as exc:
+                print(f"{pair} FAILED: {exc}")
+                print(
+                    f"Stopped after {len(key)} pairs. They are saved with their "
+                    f"key in {out}; rerun the rest with a new --out."
+                )
+                raise SystemExit(1) from exc
+            order = [0, 1]
             rng.shuffle(order)
-            for side, model in zip("AB", order):
-                (out / f"{pair}-{side}.ogg").write_bytes(clips[model])
+            for letter, index in zip("AB", order):
+                (out / f"{pair}-{letter}.ogg").write_bytes(clips[index])
             key[pair] = {
-                side: {
-                    "model": model,
-                    "voice": voices.voice_for(language, gender, model).speaker,
-                }
-                for side, model in zip("AB", order)
+                letter: sides[index].label() for letter, index in zip("AB", order)
             }
             listing += [f"## {pair}", "", text, ""]
+            save()
             print(f"{pair} done")
-    (out / "key.json").write_text(json.dumps(key, indent=2), encoding="utf-8")
-    with open(out / "scores.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["pair", "listener", "preferred (A/B/same)", "clarity note"])
-        for pair in key:
-            writer.writerow([pair, "", "", ""])
-    (out / "pairs.md").write_text("\n".join(listing), encoding="utf-8")
+    save()
     print(f"Wrote {len(key)} pairs to {out}")
+
+
+# ── abscore ──────────────────────────────────────────────────────────────────
+
+
+def _column(header: list[str], prefix: str) -> int | None:
+    """Index of the column whose name starts with `prefix`, if there is one.
+    Older score sheets lack the age and understood columns."""
+    for index, name in enumerate(header):
+        if name.strip().lower().startswith(prefix):
+            return index
+    return None
+
+
+def tally(rows: list[list[str]], key: dict) -> dict[str, dict]:
+    """
+    Per language: wins by model, "same", unscored rows, the understood-every-
+    word answers, and the clarity notes. Each row is one listener's verdict
+    on one pair, so a pair scored by three listeners counts three times.
+    """
+    header, body = rows[0], rows[1:]
+    col_pref = _column(header, "preferred")
+    col_understood = _column(header, "understood")
+    col_note = _column(header, "clarity")
+    col_listener = _column(header, "listener")
+    result: dict[str, dict] = {}
+    for row in body:
+        if not row or not row[0].strip():
+            continue
+        pair = row[0].strip()
+        sides = key.get(pair)
+        if sides is None:
+            continue
+        language = pair.rsplit("-", 1)[0]
+        lang = result.setdefault(
+            language,
+            {
+                "wins": {side["model"]: 0 for side in sides.values()},
+                "same": 0,
+                "unscored": 0,
+                "understood": {"y": 0, "n": 0},
+                "notes": [],
+            },
+        )
+        for side in sides.values():
+            lang["wins"].setdefault(side["model"], 0)
+
+        def cell(index):
+            return row[index].strip() if index is not None and index < len(row) else ""
+
+        choice = cell(col_pref).upper()
+        if choice in ("A", "B"):
+            winner = sides[choice]["model"]
+            lang["wins"][winner] += 1
+        elif choice in ("SAME", "S", "="):
+            winner = "same"
+            lang["same"] += 1
+        else:
+            winner = None
+            lang["unscored"] += 1
+        understood = cell(col_understood).lower()[:1]
+        if understood in ("y", "n"):
+            lang["understood"][understood] += 1
+        note = cell(col_note)
+        if note:
+            lang["notes"].append(
+                {
+                    "pair": pair,
+                    "listener": cell(col_listener),
+                    "preferred": winner,
+                    "note": note,
+                }
+            )
+    return result
+
+
+def cmd_abscore(source: pathlib.Path) -> dict[str, dict]:
+    folder = source.expanduser().resolve()
+    key = json.loads((folder / "key.json").read_text(encoding="utf-8"))
+    with open(folder / "scores.csv", newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    result = tally(rows, key)
+    for language, lang in result.items():
+        print(f"\n{language}")
+        for model, wins in sorted(lang["wins"].items(), key=lambda kv: -kv[1]):
+            print(f"  {model:<24} {wins} wins")
+        print(f"  {'same':<24} {lang['same']}")
+        if lang["unscored"]:
+            print(f"  {'not scored':<24} {lang['unscored']}")
+        understood = lang["understood"]
+        print(f"  understood every word    y {understood['y']} · n {understood['n']}")
+        print(f"  clarity notes            {len(lang['notes'])}")
+        for note in lang["notes"]:
+            who = f" ({note['listener']})" if note["listener"] else ""
+            print(
+                f"    {note['pair']}{who}, preferred {note['preferred'] or '—'}: "
+                f"{note['note']}"
+            )
+    return result
 
 
 # ── voices ───────────────────────────────────────────────────────────────────
@@ -640,6 +983,16 @@ def build_parser() -> argparse.ArgumentParser:
     abtest.add_argument("--n", type=int, default=10)
     abtest.add_argument("--out", type=pathlib.Path, required=True)
     abtest.add_argument("--seed", type=int, default=None, help="fix the A/B order")
+    abtest.add_argument(
+        "--compare",
+        choices=COMPARISONS,
+        default="v3-v4",
+        help="v3-v4: Bulbul v3 vs v4 Flash; sarvam-gemini: production Sarvam "
+        "voice vs Gemini 3.8 Flash TTS",
+    )
+
+    abscore = sub.add_parser("abscore", help="tally a scored abtest folder")
+    abscore.add_argument("--in", dest="source", type=pathlib.Path, required=True)
 
     voices_cmd = sub.add_parser("voices", help="every language and persona (§10)")
     voices_cmd.add_argument(
@@ -666,7 +1019,9 @@ async def run(args: argparse.Namespace) -> None:
                 await cmd_replies(args.lang, args.gender, args.n, args.out)
             elif args.command == "abtest":
                 languages = [lang.strip() for lang in args.langs.split(",") if lang]
-                await cmd_abtest(languages, args.gender, args.n, args.out, args.seed)
+                await cmd_abtest(
+                    languages, args.gender, args.n, args.out, args.seed, args.compare
+                )
             elif args.command == "voices":
                 languages = [lang.strip() for lang in args.langs.split(",") if lang]
                 await cmd_voices(languages, args.out)
@@ -677,7 +1032,12 @@ async def run(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    asyncio.run(run(build_parser().parse_args(argv)))
+    args = build_parser().parse_args(argv)
+    if args.command == "abscore":
+        # Reads two local files: no ffmpeg, no database, nothing billed.
+        cmd_abscore(args.source)
+        return 0
+    asyncio.run(run(args))
     return 0
 
 

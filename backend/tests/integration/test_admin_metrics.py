@@ -662,6 +662,8 @@ async def test_cost(world):
         "claude_other": 0.0,
         "sarvam_stt": 4.90,
         "sarvam_tts": 4.50,
+        # Operator-kit Gemini calls only; none in this fixture.
+        "google_tts": 0.0,
         "twilio": 1.43,
         "meta": 0.12,
     }
