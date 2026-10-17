@@ -174,3 +174,17 @@ def test_is_priced():
 
 def test_prices_are_dated():
     assert pricing.PRICES_AS_OF == "2026-10-16"
+
+
+def test_eval_sarvam_rows_are_priced_by_their_units():
+    """The listening kit records Sarvam calls as eval; they must not read
+    as unpriced."""
+    tts = _row("sarvam", "eval", {"characters": 1000}, "bulbul:v4-flash")
+    stt = _row(
+        "sarvam",
+        "eval",
+        {"seconds_received": 3600, "seconds_billed": 3600},
+        "saaras:v3",
+    )
+    assert pricing.cost_breakdown(tts) == {"sarvam_tts": Decimal("2")}
+    assert pricing.cost_breakdown(stt) == {"sarvam_stt": Decimal("29.40")}

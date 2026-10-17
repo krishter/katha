@@ -177,6 +177,10 @@ def cost_breakdown(row: Any) -> dict[str, Decimal] | None:
         return {_CLAUDE_COMPONENT.get(operation, "claude_other"): usd * fx}
 
     if vendor == "sarvam":
+        # Operator tools record Sarvam calls as "eval"; whether one was speech
+        # to text or text to speech is then read from its units.
+        if operation == "eval":
+            operation = "stt" if "seconds_received" in units else "tts_eval"
         if operation == "stt":
             per_hour = _SARVAM_STT_INR_PER_HOUR.get(model or "")
             # What Sarvam bills is what was sent. Before pause compression

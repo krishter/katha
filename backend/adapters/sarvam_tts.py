@@ -34,6 +34,7 @@ async def synthesize(
     speaker: str | None = None,
     *,
     purpose: str,
+    model: str | None = None,
 ) -> bytes:
     """
     Convert text to speech with Sarvam Bulbul. Returns raw WAV bytes.
@@ -45,8 +46,12 @@ async def synthesize(
 
     `purpose` — tts_reply, tts_opener, tts_system or tts_fallback — becomes
     the operation on the call's api_usage row.
+
+    `model` overrides TTS_MODEL for this call only. Production never passes
+    it; the operator listening kit does, to synthesise the same text on v3
+    and v4 Flash for a blind comparison.
     """
-    model, voice = voices.voice_for(settings.TTS_MODEL, language_code)
+    model, voice = voices.voice_for(model or settings.TTS_MODEL, language_code)
     if speaker is not None:
         voice = speaker
     if len(text) > _MAX_TEXT_CHARS:
