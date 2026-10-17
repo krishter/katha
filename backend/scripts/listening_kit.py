@@ -648,6 +648,19 @@ async def cmd_abtest(
         "each pair in scores.csv without opening key.json.",
         "",
     ]
+
+    def save() -> None:
+        """Write the key, a blank score sheet and the listing for every pair
+        made so far. Called after each pair, so a run that stops partway
+        (a vendor's daily quota, a network error) leaves a usable folder."""
+        (out / "key.json").write_text(json.dumps(key, indent=2), encoding="utf-8")
+        with open(out / "scores.csv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(SCORE_COLUMNS)
+            for pair in key:
+                writer.writerow([pair] + [""] * (len(SCORE_COLUMNS) - 1))
+        (out / "pairs.md").write_text("\n".join(listing), encoding="utf-8")
+
     for language in languages:
         sides = sides_for(compare, language, gender)
         if sides is None:
@@ -666,10 +679,18 @@ async def cmd_abtest(
         for i, sample in enumerate(_samples(language, n), start=1):
             pair = f"{language}-{i:02d}"
             text = await dialogue_reply(language, sample, i, gender)
-            clips = [
-                await matched_ogg(await side_wav(side, text, language, gender))
-                for side in sides
-            ]
+            try:
+                clips = [
+                    await matched_ogg(await side_wav(side, text, language, gender))
+                    for side in sides
+                ]
+            except Exception as exc:
+                print(f"{pair} FAILED: {exc}")
+                print(
+                    f"Stopped after {len(key)} pairs. They are saved with their "
+                    f"key in {out}; rerun the rest with a new --out."
+                )
+                raise SystemExit(1) from exc
             order = [0, 1]
             rng.shuffle(order)
             for letter, index in zip("AB", order):
@@ -678,14 +699,9 @@ async def cmd_abtest(
                 letter: sides[index].label() for letter, index in zip("AB", order)
             }
             listing += [f"## {pair}", "", text, ""]
+            save()
             print(f"{pair} done")
-    (out / "key.json").write_text(json.dumps(key, indent=2), encoding="utf-8")
-    with open(out / "scores.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(SCORE_COLUMNS)
-        for pair in key:
-            writer.writerow([pair] + [""] * (len(SCORE_COLUMNS) - 1))
-    (out / "pairs.md").write_text("\n".join(listing), encoding="utf-8")
+    save()
     print(f"Wrote {len(key)} pairs to {out}")
 
 

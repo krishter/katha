@@ -463,3 +463,25 @@ async def test_matched_ogg_brings_a_quiet_and_a_loud_clip_to_the_same_level():
     quiet = await kit.matched_ogg(_tone_wav(800))
     # 20 dB apart going in; within 1 dB coming out.
     assert abs(_mean_db(loud) - _mean_db(quiet)) < 1.0
+
+
+async def test_a_run_stopped_by_a_vendor_keeps_the_pairs_it_made(
+    tmp_path, vendors, monkeypatch
+):
+    # Gemini's free tier allows 10 requests a day; the 429 arrives mid-run.
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "k")
+    vendors.gemini.side_effect = [
+        b"GEMINI-WAV",
+        RuntimeError("Gemini TTS error 429: rate limit"),
+    ]
+    with pytest.raises(SystemExit):
+        await kit.cmd_abtest(
+            ["hi-IN"], "female", 3, tmp_path, seed=17, compare="sarvam-gemini"
+        )
+
+    key = json.loads((tmp_path / "key.json").read_text())
+    assert list(key) == ["hi-IN-01"]
+    with open(tmp_path / "scores.csv") as f:
+        assert [r[0] for r in list(csv.reader(f))[1:]] == ["hi-IN-01"]
+    assert "## hi-IN-01" in (tmp_path / "pairs.md").read_text()
+    assert not (tmp_path / "hi-IN-02-A.ogg").exists()
