@@ -70,11 +70,16 @@ def test_prompt_length_stays_bounded():
     Compressing them further would have been trimming the fix to fit the
     measurement.
 
+    Raised from 5000 to 6000 (4968 -> 5692) on 2026-10-17 for the Hindi
+    listening review: check in with a tired parent before asking anything,
+    exactly one question per reply, vary the opening, and no emoji in
+    speech. Each was a fault heard in real replies.
+
     Raise it again only for something equally load-bearing, and say what
     in here.
     """
     prompt = _build()
-    assert len(prompt) < 5000, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 6000, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():
@@ -684,3 +689,164 @@ def test_no_family_block_when_nothing_was_provided():
         _profile("she/her", context=""), _pronoun_state(5, 2), _LATER_CONTEXT
     )
     assert "family told us" not in prompt
+
+
+# ── C2: compact, capped facts (docs/specs/COST_TO_SERVE.md §7) ────────────────
+
+
+def _session_100_prior() -> PriorContext:
+    """A synthetic fact store after a hundred sessions."""
+    return PriorContext(
+        facts={
+            "people": [
+                {"name": f"Person{i:02d}", "relationship": f"relation{i:02d}"}
+                for i in range(70)
+            ],
+            "places": [f"Place{i:02d}" for i in range(50)],
+            "dates": [f"19{i:02d}" for i in range(50)],
+            "institutions": [f"Institution{i:02d}" for i in range(20)],
+        },
+        open_threads=[f"an open thread about subject number {i}" for i in range(40)],
+        significant_people=[
+            {
+                "name": f"Significant{i}",
+                "relationship": "teacher",
+                "why_significant": "spoke of him with unusual warmth",
+                "first_seen_session": 3,
+            }
+            for i in range(6)
+        ],
+    )
+
+
+def test_facts_render_as_compact_lines_not_python_reprs():
+    from prompts.system_prompt import render_facts
+
+    lines = render_facts(
+        {
+            "people": [
+                {"name": "Kamala", "relationship": "sister"},
+                {"name": "Mr. Iyer", "relationship": "teacher"},
+            ],
+            "places": ["Madurai"],
+            "birth_year": "1948",
+        }
+    )
+    assert lines == [
+        "People: Kamala (sister); Mr. Iyer (teacher)",
+        "Places: Madurai",
+        "Birth year: 1948",
+    ]
+    prompt = build_system_prompt(
+        _PROFILE, _SESSION, PriorContext(facts={"people": [{"name": "Kamala"}]})
+    )
+    assert "People: Kamala" in prompt
+    assert "{'name'" not in prompt
+
+
+def test_facts_are_capped_per_category():
+    from prompts.system_prompt import render_facts
+
+    lines = dict(
+        line.split(": ", 1) for line in render_facts(_session_100_prior().facts)
+    )
+    people = lines["People"].split("; ")
+    # The first ten (closest family, mentioned first) and the latest five.
+    assert people[:10] == [f"Person{i:02d} (relation{i:02d})" for i in range(10)]
+    assert people[10:] == [f"Person{i:02d} (relation{i:02d})" for i in range(65, 70)]
+    assert lines["Places"].split("; ") == [f"Place{i:02d}" for i in (0, 1, 2, 3, 4)] + [
+        f"Place{i:02d}" for i in range(45, 50)
+    ]
+    assert lines["Dates"].split("; ") == [f"19{i:02d}" for i in range(42, 50)]
+    assert lines["Institutions"].split("; ") == [
+        f"Institution{i:02d}" for i in range(5)
+    ]
+
+
+def test_other_fact_keys_keep_at_most_five_values():
+    from prompts.system_prompt import render_facts
+
+    (line,) = render_facts({"hobbies": [f"hobby{i}" for i in range(9)]})
+    assert line == "Hobbies: hobby0; hobby1; hobby2; hobby3; hobby4"
+
+
+def test_facts_are_deduplicated_case_insensitively():
+    from prompts.system_prompt import render_facts
+
+    (line,) = render_facts({"places": ["Madurai", "madurai", " ", "Chennai"]})
+    assert line == "Places: Madurai; Chennai"
+
+
+def test_a_short_list_is_shown_whole():
+    from prompts.system_prompt import render_facts
+
+    people = [{"name": f"P{i}", "relationship": "cousin"} for i in range(15)]
+    (line,) = render_facts({"people": people})
+    assert line.count(";") == 14
+
+
+def test_session_100_prompt_stays_under_8000_characters():
+    """
+    Before the caps the same fact store rendered a dialogue prompt of about
+    18,300 characters, and it kept growing with every session.
+    """
+    session = SimpleNamespace(**{**vars(_SESSION), "session_number": 100})
+    session.exchange_count = 3  # recall anchor and full Layer 4 in play
+    prompt = build_system_prompt(_PROFILE, session, _session_100_prior())
+    assert len(prompt) < 8000, len(prompt)
+
+
+# ── C3: the prompt in a cacheable half and a per-turn half ────────────────────
+
+
+def test_stable_and_per_turn_join_to_the_whole_prompt():
+    from prompts.system_prompt import build_system_prompt_parts
+
+    prior = _session_100_prior()
+    session = SimpleNamespace(**{**vars(_SESSION), "exchange_count": 3})
+    parts = build_system_prompt_parts(_PROFILE, session, prior)
+    assert parts.joined() == build_system_prompt(_PROFILE, session, prior)
+    # Layers 1-3 are cached; 4-5 change every turn and must come after.
+    assert "LAYER 3" in parts.stable and "LAYER 4" not in parts.stable
+    assert parts.per_turn.lstrip().startswith("LAYER 4")
+
+
+def test_the_stable_half_does_not_change_between_turns_of_a_session():
+    """What makes it cacheable: with Layer 3 frozen, only Layers 4-5 move."""
+    from prompts.system_prompt import build_system_prompt_parts
+
+    prior = _session_100_prior()
+    turn_2 = SimpleNamespace(**{**vars(_SESSION), "exchange_count": 1})
+    turn_5 = SimpleNamespace(
+        **{**vars(_SESSION), "exchange_count": 4, "goal_met": True}
+    )
+    first = build_system_prompt_parts(_PROFILE, turn_2, prior)
+    later = build_system_prompt_parts(_PROFILE, turn_5, prior)
+    assert first.stable == later.stable
+    assert first.per_turn != later.per_turn
+
+
+# ── Katha's persona (Layer 1) ────────────────────────────────────────────────
+
+
+def test_a_male_katha_uses_masculine_forms_for_himself():
+    profile = UserProfile(
+        name="Savitri",
+        preferred_language="hi-IN",
+        onboarding_context="",
+        pronouns="she/her",
+        katha_gender="male",
+    )
+    layer1 = build_system_prompt(profile, _pronoun_state(1, 0), PriorContext()).split(
+        "LAYER 2"
+    )[0]
+    assert "man's voice" in layer1 and "रहा हूँ" in layer1
+    # The parent's own pronouns are a separate line and still there.
+    assert "she/her" in layer1
+
+
+def test_katha_is_female_unless_the_family_chose_otherwise():
+    layer1 = build_system_prompt(
+        _profile("she/her"), _pronoun_state(1, 0), PriorContext()
+    ).split("LAYER 2")[0]
+    assert "woman's voice" in layer1 and "रही हूँ" in layer1

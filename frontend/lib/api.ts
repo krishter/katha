@@ -99,6 +99,8 @@ export interface OnboardingProfilePayload {
   whatsapp_number: string;
   family_whatsapp_number: string;
   preferred_language: string;
+  // Katha's persona: with the language it picks the voice the parent hears.
+  katha_gender: "female" | "male";
   session_time: string;
   // "" means not stated. The backend stores that as-is and the prompt then
   // avoids gendered wording rather than inferring any.

@@ -268,8 +268,9 @@ Pass: Response doesn't re-ask questions already answered; introduces new angle.
 
 **TC-05: Low-Energy User Adaptation**  
 Input: A very short (8-second) voice note: "I'm a bit tired today."  
-Expected: Katha shortens session plan, asks one light question, does not push for full session.  
-Pass: Response is brief, warm, low-pressure; session_end_suggested flag = true within 3 exchanges.
+Expected: Katha responds with empathy, not curiosity: it acknowledges the tiredness and asks whether they would like to talk a little today or rest and talk another day. It asks no memory question until they choose to go on, and does not push for a full session.  
+Pass: The first response acknowledges the tiredness, offers rest, and asks no memory question; every response is brief, warm, low-pressure; session_end_suggested flag = true within 3 exchanges.  
+*(Changed 2026-10-17 after the Hindi listening review. It was "asks one light question", and a tired parent was being handed a memory question straight away.)*
 
 **TC-06: Code-Mixed Input**  
 Input: "Humara ghar bahut bada tha, you know, a joint family — we were at least 15 people."  

@@ -686,3 +686,89 @@ def test_ack_body_contains_no_text_a_recipient_could_receive():
     assert inner.group(1).strip() == "", (
         f"TwiML carries text Twilio would send to the parent: {inner.group(1)!r}"
     )
+
+
+# ── usage ledger (COST_TO_SERVE.md §5) ────────────────────────────────────────
+
+
+def test_inbound_ledger_row_written_once_despite_twilio_retries(usage_rows):
+    """
+    A text message never becomes a turn, so the turn-level idempotency check
+    cannot catch Twilio's retry of it. The ledger must still bill it once.
+    """
+    stub = _make_stub()
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with patch(
+            "api.routes.webhook.session_manager.get_active_session_by_number",
+            new=AsyncMock(return_value=_make_session()),
+        ):
+            client = TestClient(app)
+            client.post("/webhook/whatsapp", data=_text_form())
+            client.post("/webhook/whatsapp", data=_text_form())  # Twilio retry
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    inbound = [r for r in usage_rows if r["operation"] == "inbound"]
+    assert len(inbound) == 1
+    assert inbound[0]["vendor"] == "twilio"
+    assert inbound[0]["message_sid"] == "MMtext456"
+    assert inbound[0]["units"] == {"messages": 1}
+
+
+def test_inbound_sets_last_inbound_at_and_scopes_the_ledger(usage_rows):
+    profile = MagicMock()
+    profile.user_id = "user-1"
+    profile.last_inbound_at = None
+    stub = _make_stub()
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with (
+            patch(
+                "api.routes.webhook._load_profile_by_number",
+                new=AsyncMock(return_value=profile),
+            ),
+            patch(
+                "api.routes.webhook.parent_consent.has_granted",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "api.routes.webhook.session_manager.get_active_session_by_number",
+                new=AsyncMock(return_value=_make_session()),
+            ),
+        ):
+            client = TestClient(app)
+            client.post("/webhook/whatsapp", data=_text_form())
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert profile.last_inbound_at is not None
+    inbound = [r for r in usage_rows if r["operation"] == "inbound"]
+    assert inbound[0]["user_id"] == "user-1"
+
+
+async def test_status_callback_stamps_the_outbound_ledger_row(usage_rows):
+    from core import usage
+
+    await usage.record_outbound("outbound_card", "SMcard1", template_sid="HXcard")
+
+    stub = _make_stub()
+    app.dependency_overrides[get_whatsapp_adapter] = lambda: stub
+    try:
+        with patch("api.routes.webhook.record_card_delivery", new=AsyncMock()):
+            client = TestClient(app)
+            response = client.post(
+                "/webhook/twilio/status",
+                data={
+                    "MessageSid": "SMcard1",
+                    "MessageStatus": "undelivered",
+                    "ErrorCode": "63016",
+                },
+            )
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_adapter, None)
+
+    assert response.status_code == 200
+    row = next(r for r in usage_rows if r["message_sid"] == "SMcard1")
+    assert row["status"] == "undelivered"
+    assert row["error_code"] == "63016"

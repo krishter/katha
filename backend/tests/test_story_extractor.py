@@ -218,6 +218,49 @@ async def test_resolves_someone_already_on_file_when_an_atom_elaborates():
     assert "Mr. Iyer" in result.resolved_people
 
 
+async def test_resolves_a_known_person_even_when_the_extractor_does_not_relist_them():
+    """
+    The extraction prompt says not to re-flag a known significant person
+    without new emotional signal. A model that follows that literally
+    (Haiku 5.5 does) returns significant_people: [] for the very turn in
+    which the user finally tells the full story — and resolution, which
+    used to look only at re-listed people, never happened. TC-11 failed
+    its resolution gate on three eval runs in a row for exactly this.
+    """
+    db = _make_db()
+    extraction = {"story_atoms": [_ATOM_ABOUT_IYER], "significant_people": []}
+    get_people, upsert, resolve = _resolution_patches(
+        already_on_file=[{"name": "Mr. Iyer (school teacher)"}]
+    )
+
+    with get_people, upsert, resolve as mock_resolve:
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    # Resolved under the name it is stored by, so mark_resolved finds it.
+    mock_resolve.assert_called_once_with(_USER_ID, "Mr. Iyer (school teacher)", db)
+    assert result.resolved_people == ["Mr. Iyer (school teacher)"]
+
+
+async def test_a_known_person_only_mentioned_in_passing_stays_unresolved():
+    db = _make_db()
+    passing = {
+        **_ATOM_ABOUT_IYER,
+        "when_approx": None,
+        "where_approx": None,
+        "why": None,
+        "what": None,
+    }
+    extraction = {"story_atoms": [passing], "significant_people": []}
+    get_people, upsert, resolve = _resolution_patches(
+        already_on_file=[{"name": "Mr. Iyer"}]
+    )
+
+    with get_people, upsert, resolve as mock_resolve:
+        await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_resolve.assert_not_called()
+
+
 async def test_resolution_matches_names_carrying_a_parenthetical():
     """Extracted names routinely look like "Grandfather (unnamed)". Matching
     that literally against narrative text never succeeded, which used to be

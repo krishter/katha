@@ -126,8 +126,20 @@ def _cut_points(duration: float, silences: list[float]) -> list[float]:
 async def split_for_stt(
     audio_bytes: bytes, max_seconds: float = MAX_SYNC_SECONDS
 ) -> list[bytes]:
+    """Return the audio as one or more pieces, each within `max_seconds`."""
+    pieces, _duration = await split_for_stt_measured(audio_bytes, max_seconds)
+    return pieces
+
+
+async def split_for_stt_measured(
+    audio_bytes: bytes, max_seconds: float = MAX_SYNC_SECONDS
+) -> tuple[list[bytes], float | None]:
     """
-    Return the audio as one or more pieces, each within `max_seconds`.
+    Return the audio as one or more pieces, each within `max_seconds`, and
+    its duration in seconds (None if ffprobe could not read it).
+
+    The duration is what Sarvam bills by, so the usage ledger needs it, and
+    the split already has to measure it.
 
     Short audio is returned unchanged and untouched — the common case
     (a brief reply) must not pay for ffmpeg or risk re-encoding artefacts.
@@ -146,10 +158,10 @@ async def split_for_stt(
             logger.warning(
                 "Could not probe duration — passing audio through", exc_info=True
             )
-            return [audio_bytes]
+            return [audio_bytes], None
 
         if duration <= max_seconds:
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         logger.info(
             "Voice note is %.1fs — splitting for STT (limit %.0fs)",
@@ -160,7 +172,7 @@ async def split_for_stt(
         silences = await _silence_ends(source)
         cuts = _cut_points(duration, silences)
         if not cuts:
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         code, _stdout, stderr = await _run(
             "ffmpeg",
@@ -184,12 +196,12 @@ async def split_for_stt(
                 "ffmpeg split failed (%s) — passing audio through",
                 stderr.decode()[:200],
             )
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         pieces = [p.read_bytes() for p in sorted(directory.glob("seg*.ogg"))]
         if not pieces:
             logger.warning("Split produced no segments — passing audio through")
-            return [audio_bytes]
+            return [audio_bytes], duration
 
         logger.info(
             "Split %.1fs into %d piece(s) at %s",
@@ -197,4 +209,92 @@ async def split_for_stt(
             len(pieces),
             "silence boundaries" if silences else "fixed intervals",
         )
-        return pieces
+        return pieces, duration
+
+
+# Pause compression (docs/specs/COST_TO_SERVE.md C7). Sarvam bills by the
+# second sent, and reflective speech pauses a lot: the 89-second note above
+# had 35 silences. Long pauses are shortened, never removed, so a cut can
+# never join two words, and speech itself is never touched.
+#
+# ffmpeg's silenceremove keeps stop_duration + stop_silence of every pause
+# longer than stop_duration (measured on ffmpeg 9, 2026-10-17: a 3 s gap
+# came out 1.5 s with 1.0 + 0.5). One pass therefore cannot do "only pauses
+# over 1 s, down to 0.5 s", the spec's first wording. Decided 2026-10-17:
+# every pause longer than the setting is cut to the setting, 0.5 s by
+# default, with stop_silence 0.
+#
+# Quieter than the split's -25dB on purpose: a soft-spoken word must never
+# be mistaken for silence, so only near-true silence is shortened. Tune on
+# fixtures before lowering it.
+_PAUSE_THRESHOLD_DB = "-35dB"
+# A result less than this much shorter is not worth a re-encode.
+_MIN_SAVING_SECONDS = 0.25
+
+
+async def compress_pauses(
+    audio_bytes: bytes, max_pause_seconds: float = 0.5
+) -> tuple[bytes, float | None, float | None]:
+    """
+    Cut every pause longer than `max_pause_seconds` down to that length.
+
+    Returns (audio, seconds_in, seconds_out). In memory only, like the
+    split: nothing is stored, as the privacy page promises voice notes are
+    discarded after transcription. On any failure — ffprobe, ffmpeg, a
+    result that is not actually shorter — the original bytes come back
+    untouched (the module's pass-through pattern), with seconds_out equal
+    to seconds_in.
+    """
+    with tempfile.TemporaryDirectory(prefix="katha-pauses-") as tmp:
+        directory = Path(tmp)
+        source = directory / "in.ogg"
+        source.write_bytes(audio_bytes)
+
+        try:
+            seconds_in = await probe_duration(source)
+        except Exception:
+            logger.warning(
+                "Could not probe duration — not compressing pauses", exc_info=True
+            )
+            return audio_bytes, None, None
+
+        target = directory / "out.ogg"
+        try:
+            code, _stdout, stderr = await _run(
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(source),
+                "-af",
+                (
+                    "silenceremove="
+                    "stop_periods=-1"
+                    f":stop_duration={max_pause_seconds}"
+                    ":stop_silence=0"
+                    f":stop_threshold={_PAUSE_THRESHOLD_DB}"
+                ),
+                "-c:a",
+                "libopus",
+                str(target),
+                timeout=120.0,
+            )
+            if code != 0:
+                raise RuntimeError(stderr.decode()[:200])
+            seconds_out = await probe_duration(target)
+        except Exception:
+            logger.warning(
+                "Pause compression failed — sending the original audio",
+                exc_info=True,
+            )
+            return audio_bytes, seconds_in, seconds_in
+
+        if seconds_out > seconds_in - _MIN_SAVING_SECONDS:
+            # Nothing worth shortening: keep the original bytes rather than
+            # pay for a re-encode that buys nothing.
+            return audio_bytes, seconds_in, seconds_in
+
+        logger.info(
+            "Shortened pauses: %.1fs -> %.1fs before STT", seconds_in, seconds_out
+        )
+        return target.read_bytes(), seconds_in, seconds_out

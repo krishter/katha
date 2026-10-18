@@ -233,7 +233,7 @@ class _LlmScript:
         self.turn = 0
         self.dialogue_prompts: list[str] = []
 
-    async def __call__(self, messages, system=None, max_tokens=500):
+    async def __call__(self, messages, system=None, max_tokens=500, **_kwargs):
         if system is not None:
             self.dialogue_prompts.append(system)
             return SimpleNamespace(
@@ -260,7 +260,7 @@ class _LlmScript:
 def _stub_paid_apis(llm_script: _LlmScript, spoken: list[tuple[str, str]]):
     """Patch every edge that costs money or leaves the machine, except S3."""
 
-    async def _tts(text, language_code=None):
+    async def _tts(text, language_code=None, **_kwargs):
         spoken.append((text, language_code or ""))
         return _FAKE_WAV
 
@@ -1027,7 +1027,9 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                     "storage side, which is exactly where gate 5.5 failed",
                 )
     finally:
-        for p in patches:
+        # Reverse order: two patches here target the same attribute through
+        # different import paths, and must unwind last-in, first-out.
+        for p in reversed(patches):
             p.stop()
         await client.aclose()
         if prev_db is not None:

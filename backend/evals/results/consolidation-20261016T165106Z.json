@@ -1,0 +1,171 @@
+{
+  "ran_at": "20261016T165106Z",
+  "cases": [
+    "tc14"
+  ],
+  "passed": 1,
+  "total": 1,
+  "usage": {
+    "by_step": {
+      "group": {
+        "calls": 1,
+        "input_tokens": 1033,
+        "output_tokens": 290
+      },
+      "compose": {
+        "calls": 1,
+        "input_tokens": 878,
+        "output_tokens": 121
+      },
+      "fidelity": {
+        "calls": 1,
+        "input_tokens": 525,
+        "output_tokens": 201
+      }
+    },
+    "total": {
+      "calls": 3,
+      "input_tokens": 2436,
+      "output_tokens": 612
+    }
+  },
+  "results": [
+    {
+      "tc": "TC-14",
+      "passed": true,
+      "evidence": "final verdicts=['supported', 'supported', 'supported', 'supported', 'supported']; invented words present: none; cut during revision: []",
+      "usage": {
+        "by_step": {
+          "group": {
+            "calls": 1,
+            "input_tokens": 1033,
+            "output_tokens": 290
+          },
+          "compose": {
+            "calls": 1,
+            "input_tokens": 878,
+            "output_tokens": 121
+          },
+          "fidelity": {
+            "calls": 1,
+            "input_tokens": 525,
+            "output_tokens": 201
+          }
+        },
+        "total": {
+          "calls": 3,
+          "input_tokens": 2436,
+          "output_tokens": 612
+        }
+      },
+      "threads": [
+        {
+          "id": "TC-14-s1:0",
+          "status": "story",
+          "title": "The Elephant Got Loose",
+          "domain": "historical_events",
+          "when_approx": "maybe eighteen",
+          "arc": {
+            "setting": {
+              "present": true,
+              "summary": "The storyteller was in Thrissur, around eighteen years old, during the pooram.",
+              "turn_ids": [
+                "t1-1",
+                "t1-2"
+              ]
+            },
+            "event": {
+              "present": true,
+              "summary": "An elephant got loose during the pooram.",
+              "turn_ids": [
+                "t1-2"
+              ]
+            },
+            "turn": {
+              "present": true,
+              "summary": "His brother pulled him behind a wall.",
+              "turn_ids": [
+                "t1-3"
+              ]
+            },
+            "resolution": {
+              "present": false,
+              "summary": "",
+              "turn_ids": []
+            }
+          },
+          "arc_present": [
+            "event",
+            "setting",
+            "turn"
+          ],
+          "arc_missing": [
+            "resolution"
+          ],
+          "atom_ids": [
+            "a-1",
+            "a-2",
+            "a-3"
+          ],
+          "people": [
+            "brother"
+          ],
+          "places": [
+            "Thrissur"
+          ],
+          "sessions_seen": [
+            1
+          ],
+          "source_turn_ids": [
+            "t1-1",
+            "t1-2",
+            "t1-3"
+          ],
+          "body_first_person": "We were in Thrissur. I was young then, maybe eighteen. The elephant got loose during the pooram. My brother pulled me behind the wall. That is all I remember of it.",
+          "quotes": [],
+          "sentence_sources": [
+            {
+              "text": "We were in Thrissur.",
+              "verdict": "supported",
+              "turn_ids": [
+                "t1-1"
+              ]
+            },
+            {
+              "text": "I was young then, maybe eighteen.",
+              "verdict": "supported",
+              "turn_ids": [
+                "t1-1"
+              ]
+            },
+            {
+              "text": "The elephant got loose during the pooram.",
+              "verdict": "supported",
+              "turn_ids": [
+                "t1-2"
+              ]
+            },
+            {
+              "text": "My brother pulled me behind the wall.",
+              "verdict": "supported",
+              "turn_ids": [
+                "t1-3"
+              ]
+            },
+            {
+              "text": "That is all I remember of it.",
+              "verdict": "supported",
+              "turn_ids": [
+                "t1-3"
+              ]
+            }
+          ],
+          "removed_sentences": [],
+          "fidelity_status": "passed",
+          "source_language": "en-IN",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

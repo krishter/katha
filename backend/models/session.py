@@ -3,7 +3,7 @@ from datetime import datetime, time
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Time, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.db import Base
@@ -54,6 +54,11 @@ class Session(Base):
     followup_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Layer 3 as built on this session's first turn, reused for the rest of
+    # it (COST_TO_SERVE.md C2) so the cached prompt prefix stays stable.
+    # NULL until the first turn; sessions from before the column get filled
+    # on their next turn.
+    prior_context: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

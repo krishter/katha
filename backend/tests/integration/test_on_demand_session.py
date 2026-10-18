@@ -90,11 +90,11 @@ class _Harness:
         app.dependency_overrides[get_db] = _db
         app.dependency_overrides[get_whatsapp_adapter] = lambda: self.adapter
 
-        async def _tts(text, language_code=None):
+        async def _tts(text, language_code=None, **_kwargs):
             self.spoken.append(text)
             return b"RIFF" + b"\x00" * 40
 
-        async def _llm(messages, system=None, max_tokens=500):
+        async def _llm(messages, system=None, max_tokens=500, **_kwargs):
             content = (
                 "<response>Tell me more about that.</response>"
                 if system is not None
@@ -138,7 +138,10 @@ class _Harness:
         return self
 
     async def __aexit__(self, *exc):
-        for p in self._patches:
+        # Reverse order: two of these patch the same attribute through
+        # different import paths, and stopping them forwards restores the
+        # first fake instead of the real function, for every later test.
+        for p in reversed(self._patches):
             p.stop()
         from adapters.whatsapp_stub import get_whatsapp_adapter
 
@@ -241,8 +244,11 @@ async def test_a_completed_session_today_is_not_repeated(real_db):
             session_number=1,
             domain="childhood",
             status="completed",
-            started_at=datetime.now(timezone.utc) - timedelta(hours=2),
-            ended_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            # Minutes, not hours: "today" is the IST calendar day, and two
+            # hours ago is yesterday for the first two hours after midnight
+            # IST, which made this fail every night between 00:00 and 02:00.
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+            ended_at=datetime.now(timezone.utc) - timedelta(minutes=1),
             ended_reason="goal_met",
         )
     )

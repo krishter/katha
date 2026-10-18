@@ -24,6 +24,7 @@ from sqlalchemy import select
 
 from core.auth import get_current_user
 from main import app
+from models.api_usage import ApiUsage
 from models.consent_record import ConsentRecord
 from models.db import AsyncSessionLocal, get_db
 from models.fact import Fact
@@ -114,6 +115,17 @@ async def _seed_full_user(db, user_id: str) -> uuid.UUID:
         )
     )
     db.add(
+        ApiUsage(
+            user_id=user_id,
+            session_id=session_id,
+            turn_id=turn.id,
+            vendor="anthropic",
+            operation="dialogue",
+            model="claude-sonnet-4-6",
+            units={"input_tokens": 1200, "output_tokens": 80},
+        )
+    )
+    db.add(
         ConsentRecord(
             user_id=user_id,
             email_hash="e2e-hash",
@@ -136,6 +148,7 @@ async def _count_rows(db, user_id: str) -> dict:
         ("story_atoms", StoryAtom),
         ("memory_cards", MemoryCard),
         ("facts", Fact),
+        ("api_usage", ApiUsage),
     ]:
         rows = (
             (await db.execute(select(model).where(model.user_id == user_id)))
@@ -210,6 +223,7 @@ async def test_export_then_delete_removes_every_row(real_db, monkeypatch):
             "story_atoms": 0,
             "memory_cards": 0,
             "facts": 0,
+            "api_usage": 0,
         }, after
 
         # Consent records are retained and anonymised, never hard-deleted.

@@ -308,6 +308,29 @@ async def close_session(
 CONSENT_SESSION_STATUS = "consent"
 
 
+def is_conversation():
+    """
+    The one definition of "a conversation": a session row in which the
+    parent was heard and answered at least once.
+
+    `exchange_count > 0` because record_turn runs only after STT, the
+    dialogue call and the post-turn policy all succeeded, so a session of
+    nothing but our own failures counts for nothing. Not `status ==
+    'completed'`, because most real conversations end by the stale sweep
+    marking them 'abandoned'. The consent handshake is never one. The
+    reasoning is in full on freemium.get_session_count.
+
+    A SQLAlchemy expression, so the free-tier counter and the admin metrics
+    page share it and can never disagree.
+    """
+    from sqlalchemy import and_
+
+    return and_(
+        Session.status != CONSENT_SESSION_STATUS,
+        Session.exchange_count > 0,
+    )
+
+
 async def get_or_create_consent_session(
     user_id: str, whatsapp_number: str, db: AsyncSession
 ) -> Session:

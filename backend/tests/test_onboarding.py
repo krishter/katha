@@ -166,6 +166,24 @@ def test_onboarding_profile_valid_payload_upserts_profile(db):
     saved_profile = db.add.call_args.args[0]
     assert saved_profile.name == "Subramaniam"
     assert saved_profile.family_whatsapp_number == "+919876543211"
+    # An older client that sends no persona keeps the voice parents know.
+    assert saved_profile.katha_gender == "female"
+
+
+def test_onboarding_profile_saves_the_chosen_persona(db):
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=None))
+    payload = {**_VALID_PROFILE_PAYLOAD, "katha_gender": "male"}
+
+    response = client.post("/onboarding/profile", data=payload)
+
+    assert response.status_code == 200
+    assert db.add.call_args.args[0].katha_gender == "male"
+
+
+def test_onboarding_profile_rejects_an_unknown_persona(db):
+    payload = {**_VALID_PROFILE_PAYLOAD, "katha_gender": "robot"}
+    response = client.post("/onboarding/profile", data=payload)
+    assert response.status_code == 422
 
 
 # ── /onboarding/consent ──────────────────────────────────────────────────────
