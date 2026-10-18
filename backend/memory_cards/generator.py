@@ -322,6 +322,185 @@ def render_card(
     return buffer.getvalue()
 
 
+# ── Conversation card ("Did you know?", CONVERSATION_CARDS.md §7.5) ─────────
+
+_CONV_WIDTH = 1080
+_CONV_HEIGHT = 1350  # 4:5
+_CONV_BOX_COLOR = "#F3E6D3"
+# Tried in order until everything fits. The card carries exactly the words
+# she approved, so it is shrunk to fit, never cut.
+_CONV_SCALES = (1.0, 0.9, 0.8, 0.7, 0.6)
+
+
+class CardTooLong(ValueError):
+    """The approved text does not fit even at the smallest size."""
+
+
+def _wrap(
+    draw: ImageDraw.ImageDraw, text: str, weight: str, size: int, width: int
+) -> list[list[tuple[str, ImageFont.FreeTypeFont, int]]]:
+    words = _layout_words(draw, text, weight, size)
+    return _wrap_words(words, width, int(size * _SPACE_WIDTH_RATIO))
+
+
+def _block_height(lines: list, size: int) -> int:
+    return len(lines) * (size + _LINE_SPACING)
+
+
+def _draw_block(
+    draw: ImageDraw.ImageDraw,
+    lines: list,
+    y: int,
+    size: int,
+    fill: str,
+    *,
+    left: Optional[int] = None,
+) -> int:
+    """Draw wrapped lines, centred (or from `left`); returns the y below."""
+    space_width = int(size * _SPACE_WIDTH_RATIO)
+    for line in lines:
+        if left is None:
+            _draw_centered_line(draw, line, y, space_width, fill)
+        else:
+            x = left
+            for word, font, width in line:
+                draw.text((x, y), word, font=font, fill=fill)
+                x += width + space_width
+        y += size + _LINE_SPACING
+    return y
+
+
+def render_conversation_card(
+    *,
+    hook: str,
+    excerpt: str,
+    call_prompt: str,
+    parent_title: str,
+    language_name: str,
+    original_quote: Optional[str] = None,
+    original_quote_gloss: Optional[str] = None,
+) -> bytes:
+    """A 1080x1350 "Did you know?" card. Raises CardTooLong rather than
+    truncating the words she approved."""
+    for scale in _CONV_SCALES:
+        image = _try_conversation_card(
+            scale,
+            hook=hook,
+            excerpt=excerpt,
+            call_prompt=call_prompt,
+            parent_title=parent_title,
+            language_name=language_name,
+            original_quote=original_quote,
+            original_quote_gloss=original_quote_gloss,
+        )
+        if image is not None:
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            return buffer.getvalue()
+    raise CardTooLong("the card's text does not fit at any size")
+
+
+def _try_conversation_card(scale: float, **text) -> Optional[Image.Image]:
+    width, height = _CONV_WIDTH, _CONV_HEIGHT
+    image = Image.new("RGB", (width, height), color=_BG_COLOR)
+    draw = ImageDraw.Draw(image)
+    inner = width - 2 * _MARGIN
+    box_pad = 40
+
+    def size(base: int) -> int:
+        return max(16, int(base * scale))
+
+    header_size, hook_size, excerpt_size = size(36), size(44), size(32)
+    quote_size, gloss_size = size(32), size(24)
+    box_label_size, prompt_size, footer_size = size(22), size(34), 20
+
+    # The hook usually starts "Did you know", and then it is the header;
+    # repeating it above reads as a stutter. A hook that answers a child's
+    # question ("You asked Amma…") gets the header.
+    header = (
+        []
+        if text["hook"].lower().startswith("did you know")
+        else _wrap(draw, "Did you know?", "bold", header_size, inner)
+    )
+    hook = _wrap(draw, text["hook"], "bold", hook_size, inner)
+    excerpt = _wrap(draw, f"“{text['excerpt']}”", "regular", excerpt_size, inner)
+    quote = (
+        _wrap(draw, text["original_quote"], "regular", quote_size, inner)
+        if text.get("original_quote")
+        else []
+    )
+    gloss = (
+        _wrap(draw, f"({text['original_quote_gloss']})", "regular", gloss_size, inner)
+        if text.get("original_quote_gloss")
+        else []
+    )
+    box_inner = inner - 2 * box_pad
+    box_label = _wrap(draw, "On your next call", "bold", box_label_size, box_inner)
+    prompt = _wrap(draw, text["call_prompt"], "bold", prompt_size, box_inner)
+
+    language = text["language_name"]
+    footer_text = f"Shared with {text['parent_title']}'s permission"
+    if language and language.lower() != "english":
+        footer_text += f" · translated from {language}"
+    footer_text += " · katha.life"
+    footer = _wrap(draw, footer_text, "regular", footer_size, inner)
+
+    gap = int(36 * scale)
+    box_height = (
+        2 * box_pad
+        + _block_height(box_label, box_label_size)
+        + 8
+        + _block_height(prompt, prompt_size)
+    )
+    content = (
+        (_block_height(header, header_size) + gap if header else 0)
+        + _block_height(hook, hook_size)
+        + gap
+        + _block_height(excerpt, excerpt_size)
+        + (gap // 2 + _block_height(quote, quote_size) if quote else 0)
+        + (_block_height(gloss, gloss_size) if gloss else 0)
+        + gap
+        + box_height
+    )
+    footer_top = height - _MARGIN - _block_height(footer, footer_size)
+    if _MARGIN + content > footer_top - gap:
+        return None
+
+    y = _MARGIN + max(0, (footer_top - gap - _MARGIN - content) // 2)
+    if header:
+        y = _draw_block(draw, header, y, header_size, _WORDMARK_COLOR)
+        y += gap
+    y = _draw_block(draw, hook, y, hook_size, _QUOTE_COLOR)
+    y += gap
+    y = _draw_block(draw, excerpt, y, excerpt_size, _QUOTE_COLOR)
+    if quote:
+        y += gap // 2
+        y = _draw_block(draw, quote, y, quote_size, _QUOTE_COLOR)
+    if gloss:
+        y = _draw_block(draw, gloss, y, gloss_size, _MUTED_COLOR)
+    y += gap
+
+    draw.rounded_rectangle(
+        [(_MARGIN, y), (width - _MARGIN, y + box_height)],
+        radius=24,
+        fill=_CONV_BOX_COLOR,
+    )
+    inner_y = _draw_block(
+        draw,
+        box_label,
+        y + box_pad,
+        box_label_size,
+        _MUTED_COLOR,
+        left=_MARGIN + box_pad,
+    )
+    _draw_block(
+        draw, prompt, inner_y + 8, prompt_size, _QUOTE_COLOR, left=_MARGIN + box_pad
+    )
+
+    _draw_block(draw, footer, footer_top, footer_size, _MUTED_COLOR)
+    return image
+
+
 async def generate_memory_card(
     session_id: str,
     user_id: str,

@@ -32,6 +32,7 @@ import cards
 from adapters import llm
 from adapters.llm import Message
 from cards import candidates, state
+from cards import image as card_image
 from cards import prompts as card_prompts
 from cards.context import family_of
 from config import settings
@@ -412,6 +413,7 @@ async def _draft(session_id: str, user_id: str, db: AsyncSession) -> DraftOutcom
             "failed_fidelity", "; ".join(passes[-1]["problems"]), card.id
         )
 
+    await card_image.try_render(card, parent_title)
     review = settings.CARDS_OPERATOR_REVIEW
     state.transition(card, "operator_review" if review else "awaiting_parent")
     db.add(card)

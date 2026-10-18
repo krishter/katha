@@ -78,6 +78,19 @@ def cards_on(monkeypatch):
     monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
 
 
+@pytest.fixture(autouse=True)
+def s3(monkeypatch):
+    """Card images go to this dict, never to S3."""
+    stored: dict[str, bytes] = {}
+
+    async def upload(data, key, content_type="audio/ogg"):
+        stored[key] = data
+        return key
+
+    monkeypatch.setattr("cards.image.storage.upload_media", upload)
+    return stored
+
+
 @pytest.fixture
 def alert():
     with patch("cards.write.send_operator_alert", new=AsyncMock()) as mock:
@@ -174,7 +187,7 @@ async def draft(db, seeded, model):
 # ── the happy path ───────────────────────────────────────────────────────────
 
 
-async def test_a_good_card_goes_to_the_operator_and_nobody_else(real_db, alert):
+async def test_a_good_card_goes_to_the_operator_and_nobody_else(real_db, alert, s3):
     s = await seed(real_db)
     model = Model(
         card_select=[{"atom_ids": [str(s.atoms[0])], "why": "a first film"}],
@@ -196,6 +209,9 @@ async def test_a_good_card_goes_to_the_operator_and_nobody_else(real_db, alert):
     assert card.fidelity_json["result"] == "passed"
     assert card.fidelity_json["sentences"][0]["turn_ids"] == [str(s.turns[0])]
     alert.assert_awaited_once()
+    # The image shows these exact words, and is private.
+    assert card.image_s3_key == f"cards/conv/{card.id}-{card.readback_hash[:12]}.png"
+    assert s3[card.image_s3_key].startswith(b"\x89PNG")
 
 
 async def test_with_review_off_the_card_waits_for_her(real_db, alert, monkeypatch):
@@ -494,3 +510,20 @@ async def test_a_model_failure_drafts_nothing_and_does_not_raise(real_db, alert)
         outcome = await write.draft_for_session(s.session_id, s.user_id, real_db)
     assert outcome.result == "error"
     assert await cards_of(real_db, s.user_id) == []
+
+
+async def test_an_image_failure_does_not_lose_the_card(real_db, alert, monkeypatch):
+    async def broken(*args, **kwargs):
+        raise RuntimeError("S3 is down")
+
+    monkeypatch.setattr("cards.image.storage.upload_media", broken)
+    s = await seed(real_db)
+    model = Model(
+        card_select=[{"atom_ids": [str(s.atoms[0])]}],
+        card_write=[GOOD_CARD],
+        card_fidelity=[all_supported(str(s.turns[0]))],
+    )
+    assert (await draft(real_db, s, model)).result == "drafted"
+    [card] = await cards_of(real_db, s.user_id)
+    assert card.status == "operator_review"
+    assert card.image_s3_key is None
