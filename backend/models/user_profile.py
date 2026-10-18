@@ -4,8 +4,17 @@ import uuid
 from datetime import datetime, time
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text, Time, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Integer,
+    String,
+    Text,
+    Time,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.db import Base
@@ -17,6 +26,11 @@ class UserProfileModel(Base):
         CheckConstraint(
             "katha_gender IN ('female', 'male')",
             name="ck_user_profiles_katha_gender",
+        ),
+        CheckConstraint(
+            "share_preference IN "
+            "('not_asked', 'share_with_approval', 'unsure', 'never')",
+            name="ck_user_profiles_share_preference",
         ),
     )
 
@@ -74,6 +88,32 @@ class UserProfileModel(Base):
     # approved template.
     last_inbound_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # Conversation cards (docs/specs/CONVERSATION_CARDS.md). Cards run for
+    # a parent only when CONVERSATION_CARDS_ENABLED is on AND this is true;
+    # an operator turns it on one family at a time (scripts/cards.py).
+    conversation_cards_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    # Her own answer to "shall I share some of these with your child?"
+    # (§5.1): not_asked | share_with_approval | unsure | never. No card is
+    # drafted unless it is share_with_approval.
+    share_preference: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="not_asked"
+    )
+    share_preference_asks: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    # Topics she asked to keep between herself and Katha (§5.2). Card
+    # selection must not pick an atom on any of them.
+    private_topics: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default="{}"
+    )
+    # The child replied "stop" on WhatsApp (§10.2): cards then go by email
+    # only.
+    card_whatsapp_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
     )
 
     created_at: Mapped[datetime] = mapped_column(

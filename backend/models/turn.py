@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,6 +36,13 @@ class Turn(Base):
     input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     response_audio_s3_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # She asked for this to stay between her and Katha
+    # (CONVERSATION_CARDS.md §5.2). A private turn, and every atom drawn
+    # from it, never reaches a card or anything the family reads.
+    is_private: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    private_topic: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

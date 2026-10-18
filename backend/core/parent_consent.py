@@ -40,6 +40,14 @@ PARENT_CONSENT_VERSION = "parent-1.0"
 PRINCIPAL_PARENT = "parent"
 PRINCIPAL_BUYER = "buyer"
 
+# Every recording-consent version starts with this. The parent also gives
+# other answers that are logged as consent records under her own
+# principal, such as whether her stories may be shared with her child
+# (core/sharing.py, "share-1.0"). Those must never be read as an answer
+# to *this* question: "don't send anything to my son" is not "stop
+# recording me", and "yes, share them" is not consent to be recorded.
+_RECORDING_VERSION_PREFIX = "parent-"
+
 
 class ConsentStatus(str, Enum):
     """Where a parent is in the consent conversation."""
@@ -268,6 +276,7 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
         select(ConsentRecord)
         .where(ConsentRecord.user_id == user_id)
         .where(ConsentRecord.principal == PRINCIPAL_PARENT)
+        .where(ConsentRecord.consent_version.startswith(_RECORDING_VERSION_PREFIX))
         .order_by(ConsentRecord.consented_at.desc())
     )
     records = result.scalars().all()
@@ -279,6 +288,10 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
     times_asked = getattr(profile, "parent_consent_asks", 0) or 0
 
     for record in records:
+        # The query already filters, but this is the one place a wrong row
+        # would turn into recording someone who said no.
+        if not record.consent_version.startswith(_RECORDING_VERSION_PREFIX):
+            continue
         if record.consent_version.endswith("-declined"):
             return ParentConsentState(ConsentStatus.DECLINED, record.consented_at)
         return ParentConsentState(ConsentStatus.GRANTED, record.consented_at)

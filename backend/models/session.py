@@ -54,6 +54,21 @@ class Session(Base):
     followup_sent_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Conversation cards (CONVERSATION_CARDS.md §6, §9.2). At most one ask
+    # a session: the sharing question, a read-back, or a child's question.
+    # `pending_ask` is the ask Katha has just made and is waiting on her
+    # answer to ("share", "readback_offer", "readback", "child_question");
+    # `pending_ask_ref` the card or question it is about.
+    pending_ask: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    pending_ask_ref: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    ask_made: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    # How her last answer to an ask came out, for Layer 4 to confirm on the
+    # next reply ("approved", "kept_private", ...). Cleared once used.
+    ask_outcome: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Layer 3 as built on this session's first turn, reused for the rest of
     # it (COST_TO_SERVE.md C2) so the cached prompt prefix stays stable.
     # NULL until the first turn; sessions from before the column get filled

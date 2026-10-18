@@ -7,10 +7,12 @@ from sqlalchemy import delete, text
 
 from models.api_usage import ApiUsage
 from models.consent_record import ConsentRecord
+from models.conversation_card import ConversationCard
 from models.crisis_event import CrisisEvent
 from models.db import AsyncSessionLocal, engine
 from models.fact import Fact
 from models.family_account import FamilyAccount
+from models.family_question import FamilyQuestion
 from models.magic_link_token import MagicLinkToken
 from models.memory_card import MemoryCard
 from models.session import Session
@@ -27,6 +29,8 @@ from models.voice_change import VoiceChange
 _TABLES_IN_DELETE_ORDER = [
     ApiUsage,
     VoiceChange,
+    FamilyQuestion,
+    ConversationCard,
     ConsentRecord,
     CrisisEvent,
     MemoryCard,

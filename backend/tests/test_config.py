@@ -21,6 +21,7 @@ _SAFE_KWARGS = dict(
     # the free-form path works in sandbox — so the safe baseline leaves
     # both unset and the pairing is asserted separately below.
     TWILIO_TEMPLATE_MEMORY_CARD="",
+    TWILIO_TEMPLATE_CONVERSATION_CARD="",
     TWILIO_TEMPLATE_MEDIA_HOST="",
     # Unset means the operator metrics routes 404 — safe.
     ADMIN_API_TOKEN="",
@@ -198,3 +199,16 @@ def test_sarvam_needs_no_gemini_key():
 def test_an_unknown_vendor_refuses_to_boot():
     with pytest.raises(RuntimeError, match="TTS_VENDOR"):
         validate_production_config(_settings(TTS_VENDOR="svara"))
+
+
+def test_conversation_card_template_needs_the_media_host():
+    with pytest.raises(RuntimeError, match="TWILIO_TEMPLATE_CONVERSATION_CARD"):
+        validate_production_config(
+            _settings(TWILIO_TEMPLATE_CONVERSATION_CARD="HXcard")
+        )
+    validate_production_config(
+        _settings(
+            TWILIO_TEMPLATE_CONVERSATION_CARD="HXcard",
+            TWILIO_TEMPLATE_MEDIA_HOST="katha-media.s3.ap-south-1.amazonaws.com",
+        )
+    )
