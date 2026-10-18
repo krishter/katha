@@ -1,22 +1,24 @@
 """
-Gemini 3.8 Flash TTS and Flash-Lite TTS, for the operator listening kit's
-blind A/B only (scripts/listening_kit.py abtest --compare sarvam-gemini or
-gemini-flash-lite;
-docs/proposals/tts-strategy.md §5).
+Gemini 3.8 TTS: Katha's voice for new families since 2026-10-18
+(docs/specs/GEMINI_TTS.md), and one side of the listening kit's A/B.
 
-Production never calls this: nothing outside the kit imports it, and
-TTS_MODEL and media/voices.py know nothing about Google. Only synthetic A/B
-text goes to Google, never anything a parent said.
+Production reaches this only through media/tts.py, with the parent's
+pinned voice (Flash-Lite, D1). The kit calls it directly, on Flash by
+default.
 
 The request follows the Interactions API as documented on 2026-10-17
 (https://ai.google.dev/gemini-api/docs/speech-generation):
 
 - POST /v1beta/interactions, key in the x-goog-api-key header.
+- `"store": false` on every request. The Interactions API keeps each
+  interaction by default (https://ai.google.dev/gemini-api/docs/zdr), and a
+  parent's story must not be kept at Google.
 - The text is a verbatim transcript; delivery is steered by a
   `speech_metadata` annotation's `style`, not by instructions in the text.
 - There is no language parameter: the model detects the language from the
-  text. `language_code` is accepted for symmetry with the Sarvam adapter
-  and is only logged.
+  text. For a language whose script another Katha language shares
+  (Marathi with Hindi, Assamese with Bengali), the style names the
+  language, since that is the only lever there is.
 - A unary request returns WAV by default. This one asks for raw 24 kHz
   16-bit mono PCM (audio/l16) and wraps it in a WAV header here, so the
   clip goes through convert_wav_to_ogg and media/tts_check.py exactly as a
@@ -28,11 +30,12 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import time
 import wave
 
 import httpx
 
-from adapters.retry import post_with_retry
+from adapters.retry import post_with_backoff
 from adapters.sarvam_tts import speakable
 from config import settings
 from core import usage
@@ -40,29 +43,42 @@ from media import tts_check, voices
 
 logger = logging.getLogger(__name__)
 
+# The kit's default. Production speaks on voices.GEMINI_TTS_MODEL.
 MODEL = "gemini-3.8-flash-tts"
 # Same API, voices and style; two thirds of Flash's audio price.
-LITE_MODEL = "gemini-3.8-flash-lite-tts"
+LITE_MODEL = voices.GEMINI_TTS_MODEL
 MODELS = (MODEL, LITE_MODEL)
 _URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24_000
 _SAMPLE_WIDTH = 2  # 16-bit
 
-# The one delivery style for the A/B. Google advises a short style string,
-# reused unchanged across turns, over long instructions.
+# The one delivery style, as heard in the A/B. Google advises a short style
+# string, reused unchanged across turns, over long instructions.
 STYLE = (
     "unhurried, warm and gentle, talking with an elderly parent; "
     "calm and kind, not energetic, not salesy"
 )
 
-# One prebuilt voice per persona, the same for every language. Gender from
-# Google Cloud's Chirp 3 HD list, which shares these names
-# (https://docs.cloud.google.com/text-to-speech/docs/chirp3-hd); the
-# descriptor in brackets is the Gemini docs' own.
-# - Sulafat (Warm): the only voice of the 30 described as warm.
-# - Achird (Friendly): no male voice is described as warm or gentle;
-#   friendly is the nearest, and avoids the Firm, Excitable and Upbeat ones.
-VOICES: dict[str, str] = {"female": "Sulafat", "male": "Achird"}
+# Languages whose script another Katha language shares, so the model could
+# say them as the other one. Named in the style; no other language is, so
+# what the A/B listeners heard is what those parents hear.
+_LANGUAGE_HINTS: dict[str, str] = {"mr-IN": "Marathi", "as-IN": "Assamese"}
+
+# Sarvam's cap, kept so a runaway reply cannot become a minutes-long voice
+# note. Gemini itself accepts 8,192 input tokens.
+_MAX_TEXT_CHARS = 2500
+
+# Unary, not streamed: a whole reply's audio comes back in one response.
+# Generous against the few seconds a clip takes; replace with a measured
+# figure after the first production week (GEMINI_TTS.md §6 stage 2).
+_TIMEOUT_SECONDS = 45.0
+
+VOICES = voices.GEMINI_VOICES
+
+
+def style_for(language_code: str) -> str:
+    hint = _LANGUAGE_HINTS.get(language_code)
+    return f"{STYLE}; speaking {hint}" if hint else STYLE
 
 
 def pcm_to_wav(pcm: bytes, sample_rate: int = SAMPLE_RATE) -> bytes:
@@ -84,6 +100,7 @@ def wav_seconds(wav_bytes: bytes) -> float:
 def request_body(text: str, voice: str, style: str, model: str = MODEL) -> dict:
     return {
         "model": model,
+        "store": False,
         "input": [
             {
                 "type": "user_input",
@@ -125,8 +142,9 @@ async def _request(
     """One billed call. Returns WAV bytes."""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set in backend/.env")
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await post_with_retry(
+    started = time.monotonic()
+    async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+        response = await post_with_backoff(
             client,
             _URL,
             headers={
@@ -141,13 +159,22 @@ async def _request(
         )
     audio = _audio_from(response.json())
     wav = audio if audio[:4] == b"RIFF" else pcm_to_wav(audio)
+    seconds = wav_seconds(wav)
+    logger.info(
+        "Gemini TTS: %s %s, %d chars -> %.1f s of audio in %.2f s",
+        model,
+        voice,
+        len(text),
+        seconds,
+        time.monotonic() - started,
+    )
     # Google bills audio by the second and text by the token; the ledger
     # keeps the counts and core/pricing.py turns them into rupees.
     await usage.record(
         "google",
         purpose,
         {
-            "audio_seconds": round(wav_seconds(wav), 3),
+            "audio_seconds": round(seconds, 3),
             "input_characters": len(text) + len(style),
         },
         model=model,
@@ -161,20 +188,35 @@ async def synthesize(
     *,
     gender: str | None,
     purpose: str,
-    style: str = STYLE,
+    style: str | None = None,
     model: str = MODEL,
+    voice: str | None = None,
 ) -> bytes:
     """
-    Speak `text` in the persona's Gemini voice. Returns WAV bytes.
+    Speak `text` in Gemini. Returns WAV bytes.
 
-    Emoji are removed, as for Sarvam. A clip media/tts_check.py rejects is
-    synthesised again once; if that fails too it is returned anyway with an
-    error logged, so a listener hears what Gemini produced.
+    `voice` is a pinned speaker (media/tts.py passes the parent's); without
+    it the persona's voice from `gender` is used. `style` defaults to
+    style_for(language_code).
+
+    Emoji are removed and the text capped, as for Sarvam. A clip
+    media/tts_check.py rejects is synthesised again once; if that fails too
+    it is returned anyway with an error logged, as Sarvam's last attempt
+    is. An HTTP error after the retries raises, and media/tts.py then says
+    the reply in the persona's Sarvam voice (D3).
     """
     if model not in MODELS:
         raise ValueError(f"unknown Gemini TTS model {model!r}")
-    voice = VOICES[voices.normalise_gender(gender)]
+    voice = voice or VOICES[voices.normalise_gender(gender)]
+    style = style if style is not None else style_for(language_code)
     text = speakable(text)
+    if len(text) > _MAX_TEXT_CHARS:
+        logger.warning(
+            "Gemini TTS input truncated from %d to %d chars",
+            len(text),
+            _MAX_TEXT_CHARS,
+        )
+        text = text[:_MAX_TEXT_CHARS]
     wav = b""
     for attempt in (1, 2):
         wav = await _request(text, voice, style, purpose, model)

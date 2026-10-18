@@ -282,3 +282,122 @@ def test_flash_lite_audio_is_two_thirds_of_flash(monkeypatch):
     later = _row(datetime(2027, 1, 1, 1, tzinfo=timezone.utc))
     later.model = "gemini-3.8-flash-lite-tts"
     assert pricing.cost_inr(later) == pricing.cost_inr(row) * 2
+
+
+# ── production hardening (docs/specs/GEMINI_TTS.md §4.1) ─────────────────────
+
+
+async def test_every_request_asks_google_not_to_store_it(gemini, usage_rows):
+    gemini.queue += [GOOD, BROKEN, GOOD]
+    await gemini_tts.synthesize("Hello.", "en-IN", gender="female", purpose="eval")
+    await gemini_tts.synthesize("x" * 80, "ml-IN", gender="male", purpose="eval")
+    bodies = [c.kwargs["json"] for c in gemini.client.post.call_args_list]
+    assert len(bodies) == 3
+    assert all(body["store"] is False for body in bodies)
+
+
+@pytest.mark.parametrize("language,hint", [("mr-IN", "Marathi"), ("as-IN", "Assamese")])
+async def test_a_script_shared_language_is_named_in_the_style(
+    gemini, usage_rows, language, hint
+):
+    gemini.queue.append(GOOD)
+    await gemini_tts.synthesize("नमस्कार.", language, gender="female", purpose="eval")
+    part = gemini.client.post.call_args.kwargs["json"]["input"][0]["content"][0]
+    assert part["annotations"][0]["style"] == f"{gemini_tts.STYLE}; speaking {hint}"
+
+
+@pytest.mark.parametrize("language", ["hi-IN", "en-IN", "ta-IN", "ml-IN", "bn-IN"])
+async def test_other_languages_keep_the_style_the_listeners_heard(
+    gemini, usage_rows, language
+):
+    gemini.queue.append(GOOD)
+    await gemini_tts.synthesize("Hello.", language, gender="female", purpose="eval")
+    part = gemini.client.post.call_args.kwargs["json"]["input"][0]["content"][0]
+    assert part["annotations"][0]["style"] == gemini_tts.STYLE
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+async def test_rate_limits_and_server_errors_are_retried_with_backoff(
+    gemini, usage_rows, monkeypatch, status
+):
+    sleeps = []
+
+    async def _sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("adapters.retry.asyncio.sleep", _sleep)
+    failing = MagicMock(status_code=status, text="busy")
+    replies = [failing, failing, _response(GOOD)]
+    gemini.client.post = AsyncMock(side_effect=lambda *a, **k: replies.pop(0))
+
+    wav = await gemini_tts.synthesize(
+        "Hello.", "en-IN", gender="female", purpose="eval"
+    )
+    assert gemini_tts.wav_seconds(wav) == pytest.approx(6.0)
+    assert gemini.client.post.await_count == 3
+    assert sleeps == [1.0, 2.0]
+    # Only the call that returned audio is billed.
+    assert len(usage_rows) == 1
+
+
+async def test_retries_give_up_after_three_attempts(gemini, monkeypatch):
+    monkeypatch.setattr("adapters.retry.asyncio.sleep", AsyncMock())
+    gemini.client.post = AsyncMock(return_value=MagicMock(status_code=429, text="x"))
+    with pytest.raises(RuntimeError, match="Gemini TTS error 429"):
+        await gemini_tts.synthesize("Hello.", "en-IN", gender="female", purpose="eval")
+    assert gemini.client.post.await_count == 3
+
+
+async def test_a_client_error_is_not_retried(gemini, monkeypatch):
+    monkeypatch.setattr("adapters.retry.asyncio.sleep", AsyncMock())
+    gemini.client.post = AsyncMock(return_value=MagicMock(status_code=400, text="x"))
+    with pytest.raises(RuntimeError, match="400"):
+        await gemini_tts.synthesize("Hello.", "en-IN", gender="female", purpose="eval")
+    assert gemini.client.post.await_count == 1
+
+
+async def test_a_timeout_is_retried(gemini, usage_rows, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr("adapters.retry.asyncio.sleep", AsyncMock())
+    replies = [httpx.ReadTimeout("slow"), _response(GOOD)]
+
+    async def _post(*a, **k):
+        reply = replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    gemini.client.post = AsyncMock(side_effect=_post)
+    await gemini_tts.synthesize("Hello.", "en-IN", gender="female", purpose="eval")
+    assert gemini.client.post.await_count == 2
+
+
+async def test_a_runaway_reply_is_capped(gemini, usage_rows):
+    gemini.queue.append(GOOD)
+    await gemini_tts.synthesize("a" * 4000, "en-IN", gender="female", purpose="eval")
+    part = gemini.client.post.call_args.kwargs["json"]["input"][0]["content"][0]
+    assert len(part["text"]) == 2500
+
+
+async def test_a_pinned_speaker_wins_over_the_persona(gemini, usage_rows):
+    gemini.queue.append(GOOD)
+    await gemini_tts.synthesize(
+        "Hello.",
+        "hi-IN",
+        gender="female",
+        purpose="tts_reply",
+        model=gemini_tts.LITE_MODEL,
+        voice="Achird",
+    )
+    body = gemini.client.post.call_args.kwargs["json"]
+    assert body["generation_config"]["speech_config"] == [{"voice": "Achird"}]
+    assert body["model"] == "gemini-3.8-flash-lite-tts"
+
+
+def test_production_speaks_flash_lite_and_the_kit_flash():
+    from media import voices
+
+    assert voices.GEMINI_TTS_MODEL == "gemini-3.8-flash-lite-tts"
+    assert gemini_tts.MODEL == "gemini-3.8-flash-tts"
+    assert gemini_tts.VOICES == {"female": "Sulafat", "male": "Achird"}

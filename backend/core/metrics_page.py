@@ -296,11 +296,22 @@ def _cost(c: dict) -> str:
         f"<b>{_pct(c['dialogue_cache_hit_rate'])}</b></p>"
         + f"<p>Median dialogue prompt tokens by session number — {tenure}. "
         "Should stay flat as relationships lengthen.</p>"
+        + _gemini_tts(c["units"]["last_30d"])
         + f"<p>Wasted outbound, 30 days: <b>{_e(wasted['count'])}</b> messages, "
         f"{_inr(wasted['inr'])} — {codes}</p>"
         + f"<p class=note>Unpriced: {unpriced}. Prices as of "
         f"{_e(c['prices_as_of'])} (core/pricing.py), USD→INR {_e(c['usd_inr_rate'])}. "
         f"{_e(c['note'])}</p>"
+    )
+
+
+def _gemini_tts(u: dict) -> str:
+    """GEMINI_TTS.md §6 stage 4: watch the fallbacks to Sarvam (under 1%)."""
+    return (
+        f"<p>Gemini voice, 30 days: <b>{_e(u['tts_gemini_clips'])}</b> clips, "
+        f"{_e(u['tts_gemini_audio_minutes'])} min. Said by Sarvam instead "
+        f"because Gemini failed: <b>{_e(u['tts_vendor_fallbacks'])}</b> "
+        f"({_pct(u['tts_vendor_fallback_rate'])}; keep under 1%).</p>"
     )
 
 

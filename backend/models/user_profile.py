@@ -48,6 +48,14 @@ class UserProfileModel(Base):
     katha_gender: Mapped[str] = mapped_column(
         String, nullable=False, server_default="female"
     )
+    # The voice she hears, for life: "vendor/model/speaker", e.g.
+    # "google/gemini-3.8-flash-lite-tts/Sulafat" (docs/specs/GEMINI_TTS.md
+    # §4.2). Set from language and persona when the profile is created, and
+    # again at onboarding if the family changes either. Only
+    # scripts/set_voice.py changes it after that, recording who did.
+    tts_voice: Mapped[str] = mapped_column(
+        String, nullable=False, default=lambda context: _default_tts_voice(context)
+    )
     onboarding_context: Mapped[str] = mapped_column(Text, nullable=False, default="")
     family_whatsapp_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     scheduled_time: Mapped[time] = mapped_column(Time, nullable=False)
@@ -71,3 +79,15 @@ class UserProfileModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+def _default_tts_voice(context) -> str:
+    """A new profile's pin, from its language and persona under the settings
+    of the day (media/tts.py default_voice)."""
+    from media import tts
+
+    params = context.get_current_parameters()
+    return tts.default_voice(
+        params.get("preferred_language") or "hi-IN",
+        params.get("katha_gender") or "female",
+    ).pin

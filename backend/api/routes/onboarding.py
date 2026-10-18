@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from core import auth
 from core.auth import get_current_user
-from media import voices
+from media import tts, voices
 from models.consent_record import ConsentRecord
 from models.db import get_db
 from models.family_account import FamilyAccount
@@ -135,10 +135,20 @@ async def onboarding_profile(
     )
     profile = result.scalar_one_or_none()
 
+    is_new = profile is None
     if profile is None:
         profile = UserProfileModel(user_id=user_id)
         db.add(profile)
 
+    if (
+        is_new
+        or profile.preferred_language != preferred_language
+        or profile.katha_gender != katha_gender
+    ):
+        # Pin her voice (media/tts.py) from language and persona. Re-sent
+        # setup that changes neither leaves the pin alone, so a family
+        # editing the context never changes the voice.
+        profile.tts_voice = tts.default_voice(preferred_language, katha_gender).pin
     profile.name = parent_name
     profile.whatsapp_number = whatsapp_number
     profile.family_whatsapp_number = family_whatsapp_number

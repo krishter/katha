@@ -114,7 +114,9 @@ class _Harness:
                     )
                 ),
             ),
+            # Both vendors: a new parent is pinned to Gemini by default.
             patch("adapters.sarvam_tts.synthesize", new=_capture_tts),
+            patch("adapters.gemini_tts.synthesize", new=_capture_tts),
             patch(
                 "media.audio_convert.convert_wav_to_ogg",
                 new=AsyncMock(return_value=b"ogg"),

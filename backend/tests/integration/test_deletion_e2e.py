@@ -33,6 +33,7 @@ from models.session import Session
 from models.story_atom import StoryAtom
 from models.turn import Turn
 from models.user_profile import UserProfileModel
+from models.voice_change import VoiceChange
 
 pytestmark = pytest.mark.integration
 
@@ -126,6 +127,15 @@ async def _seed_full_user(db, user_id: str) -> uuid.UUID:
         )
     )
     db.add(
+        VoiceChange(
+            user_id=user_id,
+            from_voice="sarvam/bulbul:v4-flash/simran_en_conversation",
+            to_voice="google/gemini-3.8-flash-lite-tts/Sulafat",
+            changed_by="Krish",
+            reason="D2 switch",
+        )
+    )
+    db.add(
         ConsentRecord(
             user_id=user_id,
             email_hash="e2e-hash",
@@ -149,6 +159,7 @@ async def _count_rows(db, user_id: str) -> dict:
         ("memory_cards", MemoryCard),
         ("facts", Fact),
         ("api_usage", ApiUsage),
+        ("voice_changes", VoiceChange),
     ]:
         rows = (
             (await db.execute(select(model).where(model.user_id == user_id)))
@@ -224,6 +235,7 @@ async def test_export_then_delete_removes_every_row(real_db, monkeypatch):
             "memory_cards": 0,
             "facts": 0,
             "api_usage": 0,
+            "voice_changes": 0,
         }, after
 
         # Consent records are retained and anonymised, never hard-deleted.

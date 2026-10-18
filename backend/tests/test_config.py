@@ -24,6 +24,8 @@ _SAFE_KWARGS = dict(
     TWILIO_TEMPLATE_MEDIA_HOST="",
     # Unset means the operator metrics routes 404 — safe.
     ADMIN_API_TOKEN="",
+    TTS_VENDOR="gemini",
+    GEMINI_API_KEY="AIza-real",
 )
 
 
@@ -171,3 +173,28 @@ def test_a_short_admin_token_raises_in_production():
 
 def test_a_long_admin_token_is_fine():
     validate_production_config(_settings(ADMIN_API_TOKEN="x" * 32))
+
+
+# ── TTS vendor (docs/specs/GEMINI_TTS.md §4.2) ──────────────────────────────
+
+
+def test_gemini_is_the_default_vendor():
+    from config import Settings
+
+    assert Settings.model_fields["TTS_VENDOR"].default == "gemini"
+    assert Settings.model_fields["GEMINI_TTS_LANGUAGES"].default == "all"
+
+
+def test_gemini_without_a_key_refuses_to_boot():
+    """Otherwise every new family's reply would quietly fall back to Sarvam."""
+    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+        validate_production_config(_settings(GEMINI_API_KEY=""))
+
+
+def test_sarvam_needs_no_gemini_key():
+    validate_production_config(_settings(TTS_VENDOR="sarvam", GEMINI_API_KEY=""))
+
+
+def test_an_unknown_vendor_refuses_to_boot():
+    with pytest.raises(RuntimeError, match="TTS_VENDOR"):
+        validate_production_config(_settings(TTS_VENDOR="svara"))

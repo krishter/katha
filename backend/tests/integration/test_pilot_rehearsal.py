@@ -139,7 +139,7 @@ async def test_full_session_pilot_rehearsal(real_db):
         ),
         patch("core.orchestrator.llm.chat", new=AsyncMock(side_effect=fake_llm_chat)),
         patch(
-            "core.orchestrator.sarvam_tts.synthesize",
+            "core.orchestrator.tts.synthesize",
             new=AsyncMock(return_value=_FAKE_WAV),
         ),
         patch(

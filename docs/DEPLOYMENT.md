@@ -116,7 +116,17 @@ DATABASE_URL=postgresql+asyncpg://...    # the compose db, not localhost
 AWS_S3_REGION=ap-south-1
 TWILIO_* + all five template SIDs        # no quotes, no spaces around '='
 SARVAM_API_KEY / ANTHROPIC_API_KEY
+GEMINI_API_KEY                           # from a BILLING-ENABLED Google project (see below)
+TTS_VENDOR=gemini                        # sarvam = rollback for new families
+GEMINI_TTS_LANGUAGES=all
 ```
+
+`GEMINI_API_KEY` must come from a Google project with billing enabled. On the free tier
+Google may use the content to improve its products, and the free tier allows only a few
+requests a day. With `TTS_VENDOR=gemini` and no key, production refuses to boot. After the
+first deploy with Gemini, startup synthesises the fallback apologies in the Gemini voices
+once (about 72 clips, a minute or so) and keeps them in S3. Moving existing families to
+Gemini is `python -m scripts.set_voice` (see `docs/specs/GEMINI_TTS.md` §6).
 
 Keep it out of git, `chmod 600`, and keep a sealed copy somewhere you'd still have it if the
 box died tonight.

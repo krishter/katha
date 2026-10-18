@@ -269,8 +269,9 @@ def _stub_paid_apis(llm_script: _LlmScript, spoken: list[tuple[str, str]]):
         # directly. Wrapping it in AsyncMock(side_effect=...) would
         # hand the caller an un-awaited coroutine.
         patch("adapters.llm.chat", new=llm_script),
+        # Both vendors, at the adapter: media/tts.py picks one per parent.
         patch("adapters.sarvam_tts.synthesize", new=_tts),
-        patch("core.orchestrator.sarvam_tts.synthesize", new=_tts),
+        patch("adapters.gemini_tts.synthesize", new=_tts),
         patch(
             "core.orchestrator.sarvam_stt.transcribe",
             new=AsyncMock(

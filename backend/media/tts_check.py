@@ -14,6 +14,12 @@ clips from that day, v3 and v4 Flash alike: no silence over 0.6 s, and
 3.7 characters per second. A good clip is never thrown away for being slow
 or pausing for breath.
 
+Gemini clips sit as clear of both (GEMINI_TTS.md §4.3, 50 clips from the
+2026-10-18 listening tests, Flash and Flash-Lite in Hindi, English and
+Malayalam): 8.7-19.2 characters per second, no pause over 1.3 s. Its
+"unhurried" style is slower than Sarvam, not slow enough to come near
+the limits, so they are unchanged.
+
 Only 16-bit PCM WAV is inspected, which is what Sarvam returns. Anything
 the check cannot read passes: the check exists to catch a known failure,
 never to cost a reply.
