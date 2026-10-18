@@ -11,10 +11,12 @@ from typing import Optional
 from fastapi import BackgroundTasks
 from sqlalchemy import select, update
 
+import cards
 from adapters import llm, sarvam_stt
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from cards import privacy as card_privacy
+from cards import write as card_writer
 from config import settings
 from core import conversation_policy, session_manager, usage
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
@@ -525,6 +527,27 @@ async def _produce_session_outputs(session_id: str, user_id: str, db) -> None:
         await run_post_session(session_id, user_id, db)
     except Exception:
         logger.exception("Post-session processing failed for session %s", session_id)
+
+    # Conversation cards replace the memory card for a family that has
+    # them (CONVERSATION_CARDS.md D2): today's card reaches the child
+    # without the parent's agreement, a conversation card never does. The
+    # profile is only read when the global switch is on, so with it off
+    # this is exactly the path it always was.
+    if settings.CONVERSATION_CARDS_ENABLED:
+        try:
+            profile = await get_user_profile(user_id, db)
+        except Exception:
+            # Not knowing whether she has cards, send nothing: falling back
+            # to the memory card would reach a cards family's child without
+            # her agreement.
+            logger.exception(
+                "Could not load profile for session %s — no card of either kind",
+                session_id,
+            )
+            return
+        if cards.enabled_for(profile):
+            await card_writer.draft_for_session(session_id, user_id, db)
+            return
 
     try:
         await _generate_and_deliver_memory_card(session_id, user_id, db)
