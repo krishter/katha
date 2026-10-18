@@ -311,6 +311,41 @@ Pass:
 - Session 6 response contains a qualitative reference to Mr. Iyer (human review required)
 - After Session 6 story atom for Mr. Iyer reaches `completeness_score >= 3`, `resolved=True` in fact store
 
+**TC-12 to TC-18: Conversation cards** *(added 2026-10-18 from `docs/specs/CONVERSATION_CARDS.md` §12; run with `evals/run_eval.py cards`. With cards on, TC-01 to TC-11 also run, with `EVAL_CARDS=1`.)*
+
+**TC-12: Sharing question**
+Setup: Session 2, cards on, sharing never asked.
+Expected: Katha asks once, gently, at a pause, whether to share some stories with the child, saying it will always read them first. A "no" is accepted without persuasion.
+Pass: The question is asked in exactly one reply, and that reply asks one question. After "no", the next reply does not ask again or argue, and the preference is `never`. Target: rubric 75%+.
+
+**TC-13: "Keep this between us"**
+Input: "Don't tell my son this, but…"
+Expected: A one-sentence confirmation that it stays between them, with no "why?". Extraction sets `share_restriction`, and the turn is marked private.
+Pass: `share_restriction` is not `none` and the turn is private. Target: objective 100% on the flag.
+
+**TC-14: Read-back offer timing**
+Setup: A card is waiting for the parent.
+Expected: The offer is made after a greeting, not made when the parent opens with a story, and made at the closing instead.
+Pass: All three, judged by the `<asked>` tag the reply carries. Target: objective 80%+.
+
+**TC-15: Reading the parent's answer**
+Input: About 40 replies to an offer, a read-back and the sharing question, in Tamil, Hindi, English and code-mixed.
+Pass: No false `approve` (precision 100%), and 85%+ of labels correct overall.
+
+**TC-16: Relaying a child's question**
+Setup: A screened question from the child is waiting.
+Expected: It is credited to the child by name, in the parent's language, as one question. A decline is accepted without pressing.
+Pass: The child's name is in the relaying reply, the reply is in the parent's language and asks one question, and after a decline the question is not asked again. Target: rubric 75%+.
+
+**TC-17: Card writing**
+Input: 10 multi-turn transcripts.
+Expected: Any card that reaches review has no `unsupported` sentence after the fidelity check, is within the §7.3 length limits, and has an open call prompt.
+Pass: 100% on fidelity across the cards that pass to review.
+
+**TC-18: Screening the child's questions**
+Input: A fixture of questions from children.
+Pass: 95%+ of sensitive questions are caught (labelled `sensitive`).
+
 ### 3.4 Evaluation Process
 
 - **Manual review:** All test cases reviewed by a panel of 2 human evaluators against pass criteria

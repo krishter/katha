@@ -71,6 +71,43 @@ class CardsContext:
     child_name: str = ""
     parent_title: str = ""
     layer4: list[str] = field(default_factory=list)
+    # The kinds this turn's reply may report in an <asked> tag.
+    tag_kinds: list[str] = field(default_factory=list)
+
+
+def _cards_layer2(cards: CardsContext) -> str:
+    """Standing rules when cards are on (CONVERSATION_CARDS.md §5.2, §10.3)."""
+    child = cards.child_name or "their child"
+    return f"""
+
+PRIVATE REQUESTS: If the user asks for something to stay private, or not to \
+be told to their family, confirm it in one short sentence in their language \
+("Of course. This stays between us.") and do not ask why.
+
+QUESTIONS FROM {child.upper()}: You may sometimes pass on a question from \
+{child}. Always say it comes from {child}, by name; never present it as \
+your own curiosity. Ask it once. If the user would rather not answer, accept \
+that warmly and move on, and never press. Never say that what they answer \
+will be passed back."""
+
+
+def _cards_layer4(cards: CardsContext) -> str:
+    if not cards.layer4:
+        return ""
+    lines = "\n".join(f"- {line}" for line in cards.layer4)
+    return f"\n\nThis turn (conversation cards):\n{lines}"
+
+
+def _cards_layer5(cards: CardsContext) -> str:
+    if not cards.tag_kinds:
+        return ""
+    kinds = ", ".join(cards.tag_kinds)
+    return f"""
+
+When Layer 4 asked you to make an ask and your reply makes it, add one \
+line after </response>: <asked>KIND</asked>, where KIND is one or more of \
+{kinds}, comma-separated, naming only what this reply actually did. If it \
+did none of them, add nothing. This tag is never spoken."""
 
 
 @dataclass
@@ -683,19 +720,22 @@ def build_system_prompt_parts(
     prior_context: PriorContext,
 ) -> SystemPromptParts:
     """The dialogue system prompt, split for caching; see build_system_prompt."""
+    cards = user_profile.cards
+    layer2 = _layer2_therapeutic()
+    layer4 = _layer4_session_state(session_state, prior_context)
+    layer5 = _layer5_output_format()
+    if cards is not None:
+        layer2 += _cards_layer2(cards)
+        layer4 += _cards_layer4(cards)
+        layer5 += _cards_layer5(cards)
     stable = "\n\n".join(
         [
             _layer1_persona(user_profile),
-            _layer2_therapeutic(),
+            layer2,
             _layer3_life_context(user_profile, session_state, prior_context),
         ]
     )
-    per_turn = "\n\n".join(
-        [
-            _layer4_session_state(session_state, prior_context),
-            _layer5_output_format(),
-        ]
-    )
+    per_turn = "\n\n".join([layer4, layer5])
     return SystemPromptParts(stable=stable, per_turn=per_turn)
 
 

@@ -195,9 +195,12 @@ other than English.
 length. Never a quiz, never yes/no. It must not assume any fact the parent \
 did not say.
 - held_back_note: for the reviewer only: what the card leaves out and why.
-- readback_text: the hook, the excerpt and the call prompt, in \
-{language_name}, to be read aloud to the parent, keeping original_quote \
-exactly as said. Plain spoken sentences, no labels.
+- readback_text: exactly what Katha will say aloud to {parent_title}, in \
+{language_name}, as one short voice note: first one line saying this is what \
+you wrote from what they told you, for {child_name}; then the hook, the \
+excerpt and the call prompt; then the question "Shall I send this to \
+{child_name}?". Keep original_quote exactly as said. Plain spoken sentences, \
+no labels, no emoji.
 {fix_block}
 TRANSCRIPTS (the only source of truth)
 {render_turns(turns)}

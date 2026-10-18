@@ -527,3 +527,94 @@ async def test_an_image_failure_does_not_lose_the_card(real_db, alert, monkeypat
     [card] = await cards_of(real_db, s.user_id)
     assert card.status == "operator_review"
     assert card.image_s3_key is None
+
+
+# ── her correction (§6.3) ────────────────────────────────────────────────────
+
+
+async def _corrected_card(db, s, round_):
+    card = ConversationCard(
+        id=uuid.uuid4(),
+        user_id=s.user_id,
+        status="draft",
+        source_turn_ids=[s.turns[0]],
+        source_atom_ids=[s.atoms[0]],
+    )
+    state.set_text(card, **{k: v for k, v in GOOD_CARD.items()})
+    card.status = "correction"
+    card.correction_round = round_
+    card.readback_offers = 2
+    card.parent_answer = "correction"
+    db.add(card)
+    await db.commit()
+    correction = uuid.uuid4()
+    db.add(
+        Turn(
+            id=correction,
+            session_id=uuid.UUID(s.session_id),
+            user_id=s.user_id,
+            turn_number=9,
+            transcript="Illai, it was my uncle who took me, not my father.",
+            response_text="…",
+        )
+    )
+    await db.commit()
+    return card.id, correction
+
+
+async def test_a_correction_is_rewritten_checked_and_reviewed_again(real_db, alert):
+    s = await seed(real_db)
+    card_id, correction = await _corrected_card(real_db, s, round_=1)
+    fixed = dict(
+        GOOD_CARD, hook="Did you know Amma's uncle took her to her first film?"
+    )
+    seen = []
+
+    async def chat(messages, **kwargs):
+        seen.append((kwargs["purpose"], messages[0].content))
+        if kwargs["purpose"] == "card_write":
+            return reply(fixed)
+        return reply(
+            {
+                "sentences": [
+                    {
+                        "field": "hook",
+                        "text": fixed["hook"],
+                        "verdict": "supported",
+                        "turn_ids": [str(correction)],
+                    },
+                    {
+                        "field": "excerpt",
+                        "text": fixed["excerpt"],
+                        "verdict": "supported",
+                        "turn_ids": [str(s.turns[0])],
+                    },
+                ]
+            }
+        )
+
+    with patch("cards.write.llm.chat", new=chat):
+        await write.rewrite_for_correction(card_id, correction, real_db)
+
+    [card] = await cards_of(real_db, s.user_id)
+    assert card.status == "operator_review"
+    assert card.hook == fixed["hook"]
+    assert card.source_turn_ids == [s.turns[0], correction]
+    assert card.readback_offers == 0 and card.parent_answer is None
+    assert card.fidelity_json["correction"].startswith("Illai")
+    # The writer saw her correction and the transcript it came from.
+    assert "my uncle who took me" in seen[0][1]
+    alert.assert_awaited_once()
+
+
+async def test_a_second_correction_goes_to_the_operator_by_hand(real_db, alert):
+    s = await seed(real_db)
+    card_id, correction = await _corrected_card(real_db, s, round_=2)
+    model = Model()
+    with patch("cards.write.llm.chat", new=model):
+        await write.rewrite_for_correction(card_id, correction, real_db)
+    [card] = await cards_of(real_db, s.user_id)
+    assert card.status == "operator_review"
+    assert card.fidelity_json["note"].startswith("Second correction")
+    assert model.calls == []
+    alert.assert_awaited_once()

@@ -1435,3 +1435,52 @@ async def test_a_share_signal_failure_does_not_cost_the_turn():
         )
     apply.assert_awaited_once()
     assert turn_row.extraction_json == _EXTRACTION_JSON
+
+
+async def test_a_session_waiting_on_her_answer_does_not_close():
+    """CONVERSATION_CARDS.md §6.1: closing would turn her answer away."""
+    import dataclasses
+
+    from core.orchestrator import run_extraction_for_turn
+    from prompts.system_prompt import CardsContext
+
+    turn_row = SimpleNamespace(
+        id=uuid.uuid4(), extraction_json={}, input_tokens=0, output_tokens=0
+    )
+    before = _make_session_state(goal_met=True)
+    after = _make_session_state(goal_met=True, session_end_suggested=True)
+    with (
+        patch(
+            "core.orchestrator.llm.chat",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    content=_EXTRACTION_LLM_CONTENT,
+                    input_tokens=1,
+                    output_tokens=1,
+                    stop_reason="end_turn",
+                )
+            ),
+        ),
+        patch("core.orchestrator.story_extractor.process_extraction", new=AsyncMock()),
+        patch("core.orchestrator.card_privacy.apply_share_signals", new=AsyncMock()),
+        patch(
+            "core.orchestrator.session_manager.apply_extraction",
+            new=AsyncMock(return_value=after),
+        ),
+        patch(
+            "core.orchestrator.card_asks.has_pending_ask",
+            new=AsyncMock(return_value=True),
+        ),
+        patch("core.orchestrator.close_and_process_session", new=AsyncMock()) as close,
+    ):
+        await run_extraction_for_turn(
+            turn_row.id,
+            _SESSION_ID,
+            before,
+            dataclasses.replace(_make_profile(), cards=CardsContext()),
+            PriorContext(),
+            "t",
+            "Shall I read it to you?",
+            _make_extraction_db(turn_row=turn_row),
+        )
+    close.assert_not_awaited()

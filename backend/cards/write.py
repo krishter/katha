@@ -257,6 +257,41 @@ async def check_fidelity(
     return sentences, problems
 
 
+async def _check_and_rewrite(
+    card: ConversationCard,
+    fields: dict,
+    write_args: dict,
+    source_turns: list[dict],
+    parent_title: str,
+) -> tuple[bool, list[dict]]:
+    """Check; on any problem rewrite once and check again (§7.4)."""
+    passes = []
+    for attempt in range(MAX_FIDELITY_PASSES):
+        sentences, problems = await check_fidelity(fields, source_turns, parent_title)
+        problems = shape_problems(fields) + problems
+        passes.append(
+            {"fields": dict(fields), "sentences": sentences, "problems": problems}
+        )
+        if not problems:
+            return True, passes
+        if attempt + 1 == MAX_FIDELITY_PASSES:
+            break
+        # Keep any standing instruction (her correction) alongside what the
+        # check found.
+        fixes = [*(write_args.get("fixes") or []), *problems]
+        fields = _clean(
+            await _ask(
+                card_prompts.build_writing_prompt(
+                    **{**write_args, "fixes": fixes}, previous=fields
+                ),
+                "card_write",
+                WRITE_MAX_TOKENS,
+            )
+        )
+        state.set_text(card, **fields)
+    return False, passes
+
+
 async def draft_for_session(
     session_id: str, user_id: str, db: AsyncSession
 ) -> DraftOutcome:
@@ -370,29 +405,9 @@ async def _draft(session_id: str, user_id: str, db: AsyncSession) -> DraftOutcom
     )
     state.set_text(card, **fields)
 
-    passes = []
-    passed = False
-    for attempt in range(MAX_FIDELITY_PASSES):
-        sentences, problems = await check_fidelity(fields, source_turns, parent_title)
-        problems = shape_problems(fields) + problems
-        passes.append(
-            {"fields": dict(fields), "sentences": sentences, "problems": problems}
-        )
-        if not problems:
-            passed = True
-            break
-        if attempt + 1 == MAX_FIDELITY_PASSES:
-            break
-        fields = _clean(
-            await _ask(
-                card_prompts.build_writing_prompt(
-                    **write_args, fixes=problems, previous=fields
-                ),
-                "card_write",
-                WRITE_MAX_TOKENS,
-            )
-        )
-        state.set_text(card, **fields)
+    passed, passes = await _check_and_rewrite(
+        card, fields, write_args, source_turns, parent_title
+    )
 
     card.fidelity_json = {
         "result": "passed" if passed else "failed",
@@ -426,3 +441,106 @@ async def _draft(session_id: str, user_id: str, db: AsyncSession) -> DraftOutcom
             "Target: reviewed within 24 hours.",
         )
     return DraftOutcome("drafted", card.status, card.id)
+
+
+async def rewrite_for_correction(
+    card_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession
+) -> None:
+    """
+    She corrected the card after hearing it (§6.3). Her correction turn
+    becomes a source, the card is rewritten and checked, and it goes back
+    to the operator and then to her once more. A second correction goes to
+    the operator to resolve by hand. Never raises.
+    """
+    try:
+        await _rewrite_for_correction(card_id, turn_id, db)
+    except Exception:
+        logger.exception("Rewriting corrected card %s failed", card_id)
+        await db.rollback()
+
+
+async def _rewrite_for_correction(card_id, turn_id, db) -> None:
+    card = (
+        await db.execute(select(ConversationCard).where(ConversationCard.id == card_id))
+    ).scalar_one_or_none()
+    if card is None or card.status != "correction":
+        return
+    profile = (
+        await db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == card.user_id)
+        )
+    ).scalar_one()
+    family = await family_of(card.user_id, db)
+    parent_title = (family.parent_title if family else None) or profile.name
+    child_name = (family.child_name if family else None) or "their child"
+
+    card.source_turn_ids = [*(card.source_turn_ids or []), turn_id]
+    # Read back once more after this: the offer count starts again.
+    card.readback_offers = 0
+    card.parent_answer = None
+    card.approved_hash = None
+
+    if (card.correction_round or 0) >= 2:
+        card.fidelity_json = {
+            **(card.fidelity_json or {}),
+            "note": "Second correction from her: resolve by hand.",
+        }
+        state.transition(card, "operator_review")
+        await db.commit()
+        await send_operator_alert(
+            "A card needs a correction resolved by hand",
+            f'Card "{card.title}" for user {card.user_id} was corrected twice. '
+            "See /admin/cards/view.",
+        )
+        return
+
+    source_turns = await load_turns(list(card.source_turn_ids), db)
+    correction = next((t for t in source_turns if t["id"] == str(turn_id)), None)
+    said = correction["transcript"] if correction else "(not readable)"
+    current = {name: getattr(card, name) for name in FIELDS}
+    write_args = dict(
+        turns=source_turns,
+        parent_title=parent_title,
+        child_name=child_name,
+        language_name=_language_name(profile.preferred_language),
+        pronouns=profile.pronouns or "",
+        fixes=[
+            f'{parent_title} heard the card read back and corrected it: "{said}". '
+            "Change what the correction requires and nothing else."
+        ],
+    )
+    fields = _clean(
+        await _ask(
+            card_prompts.build_writing_prompt(**write_args, previous=current),
+            "card_write",
+            WRITE_MAX_TOKENS,
+        )
+    )
+    state.set_text(card, **fields)
+    passed, passes = await _check_and_rewrite(
+        card, fields, write_args, source_turns, parent_title
+    )
+    card.fidelity_json = {
+        "result": "passed" if passed else "failed",
+        "rewritten": len(passes) > 1,
+        "sentences": passes[-1]["sentences"],
+        "passes": passes,
+        "correction": said,
+    }
+    if not passed:
+        state.transition(card, "failed_fidelity")
+        await db.commit()
+        logger.info("Corrected card %s failed its fidelity check", card.id)
+        return
+
+    card.image_s3_key = None
+    await card_image.try_render(card, parent_title)
+    review = settings.CARDS_OPERATOR_REVIEW
+    state.transition(card, "operator_review" if review else "awaiting_parent")
+    await db.commit()
+    if review:
+        await send_operator_alert(
+            "A corrected conversation card is waiting for review",
+            f'Card "{card.title}" for user {card.user_id} was corrected by her and '
+            "rewritten. See /admin/cards/view.",
+        )

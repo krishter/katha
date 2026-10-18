@@ -85,3 +85,40 @@ def test_cards_on_changes_only_what_it_adds():
     start = on.index("\n\nThe JSON object must also include")
     end = on.index("share_restriction, not this.") + len("share_restriction, not this.")
     assert on[:start] + on[end:] == off
+
+
+# ── dialogue (§9.1) ──────────────────────────────────────────────────────────
+
+
+def test_cards_on_adds_the_standing_rules_to_layer_2():
+    from prompts.system_prompt import build_system_prompt_parts
+
+    parts = build_system_prompt_parts(
+        dataclasses.replace(_PROFILE, cards=_CARDS), _state(), PriorContext()
+    )
+    assert "This stays between us." in parts.stable
+    assert "QUESTIONS FROM PRIYA" in parts.stable
+    # Nothing per-turn unless this turn carries something.
+    assert "conversation cards" not in parts.per_turn
+    assert "<asked>" not in parts.per_turn
+
+
+def test_this_turns_card_lines_go_in_layer_4_and_the_tag_in_layer_5():
+    from prompts.system_prompt import build_system_prompt_parts
+
+    cards = dataclasses.replace(
+        _CARDS,
+        layer4=["Offer to read the card."],
+        tag_kinds=["readback_offer"],
+    )
+    parts = build_system_prompt_parts(
+        dataclasses.replace(_PROFILE, cards=cards), _state(), PriorContext()
+    )
+    layer4, layer5 = parts.per_turn.split("LAYER 5")
+    assert "- Offer to read the card." in layer4
+    assert "<asked>KIND</asked>" in layer5 and "readback_offer" in layer5
+    # The stable, cached half does not change from turn to turn.
+    plain = build_system_prompt_parts(
+        dataclasses.replace(_PROFILE, cards=_CARDS), _state(), PriorContext()
+    )
+    assert parts.stable == plain.stable
