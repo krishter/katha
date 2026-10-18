@@ -40,13 +40,15 @@ PARENT_CONSENT_VERSION = "parent-1.0"
 PRINCIPAL_PARENT = "parent"
 PRINCIPAL_BUYER = "buyer"
 
-# Every recording-consent version starts with this. The parent also gives
-# other answers that are logged as consent records under her own
-# principal, such as whether her stories may be shared with her child
-# (core/sharing.py, "share-1.0"). Those must never be read as an answer
-# to *this* question: "don't send anything to my son" is not "stop
-# recording me", and "yes, share them" is not consent to be recorded.
-_RECORDING_VERSION_PREFIX = "parent-"
+# The parent also gives answers that are not about being recorded, logged
+# as consent records under her own principal: whether her stories may be
+# shared with her child (core/sharing.py, versions "share-…"). Those must
+# never be read as an answer to *this* question: "don't send anything to
+# my son" is not "stop recording me", and "yes, share them" is not consent
+# to be recorded. They are excluded by prefix rather than recording
+# consent being required to match one, so a record written some other way
+# (an operator's, an older format) still counts as it always has.
+SHARING_VERSION_PREFIX = "share-"
 
 
 class ConsentStatus(str, Enum):
@@ -276,7 +278,7 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
         select(ConsentRecord)
         .where(ConsentRecord.user_id == user_id)
         .where(ConsentRecord.principal == PRINCIPAL_PARENT)
-        .where(ConsentRecord.consent_version.startswith(_RECORDING_VERSION_PREFIX))
+        .where(~ConsentRecord.consent_version.startswith(SHARING_VERSION_PREFIX))
         .order_by(ConsentRecord.consented_at.desc())
     )
     records = result.scalars().all()
@@ -290,7 +292,7 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
     for record in records:
         # The query already filters, but this is the one place a wrong row
         # would turn into recording someone who said no.
-        if not record.consent_version.startswith(_RECORDING_VERSION_PREFIX):
+        if record.consent_version.startswith(SHARING_VERSION_PREFIX):
             continue
         if record.consent_version.endswith("-declined"):
             return ParentConsentState(ConsentStatus.DECLINED, record.consented_at)

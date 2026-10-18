@@ -229,8 +229,8 @@ async def test_verify_magic_link_looks_up_by_hashed_token():
 
 async def test_send_email_ses_mock_mode_does_not_call_boto3():
     with (
-        patch("core.auth.settings") as mock_settings,
-        patch("core.auth.boto3.client") as mock_boto_client,
+        patch("core.email.settings") as mock_settings,
+        patch("core.email.boto3.client") as mock_boto_client,
     ):
         mock_settings.SES_MOCK = True
         await send_email_ses(_EMAIL, "Subject", "text body", "<p>html body</p>")
@@ -240,8 +240,8 @@ async def test_send_email_ses_mock_mode_does_not_call_boto3():
 async def test_send_email_ses_calls_boto3_when_not_mocked():
     mock_client = MagicMock()
     with (
-        patch("core.auth.settings") as mock_settings,
-        patch("core.auth.boto3.client", return_value=mock_client) as mock_boto_client,
+        patch("core.email.settings") as mock_settings,
+        patch("core.email.boto3.client", return_value=mock_client) as mock_boto_client,
     ):
         mock_settings.SES_MOCK = False
         mock_settings.SES_FROM_EMAIL = "noreply@katha.life"

@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-import boto3
 from fastapi import HTTPException, Request
 from jose import JWTError, jwt
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
+from core.email import send_email_ses  # noqa: F401  (re-exported)
 from models.family_account import FamilyAccount
 from models.magic_link_token import MagicLinkToken
 
@@ -236,31 +235,6 @@ async def verify_magic_link(token: str, db: AsyncSession) -> tuple[str, str]:
 
     await db.commit()
     return account.email, account.user_id
-
-
-async def send_email_ses(to: str, subject: str, body_text: str, body_html: str) -> None:
-    """
-    Send an email via AWS SES (ap-south-1, for data residency).
-    In dev (SES_MOCK=true), print the email instead of sending it.
-    """
-    if settings.SES_MOCK:
-        logger.info("[SES_MOCK] To: %s | Subject: %s\n%s", to, subject, body_text)
-        return
-
-    client = boto3.client("ses", region_name=settings.AWS_S3_REGION)
-    await asyncio.to_thread(
-        client.send_email,
-        Source=settings.SES_FROM_EMAIL,
-        Destination={"ToAddresses": [to]},
-        Message={
-            "Subject": {"Data": subject},
-            "Body": {
-                "Text": {"Data": body_text},
-                "Html": {"Data": body_html},
-            },
-        },
-    )
-    logger.info("Sent magic link email via SES")
 
 
 # ── Operator auth (docs/specs/ADMIN_METRICS.md §4) ───────────────────────────

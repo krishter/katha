@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters import sarvam_stt
 from adapters.whatsapp_stub import get_whatsapp_adapter
+from cards import context as card_context
 from config import settings
 from core import orchestrator, parent_consent, session_manager, usage
 from core.delivery import record_card_delivery
@@ -335,6 +336,7 @@ async def _load_user_profile_for_session(
         pronouns=row.pronouns or "",
         katha_gender=row.katha_gender,
         tts_voice=row.tts_voice or "",
+        cards=await card_context.context_for(row, db),
     )
 
 

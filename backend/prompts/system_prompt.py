@@ -54,6 +54,23 @@ class UserProfile:
     # (media/tts.py). Not rendered: it decides how replies sound, not what
     # they say. Empty means the default for her language and persona.
     tts_voice: str = ""
+    # Conversation cards (docs/specs/CONVERSATION_CARDS.md), or None when
+    # cards are not on for her. None leaves every prompt exactly as it was
+    # before cards existed.
+    cards: Optional["CardsContext"] = None
+
+
+@dataclass
+class CardsContext:
+    """
+    What the prompts need when cards are on for her. `layer4` is this
+    turn's card instructions (the sharing ask, a read-back offer, a child's
+    question, the recap), chosen by cards/asks.py; usually empty.
+    """
+
+    child_name: str = ""
+    parent_title: str = ""
+    layer4: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -714,6 +731,32 @@ _DOMAIN_ID_LIST = "\n".join(
 )
 
 
+def _cards_extraction_fields(user_profile: UserProfile) -> str:
+    """The extraction fields cards add (CONVERSATION_CARDS.md §5.1, §5.2):
+    nothing at all when cards are off for her."""
+    if user_profile.cards is None:
+        return ""
+    return """
+
+The JSON object must also include these three fields:
+
+  "share_restriction": "none" | "this_turn" | "topic",
+  "topic_label": "string or null",
+  "share_preference_change": "none" | "share" | "never"
+
+share_restriction: "this_turn" if the user asks for what they just said to \
+stay private or not be told to their family ("don't tell my son this", "this \
+is between us"). "topic" if they ask for a whole subject to stay private \
+("never tell anyone about my brother's illness"); then topic_label names the \
+subject in a few plain words. Otherwise "none".
+
+share_preference_change: "never" if the user says none of their stories \
+should go to their family ("don't send anything to my daughter"). "share" if \
+they say their stories may be shared ("you can share my stories with \
+Priya"). Otherwise "none". Asking to keep one thing private is \
+share_restriction, not this."""
+
+
 def build_extraction_prompt(
     user_profile: UserProfile,
     session_state: SessionState,
@@ -802,7 +845,7 @@ For story_atoms: only include an entry if the user's statement actually \
 contains a coherent piece of their story — do not fabricate one from a short \
 or contentless reply. Each entry must be a JSON object with exactly the \
 fields shown above, not a plain string. If nothing story-worthy was said, \
-return an empty list.
+return an empty list.{_cards_extraction_fields(user_profile)}
 
 For significant_people: this list is for the few people who shaped this life, \
 not everyone who appears in it. Add an entry only when the user signals weight \

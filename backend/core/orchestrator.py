@@ -14,6 +14,7 @@ from sqlalchemy import select, update
 from adapters import llm, sarvam_stt
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
+from cards import privacy as card_privacy
 from config import settings
 from core import conversation_policy, session_manager, usage
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
@@ -1088,6 +1089,21 @@ async def _run_extraction_for_turn(
             # picks it from the registry.
             session_domain=session_state.domain,
         )
+
+        if user_profile.cards is not None:
+            # "Keep this between us", and her sharing preference said in
+            # passing (CONVERSATION_CARDS.md §5). Its own try: a failure
+            # here must not cost the turn's atoms or the session close.
+            try:
+                await card_privacy.apply_share_signals(
+                    extraction_json,
+                    turn_id=turn_id,
+                    session_id=session_id,
+                    user_id=session_state.user_id,
+                    db=db,
+                )
+            except Exception:
+                logger.exception("Share signals failed for turn %s", turn_id)
 
         turn_result = await db.execute(select(Turn).where(Turn.id == turn_id))
         turn = turn_result.scalar_one_or_none()
