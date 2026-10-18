@@ -127,7 +127,7 @@ async def test_initiate_sessions_sends_voice_note_to_scheduled_user():
             new=AsyncMock(return_value=True),
         ),
         patch(
-            "scheduler.session_initiator.sarvam_tts.synthesize",
+            "scheduler.session_initiator.tts.synthesize",
             new=AsyncMock(return_value=b"fake-audio"),
         ),
     ):
@@ -186,7 +186,7 @@ async def test_initiate_sessions_uses_session_domain_not_hardcoded_childhood():
             new=AsyncMock(return_value=True),
         ),
         patch(
-            "scheduler.session_initiator.sarvam_tts.synthesize",
+            "scheduler.session_initiator.tts.synthesize",
             new=AsyncMock(return_value=b"fake-audio"),
         ) as mock_synth,
     ):
@@ -363,7 +363,7 @@ async def test_scheduler_does_not_initiate_without_parent_consent():
             new=AsyncMock(return_value=False),
         ),
         patch(
-            "scheduler.session_initiator.sarvam_tts.synthesize",
+            "scheduler.session_initiator.tts.synthesize",
             new=AsyncMock(return_value=b"fake-audio"),
         ),
     ):
@@ -403,7 +403,7 @@ def _everything_patched(stack, stub_adapter, abandoned):
         )
     )
     stack.enter_context(
-        patch("scheduler.session_initiator.sarvam_tts.synthesize", new=mocks["tts"])
+        patch("scheduler.session_initiator.tts.synthesize", new=mocks["tts"])
     )
     stack.enter_context(
         patch(
@@ -497,7 +497,7 @@ async def test_rollback_opener_is_billed_as_tts_opener():
             "scheduler.session_initiator.parent_consent.has_granted",
             new=AsyncMock(return_value=True),
         ),
-        patch("scheduler.session_initiator.sarvam_tts.synthesize", new=tts),
+        patch("scheduler.session_initiator.tts.synthesize", new=tts),
     ):
         await initiate_sessions(factory)
 

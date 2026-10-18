@@ -30,7 +30,7 @@
        ↓                    ↓
 [Session Memory / RAG]  [Story Database]
        ↓                    ↓
-[Sarvam Bulbul V3]    [Family Dashboard API]
+[Gemini / Sarvam TTS] [Family Dashboard API]
    (Text → Voice)      (Web Interface)
 ```
 
@@ -56,11 +56,12 @@
 - System prompt architecture: Persona + therapeutic protocol + life context + conversation state
 - Function calling: `extract_story`, `identify_theme`, `generate_memory_card`, `check_gaps`
 
-**Sarvam Bulbul V3 (Text-to-Speech)**
-- 35+ voices across 11+ Indian languages (expanding to 22)
-- Emotional prosody for empathetic delivery
-- Telephony-grade audio (optimized for elderly hearing)
-- Handles code-switching and regional pronunciation
+**Text-to-Speech: Gemini 3.8 Flash-Lite TTS, with Sarvam Bulbul**
+*(Changed 2026-10-18; see `docs/specs/GEMINI_TTS.md`. This section said Sarvam Bulbul V3.)*
+- New families speak with Gemini 3.8 Flash-Lite TTS: one voice per persona (Sulafat, Achird) in 12 of Katha's 13 languages, steered by a plain-words style ("unhurried, warm and gentle").
+- Sarvam Bulbul (v4 Flash where it has a conversation voice, else v3) speaks Urdu, which Gemini does not list, and every family pinned before the switch.
+- Each parent's voice is pinned on her profile (`user_profiles.tts_voice`) and only an operator moves it (`scripts/set_voice.py`), so a change of default never changes the voice she knows.
+- If Gemini fails, that one reply is said in the persona's Sarvam voice rather than sent as text.
 
 **Session Memory & RAG**
 - Per-user vector store of all session content
@@ -84,7 +85,7 @@
 2. Audio forwarded to Sarvam Saaras V3 → transcript returned
 3. Transcript + prior session context injected into LLM prompt
 4. LLM generates: (a) conversational response and (b) story extraction JSON
-5. Response text → Sarvam Bulbul V3 → audio file
+5. Response text → TTS in the parent's pinned voice (Gemini or Sarvam) → audio file
 6. Audio sent to user as WhatsApp voice note
 7. Story extraction stored asynchronously in database
 8. At session close: memory card generated, sent to adult child's WhatsApp

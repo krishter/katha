@@ -17,6 +17,7 @@ from models.session import Session
 from models.story_atom import StoryAtom
 from models.turn import Turn
 from models.user_profile import UserProfileModel
+from models.voice_change import VoiceChange
 
 # Deletion order matters for FK constraints (children before parents).
 # family_accounts and magic_link_tokens are included because
@@ -25,6 +26,7 @@ from models.user_profile import UserProfileModel
 # collision rather than on anything real.
 _TABLES_IN_DELETE_ORDER = [
     ApiUsage,
+    VoiceChange,
     ConsentRecord,
     CrisisEvent,
     MemoryCard,

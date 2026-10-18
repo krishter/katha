@@ -55,6 +55,19 @@ def usage_rows(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_real_gemini(monkeypatch):
+    """
+    No test reaches Google with the developer's real key from backend/.env.
+    New parents default to Gemini, so an unmocked speech path would
+    otherwise make a live, billed call. With the key blank, such a call
+    fails before any request and media/tts.py falls back to Sarvam, which
+    the test mocks or which fails just the same. Tests of the Gemini
+    adapter set their own key.
+    """
+    monkeypatch.setattr("config.settings.GEMINI_API_KEY", "")
+
+
+@pytest.fixture(autouse=True)
 def system_speech_store(monkeypatch):
     """
     Keep the system-speech cache in memory for every test. backend/.env can

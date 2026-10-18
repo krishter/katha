@@ -93,6 +93,7 @@ async def synthesize(
     gender: str | None,
     purpose: str,
     model: str | None = None,
+    voice: voices.Voice | None = None,
 ) -> bytes:
     """
     Convert text to speech with Sarvam Bulbul. Returns raw WAV bytes.
@@ -110,6 +111,10 @@ async def synthesize(
     it; the operator listening kit does, to synthesise the same text on v3
     and v4 Flash for a blind comparison.
 
+    `voice` is the parent's pinned Sarvam voice, passed by media/tts.py;
+    it wins over both, so a later change of TTS_MODEL or the voice table
+    does not change what she hears.
+
     Emoji are removed first. Each clip then goes through
     media/tts_check.py: a clip that is mostly silence is synthesised again
     once, and if v4 Flash fails twice the reply is said on v3, in the same
@@ -118,7 +123,8 @@ async def synthesize(
     — a poor voice note is still better than none, and the caller's own
     fallbacks are for errors, not for this.
     """
-    voice = voices.voice_for(language_code, gender, model or settings.TTS_MODEL)
+    if voice is None:
+        voice = voices.voice_for(language_code, gender, model or settings.TTS_MODEL)
     text = speakable(text)
     if len(text) > _MAX_TEXT_CHARS:
         logger.warning(

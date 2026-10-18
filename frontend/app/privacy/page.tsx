@@ -41,6 +41,13 @@ export default function PrivacyPage() {
           All data is stored in India (AWS ap-south-1, Mumbai), in line with
           the Digital Personal Data Protection Act, 2023.
         </p>
+        <p className="mt-2 text-sm">
+          To write and speak Katha&apos;s replies, the conversation text is
+          processed by AI service providers outside India (Anthropic for the
+          replies, Google for the voice). They use it only to answer each
+          request and do not use it to train their models. Any copy they keep
+          for abuse monitoring is deleted after a limited period.
+        </p>
       </section>
 
       <section className="mt-8">

@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import BackgroundTasks
 from sqlalchemy import select, update
 
-from adapters import llm, sarvam_stt, sarvam_tts
+from adapters import llm, sarvam_stt
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
@@ -19,7 +19,7 @@ from core import conversation_policy, session_manager, usage
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
 from extraction import entity_extractor, story_extractor
-from media import storage
+from media import storage, tts
 from media.audio_convert import convert_wav_to_ogg
 from memory import fact_store, vector_store
 from memory_cards import generator as memory_card_generator
@@ -641,14 +641,10 @@ async def set_turn_audio_key(turn_id: uuid.UUID, s3_key: str, db) -> None:
     await db.commit()
 
 
-async def _synthesize_and_convert(
-    text: str, language_code: str, katha_gender: str
-) -> bytes:
+async def _synthesize_and_convert(text: str, user_profile: UserProfile) -> bytes:
     """TTS then OGG conversion — the two steps that must succeed together
     for a voice note to go out, or degrade to text (see _send_or_degrade)."""
-    audio_out = await sarvam_tts.synthesize(
-        text, language_code=language_code, gender=katha_gender, purpose="tts_reply"
-    )
+    audio_out = await tts.synthesize(text, user_profile, purpose="tts_reply")
     return await convert_wav_to_ogg(audio_out)
 
 
@@ -670,11 +666,10 @@ async def _send_or_degrade(
     spoken (P2: never silence).
     """
     try:
-        # The voice comes from the profile, never the detected language,
-        # so she hears the same voice on every turn (media/voices.py).
-        audio_out = await _synthesize_and_convert(
-            response_text, user_profile.preferred_language, user_profile.katha_gender
-        )
+        # The voice is the one pinned on her profile, never chosen from the
+        # detected language, so she hears the same voice on every turn
+        # (media/tts.py).
+        audio_out = await _synthesize_and_convert(response_text, user_profile)
         return TurnResult(
             response_audio=audio_out,
             response_text=response_text,
@@ -721,7 +716,10 @@ async def _fallback_turn_result(
     """
     text = get_fallback_text(stage)
     audio = get_fallback_audio(
-        stage, user_profile.preferred_language, user_profile.katha_gender
+        stage,
+        user_profile.preferred_language,
+        user_profile.katha_gender,
+        tts.voice_of(user_profile),
     )
     if audio is not None:
         return TurnResult(

@@ -119,7 +119,7 @@ class _Harness:
                 ),
             ),
             patch("adapters.llm.chat", new=_llm),
-            patch("core.orchestrator.sarvam_tts.synthesize", new=_tts),
+            patch("adapters.gemini_tts.synthesize", new=_tts),
             patch("adapters.sarvam_tts.synthesize", new=_tts),
             patch(
                 "core.orchestrator.convert_wav_to_ogg",

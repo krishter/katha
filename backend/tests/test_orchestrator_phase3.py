@@ -8,6 +8,7 @@ from fastapi import BackgroundTasks
 
 from core.orchestrator import build_prior_context, run_post_session
 from core.session_manager import SessionState
+from media import voices
 from prompts.system_prompt import PriorContext
 
 _SESSION_ID = str(uuid.uuid4())
@@ -357,7 +358,7 @@ def _voice_turn_patches(stack: ExitStack, session_state, llm_content) -> None:
     )
     stack.enter_context(
         patch(
-            "core.orchestrator.sarvam_tts.synthesize",
+            "core.orchestrator.tts.synthesize",
             new=AsyncMock(return_value=_FAKE_WAV),
         )
     )
@@ -390,11 +391,17 @@ def _voice_turn_patches(stack: ExitStack, session_state, llm_content) -> None:
     )
 
 
+_PINNED_SARVAM = voices.Voice("bulbul:v3", "ritu", "ta-IN")
+
+
 def _make_profile():
     from prompts.system_prompt import UserProfile
 
     return UserProfile(
-        name="Subramaniam", preferred_language="ta-IN", onboarding_context=""
+        name="Subramaniam",
+        preferred_language="ta-IN",
+        onboarding_context="",
+        tts_voice=_PINNED_SARVAM.pin,
     )
 
 
@@ -508,7 +515,7 @@ async def test_process_voice_turn_degrades_to_text_when_tts_fails():
         _voice_turn_patches(stack, session_state, _DIALOGUE_ONLY_LLM)
         stack.enter_context(
             patch(
-                "core.orchestrator.sarvam_tts.synthesize",
+                "core.orchestrator.tts.synthesize",
                 new=AsyncMock(side_effect=RuntimeError("Sarvam TTS is down")),
             )
         )
@@ -621,7 +628,11 @@ async def test_process_voice_turn_stt_failure_returns_fallback_audio():
 
     assert result.response_audio == b"pre-synthesized-stt-fallback"
     assert result.response_mime_type == "audio/ogg"
-    mock_get_audio.assert_called_once_with(FailureStage.STT, "ta-IN", "female")
+    # In her pinned voice: a parent on Sarvam since before the switch hears
+    # the apology in that voice, not the new default.
+    mock_get_audio.assert_called_once_with(
+        FailureStage.STT, "ta-IN", "female", _PINNED_SARVAM
+    )
     # No turn is persisted for a total STT failure — nothing was said.
     db.add.assert_not_called()
 
@@ -694,7 +705,11 @@ async def test_process_voice_turn_llm_failure_returns_fallback_audio():
     assert result.response_audio == b"pre-synthesized-llm-fallback"
     # The profile's language and persona, not the language STT detected
     # in this note (hi-IN): she hears the voice she always hears.
-    mock_get_audio.assert_called_once_with(FailureStage.LLM, "ta-IN", "female")
+    # In her pinned voice: a parent on Sarvam since before the switch hears
+    # the apology in that voice, not the new default.
+    mock_get_audio.assert_called_once_with(
+        FailureStage.LLM, "ta-IN", "female", _PINNED_SARVAM
+    )
     db.add.assert_not_called()
 
 
@@ -767,7 +782,7 @@ async def test_process_voice_turn_logs_crisis_event_for_user_transcript():
             ),
         ),
         patch(
-            "core.orchestrator.sarvam_tts.synthesize",
+            "core.orchestrator.tts.synthesize",
             new=AsyncMock(return_value=_FAKE_WAV),
         ),
         patch(
@@ -944,7 +959,7 @@ async def test_long_detailed_story_produces_complete_reply_and_extraction():
         )
         stack.enter_context(
             patch(
-                "core.orchestrator.sarvam_tts.synthesize",
+                "core.orchestrator.tts.synthesize",
                 new=AsyncMock(return_value=_FAKE_WAV),
             )
         )

@@ -17,7 +17,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 ## Tech Stack
 
 - **STT:** Sarvam Saaras V3 (all 22 Indian languages, code-mixing, elderly speech)
-- **TTS:** Sarvam Bulbul V3 (35+ Indian voices, emotional prosody)
+- **TTS:** Gemini 3.8 Flash-Lite TTS for new families (decided 2026-10-18, `docs/specs/GEMINI_TTS.md`); Sarvam Bulbul v4 Flash / v3 for Urdu, for families pinned before the switch, and as the fallback when Gemini fails. Each parent's voice is pinned on her profile (`media/tts.py`)
 - **LLM:** Claude Sonnet 4.6 (`claude-sonnet-4-6`) for MVP (evaluate Sarvam native LLM in Phase 2)
 - **Messaging:** WhatsApp Business API (via Meta or Twilio/360Dialog intermediary)
 - **Memory:** Postgres fact store + story-atom recency retrieval. **No embedding vendor** — the OpenAI dependency was removed in Sprint 1 for DPDP residency and single-point-of-failure reasons; pgvector is retained unwritten for Phase 2. See @docs/proposals/embedding-strategy.md
@@ -28,7 +28,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 
 See @docs/TECH_DESIGN.md Section 1 for full system diagram and data flow.
 
-Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → Sarvam TTS → WhatsApp voice note. Story extraction runs async post-session.
+Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → TTS in the parent's pinned voice (Gemini or Sarvam, via `media/tts.py`) → WhatsApp voice note. Story extraction runs async post-session.
 
 ## AI System
 
@@ -56,6 +56,7 @@ Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → Sa
 - **DPDP Act compliance:** All user data (voice, stories) requires explicit consent; user can delete all data; no AI training on user content
 - **WhatsApp API:** Outbound messages require pre-approved message templates; 24-hour conversation window resets on user reply
 - **Sarvam API:** STT ~₹1/min, TTS ~₹0.50/min — track API costs per session in unit economics
+- **Gemini TTS:** ~₹1.14/min of audio to 31 Dec 2026, doubling from 1 Jan 2027; billed per second of audio, so slower speech costs more. Every request sends `store: false`; production needs a billing-enabled key
 - **No medical claims:** Katha is not therapy; include disclaimers; crisis protocol must reference iCall India (9152987821)
 
 ## Evaluation

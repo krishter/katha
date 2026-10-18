@@ -68,7 +68,7 @@ def mock_stt():
 @pytest.fixture(autouse=True)
 def mock_tts():
     with patch(
-        "core.orchestrator.sarvam_tts.synthesize",
+        "core.orchestrator.tts.synthesize",
         new=AsyncMock(return_value=_FAKE_WAV),
     ):
         yield

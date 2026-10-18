@@ -255,3 +255,65 @@ def test_consent_version_is_current():
     from api.routes.onboarding import _CONSENT_VERSION
 
     assert _CONSENT_VERSION == "1.1"
+
+
+# ── the pinned voice (docs/specs/GEMINI_TTS.md §4.2) ─────────────────────────
+
+
+@pytest.fixture
+def gemini_default(monkeypatch):
+    monkeypatch.setattr("config.settings.TTS_VENDOR", "gemini")
+    monkeypatch.setattr("config.settings.GEMINI_TTS_LANGUAGES", "all")
+
+
+def test_a_new_profile_is_pinned_to_the_default_voice(db, gemini_default):
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=None))
+    payload = {**_VALID_PROFILE_PAYLOAD, "katha_gender": "male"}
+
+    client.post("/onboarding/profile", data=payload)
+
+    saved = db.add.call_args.args[0]
+    assert saved.tts_voice == "google/gemini-3.8-flash-lite-tts/Achird"
+
+
+def test_a_new_urdu_profile_is_pinned_to_sarvam(db, gemini_default):
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=None))
+    payload = {**_VALID_PROFILE_PAYLOAD, "preferred_language": "ur-IN"}
+
+    client.post("/onboarding/profile", data=payload)
+
+    assert db.add.call_args.args[0].tts_voice.startswith("sarvam/")
+
+
+def _existing(language, gender, pin):
+    from models.user_profile import UserProfileModel
+
+    return UserProfileModel(
+        user_id=_USER_ID,
+        preferred_language=language,
+        katha_gender=gender,
+        tts_voice=pin,
+    )
+
+
+def test_resending_setup_unchanged_keeps_the_pin(db, gemini_default):
+    """A family editing the context must not change the voice she hears."""
+    pinned = "sarvam/bulbul:v4-flash/ritu_hi_conversation"
+    existing = _existing(_VALID_PROFILE_PAYLOAD["preferred_language"], "female", pinned)
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=existing))
+
+    payload = {**_VALID_PROFILE_PAYLOAD, "onboarding_context": "Loves cricket."}
+    client.post("/onboarding/profile", data=payload)
+
+    assert existing.tts_voice == pinned
+
+
+def test_changing_language_or_persona_at_setup_moves_the_pin(db, gemini_default):
+    pinned = "sarvam/bulbul:v4-flash/ritu_hi_conversation"
+    existing = _existing(_VALID_PROFILE_PAYLOAD["preferred_language"], "female", pinned)
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=existing))
+
+    payload = {**_VALID_PROFILE_PAYLOAD, "katha_gender": "male"}
+    client.post("/onboarding/profile", data=payload)
+
+    assert existing.tts_voice == "google/gemini-3.8-flash-lite-tts/Achird"

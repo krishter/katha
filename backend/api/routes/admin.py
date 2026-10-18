@@ -20,6 +20,7 @@ from models.session import Session
 from models.story_atom import StoryAtom
 from models.turn import Turn
 from models.user_profile import UserProfileModel
+from models.voice_change import VoiceChange
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,8 @@ async def delete_user(
         # The usage ledger holds counts, not content, but it is keyed to
         # her and outlives nothing (COST_TO_SERVE.md §3.6).
         ("api_usage", delete(ApiUsage).where(ApiUsage.user_id == user_id)),
+        # Which voice she was moved between, and by whom (GEMINI_TTS.md §4.2).
+        ("voice_changes", delete(VoiceChange).where(VoiceChange.user_id == user_id)),
     ]:
         try:
             await db.execute(stmt)

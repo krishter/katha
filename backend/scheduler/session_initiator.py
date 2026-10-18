@@ -8,10 +8,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adapters import sarvam_tts
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from config import settings
 from core import freemium, orchestrator, parent_consent, session_manager, usage
+from media import tts
 from media.audio_convert import convert_wav_to_ogg
 from models.session import Session
 from models.user_profile import UserProfileModel as UserProfile
@@ -160,11 +160,8 @@ async def _open_scheduled_sessions(
                 # Synthesize, then convert. Bulbul returns WAV, and this
                 # used to send the raw WAV labelled audio/ogg — so a
                 # rollback restored an opener WhatsApp could not play.
-                wav_bytes = await sarvam_tts.synthesize(
-                    opening_text,
-                    language_code=profile.preferred_language,
-                    gender=profile.katha_gender,
-                    purpose="tts_opener",
+                wav_bytes = await tts.synthesize(
+                    opening_text, profile, purpose="tts_opener"
                 )
                 audio_bytes = await convert_wav_to_ogg(wav_bytes)
 

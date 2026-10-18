@@ -54,12 +54,12 @@ def _default_execute_results(
     1. select memory_cards.image_s3_key
     2. select turns.response_audio_s3_key
     3. select sessions.session_open_audio_s3_key
-    4-10. delete memory_cards / story_atoms / turns / facts / sessions /
-          user_profiles / api_usage
-    11. select family_accounts.email
-    12. delete magic_link_tokens (only if email found)
-    13. update consent_records
-    14. delete family_accounts
+    4-11. delete memory_cards / story_atoms / turns / facts / sessions /
+          user_profiles / api_usage / voice_changes
+    12. select family_accounts.email
+    13. delete magic_link_tokens (only if email found)
+    14. update consent_records
+    15. delete family_accounts
     """
     s3_key_result = MagicMock()
     s3_key_result.scalars.return_value.all.return_value = s3_keys or []
@@ -76,7 +76,7 @@ def _default_execute_results(
     generic = lambda: MagicMock()  # noqa: E731 — result of a DELETE/UPDATE, unused
 
     results = [s3_key_result, audio_key_result, session_open_result]
-    results += [generic() for _ in range(7)]  # the 7 DELETE-by-user_id statements
+    results += [generic() for _ in range(8)]  # the 8 DELETE-by-user_id statements
     results.append(email_result)
     if email is not None:
         results.append(generic())  # delete magic_link_tokens
@@ -117,11 +117,11 @@ def test_delete_removes_rows_for_each_table(db):
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
-    # 14 execute calls: memory_cards select, turn audio keys select,
-    # session-open audio key select, 7 deletes (api_usage included), email
-    # select, magic_link_tokens delete, consent update, family_accounts
-    # delete.
-    assert db.execute.await_count == 14
+    # 15 execute calls: memory_cards select, turn audio keys select,
+    # session-open audio key select, 8 deletes (api_usage and voice_changes
+    # included), email select, magic_link_tokens delete, consent update,
+    # family_accounts delete.
+    assert db.execute.await_count == 15
     assert db.commit.await_count >= 6
 
 
@@ -131,8 +131,8 @@ def test_delete_anonymizes_consent_records_not_deletes_them(db):
     with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
-    # The 13th execute() call is the consent_records UPDATE (anonymize).
-    consent_stmt = db.execute.await_args_list[12].args[0]
+    # The 14th execute() call is the consent_records UPDATE (anonymize).
+    consent_stmt = db.execute.await_args_list[13].args[0]
     compiled = str(consent_stmt)
     assert "consent_records" in compiled.lower()
     assert "UPDATE" in compiled.upper()
@@ -229,8 +229,20 @@ def test_delete_removes_usage_ledger_rows(db):
     with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
-    # 10th execute() call: the last DELETE-by-user_id, after user_profiles.
+    # 10th execute() call: the DELETE-by-user_id after user_profiles.
     ledger_stmt = db.execute.await_args_list[9].args[0]
     compiled = str(ledger_stmt)
     assert "api_usage" in compiled.lower()
     assert "DELETE" in compiled.upper()
+
+
+def test_delete_removes_voice_change_history(db):
+    """GEMINI_TTS.md §4.2: the record of who moved her voice is hers too."""
+    db.execute = AsyncMock(side_effect=_default_execute_results())
+
+    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+        client.request("DELETE", f"/user/{_USER_ID}")
+
+    stmt = str(db.execute.await_args_list[10].args[0])
+    assert "voice_changes" in stmt.lower()
+    assert "DELETE" in stmt.upper()

@@ -113,8 +113,8 @@ _convert_ok = AsyncMock(side_effect=lambda audio_bytes: audio_bytes)
         (
             "tts",
             {
-                "core.orchestrator.sarvam_tts.synthesize": AsyncMock(
-                    side_effect=RuntimeError("Sarvam TTS down")
+                "core.orchestrator.tts.synthesize": AsyncMock(
+                    side_effect=RuntimeError("TTS down, both vendors")
                 )
             },
             1,
@@ -139,7 +139,7 @@ async def test_failure_stage_never_silent_and_never_corrupts_rows(
     active_patches = {
         "core.orchestrator.sarvam_stt.transcribe": _stt_ok,
         "core.orchestrator.llm.chat": AsyncMock(side_effect=_llm_ok),
-        "core.orchestrator.sarvam_tts.synthesize": _tts_ok,
+        "core.orchestrator.tts.synthesize": _tts_ok,
         "core.orchestrator.convert_wav_to_ogg": _convert_ok,
     }
     active_patches.update(patches)

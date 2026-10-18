@@ -14,9 +14,10 @@ class Settings(BaseSettings):
 
     SARVAM_API_KEY: str
     ANTHROPIC_API_KEY: str
-    # Gemini TTS, for the operator listening kit's blind A/B only
-    # (scripts/listening_kit.py abtest --compare sarvam-gemini). Production
-    # never calls Google; empty is the normal state.
+    # Gemini TTS (docs/specs/GEMINI_TTS.md). Must be a key from a
+    # billing-enabled project: on the free tier Google may use the content
+    # to improve its products. Required in production while TTS_VENDOR is
+    # gemini.
     GEMINI_API_KEY: str = ""
 
     # WhatsApp / Twilio
@@ -162,6 +163,16 @@ class Settings(BaseSettings):
     # bulbul:v3 is the rollback: every persona on v3.
     TTS_MODEL: str = "bulbul:v4-flash"
 
+    # Which vendor a NEW family's voice comes from (GEMINI_TTS.md §4.2).
+    # gemini since 2026-10-18; sarvam is the rollback for new families.
+    # Existing parents keep the voice pinned on their profile either way;
+    # scripts/set_voice.py moves them.
+    TTS_VENDOR: str = "gemini"
+    # The languages Gemini speaks for Katha, comma-separated, or "all" for
+    # all twelve it supports (every Katha language but Urdu). Removing a
+    # language sends new families in it back to Sarvam.
+    GEMINI_TTS_LANGUAGES: str = "all"
+
     # C7: shorten long pauses before STT, which bills by the second sent.
     # Every pause longer than STT_MAX_PAUSE_SECONDS is cut to that length
     # (see media/audio_split.py for why it is one number); speech is never
@@ -214,6 +225,13 @@ def validate_production_config(s: Settings = settings) -> None:
     ):
         if not getattr(s, name):
             problems.append(f"{name} is empty")
+    if s.TTS_VENDOR not in ("gemini", "sarvam"):
+        problems.append(f"TTS_VENDOR must be gemini or sarvam (got: {s.TTS_VENDOR!r})")
+    elif s.TTS_VENDOR == "gemini" and not s.GEMINI_API_KEY:
+        problems.append(
+            "TTS_VENDOR is gemini but GEMINI_API_KEY is empty — every new "
+            "family's voice note would fall back to Sarvam"
+        )
     if not s.APP_BASE_URL.startswith("https://"):
         problems.append(f"APP_BASE_URL is not https:// (got: {s.APP_BASE_URL!r})")
     if not s.COOKIE_DOMAIN:

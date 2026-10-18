@@ -289,7 +289,7 @@ Build that spec as written, with these changes:
   | `inr_total` | Sum over rows `{all_time, last_7d, last_30d}`, fixed hosting excluded |
   | `inr_per_conversation` | ÷ conversations (§5.1 predicate), same window |
   | `by_component` | `{claude_dialogue, claude_extraction, claude_entities, claude_other, sarvam_stt, sarvam_tts, twilio, meta}`, each `{inr, share}` |
-  | `units` | Claude tokens by operation (including cache read and write), `stt_minutes_received`, `stt_minutes_billed`, `tts_characters`, `messages_in`, `messages_out` |
+  | `units` | Claude tokens by operation (including cache read and write), `stt_minutes_received`, `stt_minutes_billed`, `tts_characters`, `tts_gemini_clips`, `tts_gemini_audio_minutes`, `tts_vendor_fallbacks`, `tts_vendor_fallback_rate`, `messages_in`, `messages_out` |
   | `dialogue_cache_hit_rate` | `cache_read / (cache_read + cache_creation + uncached input)` over dialogue rows, last 7 days. Target > 0.6. |
   | `dialogue_input_tokens_by_tenure` | Median dialogue input tokens per call, bucketed by session number (1–10, 11–30, 31–100, 100+). After C2 this should stay flat. |
   | `wasted_outbound` | Outbound rows with status `failed` or `undelivered`: `{count, inr}` by `error_code`, last 30 days |

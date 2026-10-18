@@ -50,6 +50,10 @@ class UserProfile:
     # the gendered forms Katha uses for herself or himself, so the words
     # match the voice saying them.
     katha_gender: str = "female"
+    # The voice pinned on her profile, "vendor/model/speaker"
+    # (media/tts.py). Not rendered: it decides how replies sound, not what
+    # they say. Empty means the default for her language and persona.
+    tts_voice: str = ""
 
 
 @dataclass

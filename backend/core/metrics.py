@@ -574,6 +574,68 @@ def _usage_row(u) -> SimpleNamespace:
     )
 
 
+def _units(window_rows) -> dict:
+    """Usage counts behind the cost: tokens, minutes, characters, audio
+    seconds and messages, from api_usage rows."""
+    claude: dict[str, dict] = defaultdict(
+        lambda: {
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+    )
+    stt_in = stt_billed = 0.0
+    tts_chars = messages_in = messages_out = 0
+    # Gemini TTS (GEMINI_TTS.md §6 stage 4): clips and seconds billed, and
+    # how often a Gemini reply had to be said by Sarvam instead (D3).
+    gemini_clips = vendor_fallbacks = 0
+    gemini_seconds = 0.0
+    for u in window_rows:
+        units = u.units or {}
+        if u.vendor == "anthropic":
+            op = claude[u.operation]
+            op["calls"] += 1
+            for key in (
+                "input_tokens",
+                "output_tokens",
+                "cache_creation_input_tokens",
+                "cache_read_input_tokens",
+            ):
+                op[key] += int(units.get(key) or 0)
+        elif u.vendor == "sarvam" and u.operation == "stt":
+            received = float(units.get("seconds_received") or 0)
+            stt_in += received
+            stt_billed += float(units.get("seconds_billed") or received)
+        elif u.vendor == "sarvam":
+            tts_chars += int(units.get("characters") or 0)
+            if u.operation == "tts_fallback_vendor":
+                vendor_fallbacks += 1
+        elif u.vendor == "google":
+            gemini_clips += 1
+            gemini_seconds += float(units.get("audio_seconds") or 0)
+        elif u.vendor == "twilio":
+            if u.operation == "inbound":
+                messages_in += int(units.get("messages") or 1)
+            else:
+                messages_out += int(units.get("messages") or 1)
+    return {
+        "claude_tokens_by_operation": dict(sorted(claude.items())),
+        "stt_minutes_received": round(stt_in / 60, 2),
+        "stt_minutes_billed": round(stt_billed / 60, 2),
+        "tts_characters": tts_chars,
+        "tts_gemini_clips": gemini_clips,
+        "tts_gemini_audio_minutes": round(gemini_seconds / 60, 2),
+        "tts_vendor_fallbacks": vendor_fallbacks,
+        "tts_vendor_fallback_rate": rate(
+            vendor_fallbacks, gemini_clips + vendor_fallbacks
+        ),
+        "messages_in": messages_in,
+        "messages_out": messages_out,
+    }
+
+
 def _cost(world: _World, w: _Windows, conversations: dict[str, int]) -> dict:
     rows = [u for u in world.usage if _aware(u.created_at) <= w.now]
     by_window = w.split(rows, lambda u: u.created_at)
@@ -585,50 +647,6 @@ def _cost(world: _World, w: _Windows, conversations: dict[str, int]) -> dict:
             for component, value in (parts or {}).items():
                 totals[component] += value
         return totals
-
-    def _units(window_rows):
-        claude: dict[str, dict] = defaultdict(
-            lambda: {
-                "calls": 0,
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "cache_creation_input_tokens": 0,
-                "cache_read_input_tokens": 0,
-            }
-        )
-        stt_in = stt_billed = 0.0
-        tts_chars = messages_in = messages_out = 0
-        for u in window_rows:
-            units = u.units or {}
-            if u.vendor == "anthropic":
-                op = claude[u.operation]
-                op["calls"] += 1
-                for key in (
-                    "input_tokens",
-                    "output_tokens",
-                    "cache_creation_input_tokens",
-                    "cache_read_input_tokens",
-                ):
-                    op[key] += int(units.get(key) or 0)
-            elif u.vendor == "sarvam" and u.operation == "stt":
-                received = float(units.get("seconds_received") or 0)
-                stt_in += received
-                stt_billed += float(units.get("seconds_billed") or received)
-            elif u.vendor == "sarvam":
-                tts_chars += int(units.get("characters") or 0)
-            elif u.vendor == "twilio":
-                if u.operation == "inbound":
-                    messages_in += int(units.get("messages") or 1)
-                else:
-                    messages_out += int(units.get("messages") or 1)
-        return {
-            "claude_tokens_by_operation": dict(sorted(claude.items())),
-            "stt_minutes_received": round(stt_in / 60, 2),
-            "stt_minutes_billed": round(stt_billed / 60, 2),
-            "tts_characters": tts_chars,
-            "messages_in": messages_in,
-            "messages_out": messages_out,
-        }
 
     component_totals = {win: _components(by_window[win]) for win in WINDOWS}
     inr_total = {
