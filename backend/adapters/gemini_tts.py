@@ -1,6 +1,7 @@
 """
-Gemini 3.8 Flash TTS, for the operator listening kit's blind A/B only
-(scripts/listening_kit.py abtest --compare sarvam-gemini;
+Gemini 3.8 Flash TTS and Flash-Lite TTS, for the operator listening kit's
+blind A/B only (scripts/listening_kit.py abtest --compare sarvam-gemini or
+gemini-flash-lite;
 docs/proposals/tts-strategy.md §5).
 
 Production never calls this: nothing outside the kit imports it, and
@@ -40,6 +41,9 @@ from media import tts_check, voices
 logger = logging.getLogger(__name__)
 
 MODEL = "gemini-3.8-flash-tts"
+# Same API, voices and style; two thirds of Flash's audio price.
+LITE_MODEL = "gemini-3.8-flash-lite-tts"
+MODELS = (MODEL, LITE_MODEL)
 _URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24_000
 _SAMPLE_WIDTH = 2  # 16-bit
@@ -77,9 +81,9 @@ def wav_seconds(wav_bytes: bytes) -> float:
         return wav.getnframes() / wav.getframerate()
 
 
-def request_body(text: str, voice: str, style: str) -> dict:
+def request_body(text: str, voice: str, style: str, model: str = MODEL) -> dict:
     return {
-        "model": MODEL,
+        "model": model,
         "input": [
             {
                 "type": "user_input",
@@ -115,7 +119,9 @@ def _audio_from(body: dict) -> bytes:
     return base64.b64decode(parts[-1]["data"])
 
 
-async def _request(text: str, voice: str, style: str, purpose: str) -> bytes:
+async def _request(
+    text: str, voice: str, style: str, purpose: str, model: str
+) -> bytes:
     """One billed call. Returns WAV bytes."""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set in backend/.env")
@@ -127,7 +133,7 @@ async def _request(text: str, voice: str, style: str, purpose: str) -> bytes:
                 "x-goog-api-key": settings.GEMINI_API_KEY,
                 "Content-Type": "application/json",
             },
-            json=request_body(text, voice, style),
+            json=request_body(text, voice, style, model),
         )
     if response.status_code != 200:
         raise RuntimeError(
@@ -144,7 +150,7 @@ async def _request(text: str, voice: str, style: str, purpose: str) -> bytes:
             "audio_seconds": round(wav_seconds(wav), 3),
             "input_characters": len(text) + len(style),
         },
-        model=MODEL,
+        model=model,
     )
     return wav
 
@@ -156,6 +162,7 @@ async def synthesize(
     gender: str | None,
     purpose: str,
     style: str = STYLE,
+    model: str = MODEL,
 ) -> bytes:
     """
     Speak `text` in the persona's Gemini voice. Returns WAV bytes.
@@ -164,11 +171,13 @@ async def synthesize(
     synthesised again once; if that fails too it is returned anyway with an
     error logged, so a listener hears what Gemini produced.
     """
+    if model not in MODELS:
+        raise ValueError(f"unknown Gemini TTS model {model!r}")
     voice = VOICES[voices.normalise_gender(gender)]
     text = speakable(text)
     wav = b""
     for attempt in (1, 2):
-        wav = await _request(text, voice, style, purpose)
+        wav = await _request(text, voice, style, purpose, model)
         problem = tts_check.speech_problem(wav, text)
         if problem is None:
             return wav

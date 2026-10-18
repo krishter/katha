@@ -97,6 +97,10 @@ _GEMINI_TTS_USD_PER_MTOK: dict[str, list[tuple[date, dict[str, Decimal]]]] = {
         (date(2026, 1, 1), {"input": Decimal("0.50"), "audio": Decimal("9")}),
         (date(2027, 1, 1), {"input": Decimal("1"), "audio": Decimal("18")}),
     ],
+    "gemini-3.8-flash-lite-tts": [
+        (date(2026, 1, 1), {"input": Decimal("0.50"), "audio": Decimal("6")}),
+        (date(2027, 1, 1), {"input": Decimal("1"), "audio": Decimal("12")}),
+    ],
 }
 
 # ---------------------------------------------------------------------------

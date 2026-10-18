@@ -16,6 +16,10 @@ Five subcommands, one per check the eval harness cannot do:
         --langs ta-IN,ml-IN,or-IN --out ~/kit/ab-gemini
     python scripts/listening_kit.py abscore --in ~/kit/ab-gemini
 
+    # Gemini 3.8 Flash TTS against Flash-Lite TTS, same voice and style
+    python scripts/listening_kit.py abtest --compare gemini-flash-lite \
+        --langs hi-IN,en-IN,ml-IN --n 5 --out ~/kit/ab-lite
+
     # §10: one clip per language and persona, to confirm each mapped voice
     # sounds like the persona it was chosen for
     python scripts/listening_kit.py voices --out ~/kit/voices
@@ -527,7 +531,7 @@ async def cmd_replies(language: str, gender: str, n: int, out: pathlib.Path) -> 
 # ── abtest ───────────────────────────────────────────────────────────────────
 
 
-COMPARISONS = ("v3-v4", "sarvam-gemini")
+COMPARISONS = ("v3-v4", "sarvam-gemini", "gemini-flash-lite")
 
 SCORE_COLUMNS = [
     "pair",
@@ -559,7 +563,7 @@ class Side:
 async def side_wav(side: Side, text: str, language: str, gender: str) -> bytes:
     if side.vendor == "google":
         return await gemini_tts.synthesize(
-            text, language, gender=gender, purpose=PURPOSE
+            text, language, gender=gender, purpose=PURPOSE, model=side.model
         )
     return await sarvam_tts.synthesize(
         text, language, gender=gender, purpose=PURPOSE, model=side.model
@@ -575,6 +579,8 @@ def sides_for(compare: str, language: str, gender: str) -> list[Side] | None:
     sarvam-gemini: whatever production would say this with
     (voices.voice_for under TTS_MODEL: v4 Flash for Hindi and English, v3 for
     Tamil, Malayalam and Odia) against Gemini's voice for the persona.
+    gemini-flash-lite: Gemini 3.8 Flash TTS against Flash-Lite TTS, in the
+    same voice and style, so only the model differs.
     """
     if compare == "v3-v4":
         v4 = voices.voice_for(language, gender, voices.V4_FLASH_MODEL)
@@ -585,8 +591,13 @@ def sides_for(compare: str, language: str, gender: str) -> list[Side] | None:
             Side("sarvam", v3.model, v3.speaker),
             Side("sarvam", v4.model, v4.speaker),
         ]
-    sarvam = voices.voice_for(language, gender, settings.TTS_MODEL)
     gemini = gemini_tts.VOICES[voices.normalise_gender(gender)]
+    if compare == "gemini-flash-lite":
+        return [
+            Side("google", gemini_tts.MODEL, gemini),
+            Side("google", gemini_tts.LITE_MODEL, gemini),
+        ]
+    sarvam = voices.voice_for(language, gender, settings.TTS_MODEL)
     return [
         Side("sarvam", sarvam.model, sarvam.speaker),
         Side("google", gemini_tts.MODEL, gemini),
@@ -628,7 +639,7 @@ async def cmd_abtest(
     seed: int | None,
     compare: str = "v3-v4",
 ) -> None:
-    if compare == "sarvam-gemini" and not settings.GEMINI_API_KEY:
+    if compare != "v3-v4" and not settings.GEMINI_API_KEY:
         raise SystemExit(
             "GEMINI_API_KEY is not set in backend/.env; nothing has been called "
             "or billed."
@@ -636,11 +647,11 @@ async def cmd_abtest(
     out = ensure_outside_repo(out)
     rng = random.Random(seed)
     key: dict[str, dict] = {}
-    title = (
-        "Bulbul v3 against v4 Flash"
-        if compare == "v3-v4"
-        else "Sarvam (production voice) against Gemini 3.8 Flash TTS"
-    )
+    title = {
+        "v3-v4": "Bulbul v3 against v4 Flash",
+        "sarvam-gemini": "Sarvam (production voice) against Gemini 3.8 Flash TTS",
+        "gemini-flash-lite": "Gemini 3.8 Flash TTS against Flash-Lite TTS",
+    }[compare]
     listing = [
         f"# Blind A/B: {title}, {gender} persona",
         "",
@@ -988,7 +999,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=COMPARISONS,
         default="v3-v4",
         help="v3-v4: Bulbul v3 vs v4 Flash; sarvam-gemini: production Sarvam "
-        "voice vs Gemini 3.8 Flash TTS",
+        "voice vs Gemini 3.8 Flash TTS; gemini-flash-lite: Gemini Flash vs "
+        "Flash-Lite TTS",
     )
 
     abscore = sub.add_parser("abscore", help="tally a scored abtest folder")

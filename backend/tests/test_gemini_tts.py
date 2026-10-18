@@ -190,6 +190,33 @@ async def test_each_call_is_a_ledger_row_with_seconds_and_characters(
     }
 
 
+async def test_flash_lite_is_requested_and_ledgered_under_its_own_name(
+    gemini, usage_rows
+):
+    gemini.queue.append(GOOD)
+    await gemini_tts.synthesize(
+        "Hello.",
+        "ml-IN",
+        gender="female",
+        purpose="eval",
+        model=gemini_tts.LITE_MODEL,
+    )
+    body = gemini.client.post.call_args.kwargs["json"]
+    assert body["model"] == "gemini-3.8-flash-lite-tts"
+    # Same voice and style as Flash, so a pair differs only by model.
+    assert body["generation_config"] == {"speech_config": [{"voice": "Sulafat"}]}
+    (row,) = usage_rows
+    assert row["model"] == "gemini-3.8-flash-lite-tts"
+
+
+async def test_an_unknown_model_is_refused_before_any_call(gemini, usage_rows):
+    with pytest.raises(ValueError, match="gemini-9-tts"):
+        await gemini_tts.synthesize(
+            "Hello.", "en-IN", gender="female", purpose="eval", model="gemini-9-tts"
+        )
+    gemini.client.post.assert_not_called()
+
+
 async def test_no_key_fails_before_any_call(monkeypatch):
     monkeypatch.setattr("adapters.gemini_tts.settings.GEMINI_API_KEY", "")
     with patch("adapters.gemini_tts.httpx.AsyncClient") as client:
@@ -243,3 +270,15 @@ def test_an_unknown_gemini_model_or_missing_units_is_unpriced():
     assert pricing.cost_breakdown(row) is None
     assert pricing.is_priced("google", "gemini-3.8-flash-tts")
     assert not pricing.is_priced("google", "gemini-9-tts")
+
+
+def test_flash_lite_audio_is_two_thirds_of_flash(monkeypatch):
+    monkeypatch.setattr("core.pricing.settings.USD_INR_RATE", 100.0)
+    row = _row(datetime(2026, 10, 18, tzinfo=timezone.utc))
+    row.model = "gemini-3.8-flash-lite-tts"
+    # 15 s x 32 tokens x $6/M + 200 chars x $0.50/M = $0.00288 + $0.0001.
+    assert pricing.cost_breakdown(row) == {"google_tts": Decimal("0.2980")}
+    assert pricing.is_priced("google", "gemini-3.8-flash-lite-tts")
+    later = _row(datetime(2027, 1, 1, 1, tzinfo=timezone.utc))
+    later.model = "gemini-3.8-flash-lite-tts"
+    assert pricing.cost_inr(later) == pricing.cost_inr(row) * 2

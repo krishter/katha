@@ -260,6 +260,25 @@ async def test_a_missing_ffmpeg_stops_before_any_billed_call(tmp_path, vendors):
             ],
         ),
         ("v3-v4", "ta-IN", "female", None),
+        # Flash against Flash-Lite: same voice, so only the model differs.
+        (
+            "gemini-flash-lite",
+            "ml-IN",
+            "female",
+            [
+                ("google", "gemini-3.8-flash-tts", "Sulafat"),
+                ("google", "gemini-3.8-flash-lite-tts", "Sulafat"),
+            ],
+        ),
+        (
+            "gemini-flash-lite",
+            "hi-IN",
+            "male",
+            [
+                ("google", "gemini-3.8-flash-tts", "Achird"),
+                ("google", "gemini-3.8-flash-lite-tts", "Achird"),
+            ],
+        ),
     ],
 )
 def test_compare_picks_the_two_sides(monkeypatch, compare, language, gender, expected):
@@ -485,3 +504,32 @@ async def test_a_run_stopped_by_a_vendor_keeps_the_pairs_it_made(
         assert [r[0] for r in list(csv.reader(f))[1:]] == ["hi-IN-01"]
     assert "## hi-IN-01" in (tmp_path / "pairs.md").read_text()
     assert not (tmp_path / "hi-IN-02-A.ogg").exists()
+
+
+async def test_flash_lite_abtest_sends_each_side_to_its_own_model(
+    tmp_path, vendors, monkeypatch
+):
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "k")
+    vendors.gemini.side_effect = lambda text, lang, **kw: kw["model"].encode()
+    await kit.cmd_abtest(
+        ["en-IN"], "female", 3, tmp_path, seed=5, compare="gemini-flash-lite"
+    )
+
+    vendors.tts.assert_not_awaited()
+    models = [c.kwargs["model"] for c in vendors.gemini.await_args_list]
+    assert models == ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"] * 3
+    key = json.loads((tmp_path / "key.json").read_text())
+    for pair, sides in key.items():
+        for letter, side in sides.items():
+            clip = (tmp_path / f"{pair}-{letter}.ogg").read_bytes()
+            assert clip == b"OGG:" + side["model"].encode()
+    assert "Flash-Lite" in (tmp_path / "pairs.md").read_text()
+
+
+async def test_flash_lite_abtest_needs_a_gemini_key(tmp_path, vendors, monkeypatch):
+    monkeypatch.setattr("scripts.listening_kit.settings.GEMINI_API_KEY", "")
+    with pytest.raises(SystemExit, match="GEMINI_API_KEY"):
+        await kit.cmd_abtest(
+            ["hi-IN"], "female", 1, tmp_path, seed=1, compare="gemini-flash-lite"
+        )
+    vendors.chat.assert_not_awaited()
