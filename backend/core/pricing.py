@@ -13,6 +13,7 @@ not quietly read as free.
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping
 
@@ -76,6 +77,33 @@ _SARVAM_TTS_INR_PER_10K_CHARS: dict[str, Decimal] = {
 }
 
 # ---------------------------------------------------------------------------
+# Google Gemini TTS — USD per million tokens, by the date of the call.
+# Source: https://ai.google.dev/gemini-api/docs/pricing (rates as given in
+# docs/proposals/tts-strategy.md §4; Google has said they double on
+# 2027-01-01). Operator listening kit only: nothing in production calls it.
+#
+# Audio is billed per second of output, not per character. Google documents
+# 25 audio tokens a second; measured bills come to about 32
+# (docs/proposals/tts-strategy.md §4: 31.9), so audio is priced at the
+# measured rate. Input tokens are not counted by the API response we
+# use, so input is priced at one token per character sent (text plus style
+# prompt) — an overestimate for Latin script, about right for Indic, and
+# either way under a hundredth of a rupee per clip.
+# ---------------------------------------------------------------------------
+_GEMINI_AUDIO_TOKENS_PER_SECOND = Decimal(32)
+_GEMINI_TTS_USD_PER_MTOK: dict[str, list[tuple[date, dict[str, Decimal]]]] = {
+    # (first day the rate applies, rates), oldest first.
+    "gemini-3.8-flash-tts": [
+        (date(2026, 1, 1), {"input": Decimal("0.50"), "audio": Decimal("9")}),
+        (date(2027, 1, 1), {"input": Decimal("1"), "audio": Decimal("18")}),
+    ],
+    "gemini-3.8-flash-lite-tts": [
+        (date(2026, 1, 1), {"input": Decimal("0.50"), "audio": Decimal("6")}),
+        (date(2027, 1, 1), {"input": Decimal("1"), "audio": Decimal("12")}),
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # Twilio — USD per WhatsApp message, inbound or outbound, on top of Meta's
 # fee. Source: https://www.twilio.com/en-us/whatsapp/pricing (2026-10-16).
 # ---------------------------------------------------------------------------
@@ -108,6 +136,7 @@ COMPONENTS = (
     "claude_other",
     "sarvam_stt",
     "sarvam_tts",
+    "google_tts",
     "twilio",
     "meta",
 )
@@ -155,6 +184,32 @@ def _anthropic_usd(model: str | None, units: Mapping[str, Any]) -> Decimal | Non
     ) / _MTOK
 
 
+def _call_date(row: Any) -> date:
+    """The day a ledger row was written; today for a row not yet saved."""
+    created = getattr(row, "created_at", None)
+    if isinstance(created, datetime):
+        return created.astimezone(timezone.utc).date()
+    return datetime.now(timezone.utc).date()
+
+
+def _gemini_tts_usd(
+    model: str | None, units: Mapping[str, Any], on: date
+) -> Decimal | None:
+    schedule = _GEMINI_TTS_USD_PER_MTOK.get(model or "")
+    seconds = _n(units, "audio_seconds")
+    characters = _n(units, "input_characters")
+    if schedule is None or seconds is None or characters is None:
+        return None
+    rates = None
+    for starts, candidate in schedule:
+        if on >= starts:
+            rates = candidate
+    if rates is None:
+        return None
+    audio_tokens = seconds * _GEMINI_AUDIO_TOKENS_PER_SECOND
+    return (characters * rates["input"] + audio_tokens * rates["audio"]) / _MTOK
+
+
 def cost_breakdown(row: Any) -> dict[str, Decimal] | None:
     """
     INR by component for one api_usage row, or None if any part of it is
@@ -199,6 +254,12 @@ def cost_breakdown(row: Any) -> dict[str, Decimal] | None:
             return {"sarvam_tts": characters * per_10k / Decimal(10_000)}
         return None
 
+    if vendor == "google":
+        usd = _gemini_tts_usd(model, units, _call_date(row))
+        if usd is None:
+            return None
+        return {"google_tts": usd * fx}
+
     if vendor == "twilio":
         messages = _n(units, "messages") or Decimal(1)
         out = {"twilio": messages * _TWILIO_USD_PER_MESSAGE * fx}
@@ -229,4 +290,6 @@ def is_priced(vendor: str, model: str | None) -> bool:
         return (
             model in _SARVAM_STT_INR_PER_HOUR or model in _SARVAM_TTS_INR_PER_10K_CHARS
         )
+    if vendor == "google":
+        return model in _GEMINI_TTS_USD_PER_MTOK
     return vendor == "twilio"
