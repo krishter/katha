@@ -445,8 +445,9 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
         )
         plan.layer4.append(
             f'{child} sent a question for the user: "{question.text}". Pass it on '
-            f"{when}, as your one question in this reply, saying it comes from "
-            f"{child}, in the user's language. Never present it as your own "
+            f"{when}, saying it comes from {child}, in the user's language. It is "
+            "the only question in this reply: if you pass it on, ask no question "
+            "of your own before or after it. Never present it as your own "
             "curiosity. If they would rather not answer, accept that warmly and "
             "move on; never press, and never say anything will be passed back. "
             f"If you ask it, add {CHILD_QUESTION} to the <asked> tag."

@@ -69,11 +69,36 @@ much as they are.
 5. Adds one line in her own words with the link — "Amma, I set this up for you, please say
    hello to Katha." Not a forwarded blurb.
 
+**Conversation cards (families with cards on, `docs/specs/CONVERSATION_CARDS.md`).** Ask
+the child, and write down for the script below:
+
+- what they call her ("Amma", "Maa") and the name she knows them by;
+- **when they usually call her**, e.g. "Sundays around 11, sometimes Wednesday evenings",
+  and the timezone they are in, which for an NRI child is not hers.
+
+Tell them, in these words or close: *"Instead of a quote card after every conversation,
+you'll get up to two 'Did you know?' cards a week, a few hours before you usually call,
+on WhatsApp and by email. Each one is something she told Katha that you might not know,
+with a question to ask her. Katha reads every card to her first and sends only the ones
+she says yes to, so some weeks there may be none. If you reply with a question, Katha
+will ask her, saying it's from you."*
+
+Then, after the call:
+
+```
+cd backend
+python -m scripts.cards --user-id <user_id> --enable --child-name <name> \
+  --parent-title <Amma> --timezone <Asia/Kolkata | America/New_York …> \
+  --slot "sun 11:00" --slot "wed 19:30"            # dry run; add --apply
+```
+
 **Parent:** nothing yet. She should have heard about it from her child, not from us.
 
 **PO closes the call by saying what happens next, in order:** she taps the link tomorrow →
 Katha introduces itself and asks her permission → first conversation the morning after →
-a memory card in the child's WhatsApp that same day.
+a memory card in the child's WhatsApp that same day. *(With cards on: no memory card;
+Katha asks her in her second conversation whether she'd like some stories shared, and the
+first card can come after that.)*
 
 ---
 
@@ -213,6 +238,22 @@ she is willing — one open question ("what do you think of your morning calls?"
 listen.
 
 ---
+
+## Conversation cards — the operator's daily part
+
+For families with cards on (`scripts/cards.py --show` lists them):
+
+- **Review waiting cards within 24 hours** at `/admin/cards/view` (same token as the
+  metrics page). An alert goes to `OPERATOR_EMAIL` when one is waiting. Read the card
+  against her words beside it; approve, edit (it is checked again), or reject with a
+  reason. Approving sends nothing to the family: she hears it read first.
+- **Held questions** from the child are on the same page. Release a question you are
+  comfortable with her hearing; drop the rest. The child is never told one was held.
+- **Tag the calls.** When she mentions, unprompted, that her child called about a card,
+  tag that card "brought_up" on the same page. It is the metric that matters most and
+  the only one a person has to record.
+- **"Never share."** If she says not to share, every unsent card is withdrawn and you get
+  an email. Talk to the family; nothing automatic tells them (spec Q2).
 
 ## Stop conditions — end a family's run early
 

@@ -63,6 +63,11 @@
 - Each parent's voice is pinned on her profile (`user_profiles.tts_voice`) and only an operator moves it (`scripts/set_voice.py`), so a change of default never changes the voice she knows.
 - If Gemini fails, that one reply is said in the persona's Sarvam voice rather than sent as text.
 
+**Conversation cards** *(added 2026-10-18; `docs/specs/CONVERSATION_CARDS.md`; behind `CONVERSATION_CARDS_ENABLED` and a per-family switch)*
+- After a session, a family with cards on gets a draft "Did you know?" card in place of the memory card: one moment chosen from her story atoms, written from her raw transcripts, and checked sentence by sentence against them (`cards/write.py`).
+- An operator reviews it (`/admin/cards/view`), then Katha offers to read it to her in her next session and speaks the stored read-back in her pinned voice (`cards/asks.py`). Only her classified "approve", on the card's exact current wording, lets it leave; a CHECK constraint holds the same rule in the database (`cards/state.py`).
+- Approved cards go on WhatsApp (template) and email a few hours before the child's usual call (`cards/schedule.py`, `cards/deliver.py`). The child's taps and questions come back through the webhook or the card's page and are screened before she hears them, credited to the child (`cards/family_inbox.py`).
+
 **Session Memory & RAG**
 - Per-user vector store of all session content
 - Structured fact store (JSON): names, relationships, dates, places, events

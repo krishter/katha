@@ -469,3 +469,85 @@ At 2 cards a week that is roughly ₹50–55 per family per month. It replaces t
 - [ ] Deletion removes both new tables and card images; export includes sent cards.
 - [ ] Step 0 checks recorded in this spec, including the category Meta assigned.
 - [ ] `ADMIN_METRICS.md`, `PILOT_RUNBOOK.md`, `TECH_DESIGN.md`, `CLAUDE.md` (Critical Constraints: card approval, template category) and the privacy page updated.
+
+## 18. Build notes (2026-10-19, `feature/conversation-cards`)
+
+Step 1 of §15 is built, behind `CONVERSATION_CARDS_ENABLED` (default off). Step 0 is not done; it's a checklist in `CONVERSATION_CARDS_STEP0.md`. With the switch off, every prompt is byte-identical to before (checked against `main`), and the memory card path is unchanged.
+
+This section records what the build decided, changed from the spec, or measured.
+
+**Switches**
+- **Cards need two switches:** `CONVERSATION_CARDS_ENABLED`, and `user_profiles.conversation_cards_enabled` for that parent. §15 turns cards on "for that family", which one global flag can't do.
+- **The operator command is `scripts/cards.py`.** It turns cards on for a family and records `child_name`, `parent_title`, the child's timezone and their call slots. It's a dry run unless given `--apply`.
+
+**Her approval (§4.1)**
+- **Her yes is to the words, not the topic.**
+  - `cards/state.py` fingerprints every text field of the card.
+  - Text can change only while the card is being shaped (`draft`, `operator_review`, `correction`).
+  - Her "approve" records the fingerprint she heard.
+  - Sending re-checks it against the row as stored in the database.
+- **The database enforces it too.** A CHECK constraint refuses `approved`, `scheduled` or `sent` without `parent_answer = 'approve'` and matching fingerprints. The first version let a card with no answer at all through, because a NULL comparison passes a CHECK. It now uses `COALESCE(…, false)`, and a test writes each status with raw SQL.
+- **`tests/integration/test_cards_approval_gate.py`** tries every path from every status short of her approval: the sender, each operator action, each of her other answers, a "yes" the classifier can't trace to her words, and each child action.
+  - It found one real bug. The sender decided from a copy of the card loaded earlier in the same database session, because sessions here don't expire on commit, so it sent a card whose words had been changed. The sender now reloads rows from the database (`populate_existing`).
+
+**Asks in the session (§6, §9)**
+- **The dialogue model reports an ask with an `<asked>` tag** after `</response>`. The tag is stripped before anything is spoken. Only an ask the model actually made becomes the pending ask, and only a made offer counts towards D9.
+- **Her answer is classified before the next dialogue call,** with one Haiku call (`core/parent_answers.py`).
+  - Any failure, unknown label, or "yes" whose quoted words aren't in her transcript counts as the label that moves nothing.
+  - A yes to the offer makes that turn's reply the stored `readback_text`, with no dialogue call.
+- **`readback_text` carries its own opening line and its closing "Shall I send this to Priya?"**, in her language. A fixed framing line would need translating into 13 languages; this way she hears exactly the text the operator saw.
+- **A session doesn't close while an ask waits for her answer.** Otherwise her yes would arrive as a second conversation for the day and be turned away. The stale sweep closes the session if she never answers.
+- **The sharing question is "due" in session 2,** at a pause. If she's unclear, it's asked once more in session 4 or later, and unclear again means `never`.
+  - The first wording let the model keep asking its own follow-up questions. It now says that when she has just finished a story, the sharing question replaces the follow-up.
+  - TC-12's harness gives up to three stories, because §3.3 says "asked in exactly one reply", not "on the first turn".
+
+**Privacy (§5.2)**
+- **Turns she marks private are hidden everywhere the family looks**: not only cards, but the dashboard's stories and counts and the export. Before this, "This stays between us" would have been untrue on the dashboard.
+- **A whole topic made private** marks matching earlier turns in the session, decided by one Haiku call (`private_topic_match`). If that call fails, every earlier turn in the session is made private.
+- **Sharing answers are logged as consent records** with version `share-1.0` / `share-1.0-never`. `parent_consent.get_status` now skips `share-` records, so a "don't send anything to my son" can never read as withdrawing consent to be recorded, and a "yes, share" can't mask a decline.
+
+**Card writing (§7)**
+- **Fidelity checking** reuses the consolidation check's format and its two-pass budget, with a card version of the prompt: "Did you know" and the title are framing, the call prompt's assumptions are checked, and the quote must be hers.
+  - A failure gets one rewrite; length limits are enforced in code.
+  - A "supported" line must cite a turn the check was shown.
+  - An atom from a card that failed its check returns to the pool once.
+- **Card calls run at `LLM_CARD_EFFORT=medium`,** with budgets of 4,000 tokens for selection and 8,000 for writing and checking. At the default effort, a Hindi card spent its 2,000-token budget thinking and returned nothing (TC-17).
+- **A non-English read-back that repeats the English hook is caught in code and rewritten.** TC-17 found a Marathi read-back that switched to English halfway.
+- **The prompts say "the parent"** and use the pronouns the family entered, or none. Some parents are fathers.
+- **The image** is 1080×1350. The approved words are shrunk to fit, never cut. Its key includes the fingerprint, and re-rendering deletes the replaced image so DPDP deletion can find every object.
+
+**Delivery and the child (§8, §10)**
+- **Template wording.** The template text proposed in `STEP0.md` avoids "her" ("from talking with Katha"; button "Send a question"), because template text can't follow the parent's pronouns.
+- **+1 numbers.** These get WhatsApp only when Meta's category for the template is recorded as Utility. Unknown is treated as Marketing.
+- **The email page is served by the API at `/c/{token}`,** not `katha.life/family/card/{id}`:
+  - `katha.life` is the landing page, and `app.katha.life/family/*` needs a login.
+  - A GET records nothing, because mail scanners open every link.
+  - Taps and questions are POSTs.
+  - Unsubscribe is RFC 8058 one-click and works even with cards switched off.
+- **A Twilio retry can't queue a question twice.** `family_questions.inbound_message_sid` dedupes it.
+- **"Send a question" stores no waiting state.** Whatever the child sends next is screened like any other message.
+
+**Tests and tools**
+- **Tests can't reach AWS.** An autouse fixture refuses a real S3 client. Card review tests had made two real delete calls, on a key that doesn't exist, before this guard went in.
+
+**Evals** (live model; TECH_DESIGN §3.3 now lists TC-12 to TC-18; `run_eval.py cards`, and `EVAL_CARDS=1` for TC-01 to TC-11)
+
+| Case | Result |
+|---|---|
+| TC-01 to TC-11, cards on | 10/11, then 9/11; objective ≥ 80% and rubric ≥ 75% both times. TC-05 and TC-08 vary with cards off too (TC-05: 3/9 on vs 4/8 off; TC-08: 6/9 on vs 7/8 off) |
+| TC-12 sharing question | pass (4/4 reruns, plus the final run) |
+| TC-13 private turn | pass; flag set, turn private |
+| TC-14 offer timing | pass, all three cases |
+| TC-15 her answers | 39/40 (98%), no false approve |
+| TC-16 child's question | pass 4/4 after the wording fix below |
+| TC-17 card writing | 8/10 sessions drafted, 0 unsupported sentences, all within limits, open call prompts; both traps declined |
+| TC-18 screening | sensitive recall 20/20; 35/36 labels |
+
+**TC-16 wording fix.** TC-16 failed once in the final run: the model asked its own question as well as the child's. The relay instruction now says the child's question is the reply's only question.
+
+**Still open**
+- **Step 0:** the Meta template and its category, SES production access, DKIM, SPF and DMARC. See `CONVERSATION_CARDS_STEP0.md`.
+- **The TC-15 fixture's Tamil and Hindi lines need a native speaker's check.** TC-17 uses synthetic transcripts; real consented pilot transcripts should replace them.
+- **Q1–Q3 as proposed.** Child questions are relayed as text only; never-share is handled by the operator; SES bounce and complaint handling is a follow-up.
+- **The dashboard's cards page doesn't show conversation cards yet.** `/family/cards` returns them under `conversation_cards`.
+- **A possible small effect on TC-08 with cards on is worth watching in the self-trial.**

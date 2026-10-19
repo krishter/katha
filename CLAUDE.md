@@ -57,6 +57,7 @@ Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → TT
 - **WhatsApp API:** Outbound messages require pre-approved message templates; 24-hour conversation window resets on user reply
 - **Sarvam API:** STT ~₹1/min, TTS ~₹0.50/min — track API costs per session in unit economics
 - **Gemini TTS:** ~₹1.14/min of audio to 31 Dec 2026, doubling from 1 Jan 2027; billed per second of audio, so slower speech costs more. Every request sends `store: false`; production needs a billing-enabled key
+- **Conversation cards:** nothing reaches the family unless the parent said "approve" to that exact card after hearing it read; enforced in `cards/state.py` and by a CHECK constraint on `conversation_cards`. Private turns never feed a card or the family dashboard. The card template's Meta category (`META_TEMPLATE_CATEGORIES`) decides whether +1 numbers get WhatsApp at all; unknown is treated as Marketing. See `docs/specs/CONVERSATION_CARDS.md`
 - **No medical claims:** Katha is not therapy; include disclaimers; crisis protocol must reference iCall India (9152987821)
 
 ## Evaluation

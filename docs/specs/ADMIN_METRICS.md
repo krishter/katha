@@ -178,6 +178,29 @@ small, a rate without its denominator misleads.
 | `pending` | Anything else, including null |
 | `failure_codes` | All-time failed cards grouped by `delivery_error_code` (63016 is the known one) |
 
+### 6.5b Conversation cards
+
+*(Added 2026-10-19, `docs/specs/CONVERSATION_CARDS.md` §13.)* Families with cards on get conversation cards instead of the per-session memory card, so both sections are shown while families of both kinds exist. `conversation_cards` in the JSON (`core/metrics.py`, `_conversation_cards`):
+
+| Key | Definition |
+|---|---|
+| `pipeline.drafted` | `conversation_cards` rows, by `created_at` window |
+| `pipeline.selection_calls`, `selection_none_rate` | `card_select` ledger rows; the share of those that chose no card (`1 − rows / calls`) |
+| `pipeline.failed_fidelity`, `operator_approved`, `operator_edited`, `operator_rejected`, `waiting_for_review` | by status or `operator_action` |
+| `pipeline.median_hours_in_review` | `operator_reviewed_at − created_at` |
+| `parent.share_preference` | split of `user_profiles.share_preference` among families with cards on |
+| `parent.readback_offers_per_card` | mean `readback_offers` over cards offered at least once |
+| `parent.outcomes` | approved (approved, scheduled or sent), corrected, kept private, expired, withdrawn, waiting for her |
+| `parent.median_days_draft_to_sent` | `scheduled_for − created_at` over sent cards |
+| `delivery.whatsapp`, `whatsapp_by_country` | sent / delivered (`DELIVERED_STATUSES`) / rate, split by the child's country code (+91, +1, other), computed in SQL so no number is read |
+| `delivery.whatsapp_skipped` | by `wa_skipped_reason` (`marketing_us`, `child_stopped`, `no_template`, `no_number`) |
+| `delivery.email_accepted` | `email_status = accepted`: accepted by SES, not delivered |
+| `delivery.email_turned_off`, `whatsapp_stopped` | families that turned a channel off |
+| `child.*` | taps (`didnt_know`, `knew`), questions, questions per sent card, by screening label, asked to her |
+| `calls_brought_up`, `calls_tagged` | hand-tagged on `/admin/cards/view`: she brought up a call about the card, unprompted |
+
+The families table gains `cards_sent_30d`, `last_card_sent_at_ist` and `pending_card_status`. Card cost appears as `claude_cards` (selection, writing, fidelity, her answers, screening) and `ses` (card emails); `outbound_conversation_card` sends price as templates. As everywhere on this page, only status, time and count columns are read: no card text, question, or phone number.
+
 ### 6.6 Family dashboard
 
 | Key | Definition |

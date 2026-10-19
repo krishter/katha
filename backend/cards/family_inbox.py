@@ -9,7 +9,7 @@ receive() with the typed question.
     "I didn't know this!"  recorded on the card; relayed to her as a
                            reaction (§10.3)
     "I knew this"          recorded; nothing relayed
-    "Ask her something"    a prompt; whatever they send next is screened
+    "Send a question"      a prompt; whatever they send next is screened
                            like any other message (no "waiting for a
                            question" state to get stuck in)
     anything else          screened (core/question_screen.py):
@@ -63,6 +63,7 @@ BUTTONS = {
     "knew": KNEW,
     "i knew this": KNEW,
     "ask": ASK,
+    "send a question": ASK,
     "ask her something": ASK,
 }
 
