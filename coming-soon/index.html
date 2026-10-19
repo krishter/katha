@@ -421,9 +421,8 @@ fieldset { border: 0; min-width: 0; }
 .form-status.err { color: var(--err); }
 
 .trust { padding-block: 6vh 12vh; }
-.trust-list { list-style: none; display: grid; gap: 18px; border-top: 1px solid #DCCFB7; padding-top: 36px; }
-@media (min-width: 640px) { .trust-list { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1000px) { .trust-list { grid-template-columns: repeat(4, 1fr); } }
+.trust-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid #DCCFB7; padding-top: 36px; }
+@media (min-width: 1000px) { .trust-list { grid-template-columns: repeat(3, 1fr); } }
 .trust-list li { display: flex; gap: 12px; align-items: flex-start; color: var(--ink); font-size: 0.98rem; }
 .trust-list svg { flex: none; width: 24px; height: 24px; fill: none; stroke: var(--indigo-mid); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -1542,6 +1541,11 @@ fieldset { border: 0; min-width: 0; }
           </div>
         </fieldset>
         <div class="f">
+          <!-- COPY: draft -->
+          <label for="f-call">When do you usually call your parent? <span class="opt">(optional)</span></label>
+          <input id="f-call" name="call_time" type="text" autocomplete="off" placeholder="e.g. Sundays around 11">
+        </div>
+        <div class="f">
           <label for="f-notes">Anything you'd like us to know <span class="opt">(optional)</span></label>
           <textarea id="f-notes" name="notes" rows="4"></textarea>
         </div>
@@ -1571,6 +1575,16 @@ fieldset { border: 0; min-width: 0; }
         <li>
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
           We never use her stories to train AI.
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9h3l4-4v14l-4-4H4z"/><path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></svg>
+          <!-- COPY: draft -->
+          She hears every card before you do.
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <!-- COPY: draft -->
+          She can keep anything just between her and Katha.
         </li>
       </ul>
     </div>

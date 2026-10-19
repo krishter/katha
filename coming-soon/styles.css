@@ -392,9 +392,8 @@ fieldset { border: 0; min-width: 0; }
 .form-status.err { color: var(--err); }
 
 .trust { padding-block: 6vh 12vh; }
-.trust-list { list-style: none; display: grid; gap: 18px; border-top: 1px solid #DCCFB7; padding-top: 36px; }
-@media (min-width: 640px) { .trust-list { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1000px) { .trust-list { grid-template-columns: repeat(4, 1fr); } }
+.trust-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid #DCCFB7; padding-top: 36px; }
+@media (min-width: 1000px) { .trust-list { grid-template-columns: repeat(3, 1fr); } }
 .trust-list li { display: flex; gap: 12px; align-items: flex-start; color: var(--ink); font-size: 0.98rem; }
 .trust-list svg { flex: none; width: 24px; height: 24px; fill: none; stroke: var(--indigo-mid); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 
