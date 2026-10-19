@@ -515,6 +515,8 @@ async def test_export_has_sent_cards_and_questions_but_never_private_ones(
     assert [c["title"] for c in listed["conversation_cards"]] == [
         "The walk to the talkies"
     ]
+    # No source language recorded on this card: not labelled as translated.
+    assert listed["conversation_cards"][0]["translated_from"] is None
 
 
 async def test_deletion_removes_cards_questions_and_images(real_db, as_family):

@@ -568,3 +568,11 @@ def test_uncategorised_atoms_do_not_count_as_a_covered_chapter(db):
     _stats_db(db, [("childhood", 2), ("education_coming_of_age", 5)])
 
     assert client.get("/family/stats").json()["domains_covered"] == 1
+
+
+def test_a_card_says_what_language_it_was_translated_from():
+    from api.routes.family import _translated_from
+
+    assert _translated_from("ta-IN") == "Tamil"
+    assert _translated_from("en-IN") is None
+    assert _translated_from(None) is None

@@ -26,6 +26,7 @@ from models.session import Session
 from models.story_atom import StoryAtom
 from models.user_profile import UserProfileModel
 from prompts.domains import domain_label, get_domain, get_domain_sequence
+from prompts.system_prompt import _language_name
 
 # Long enough for "she/her", "they/them" or a short free-text answer, short
 # enough that the field cannot become a second notes box inside the prompt.
@@ -337,6 +338,13 @@ async def get_story(
     return _to_story_response(atom)
 
 
+def _translated_from(language_code: Optional[str]) -> Optional[str]:
+    """The language a card was translated from, or None for English."""
+    if not language_code or language_code.startswith("en"):
+        return None
+    return _language_name(language_code)
+
+
 @router.get("/family/cards")
 async def list_cards(
     page: int = Query(default=1, ge=1),
@@ -400,6 +408,9 @@ async def list_cards(
                 if c.image_s3_key
                 else None,
                 "sent_at": c.scheduled_for.isoformat() if c.scheduled_for else None,
+                # D8: the card is English; say so when the parent spoke
+                # something else.
+                "translated_from": _translated_from(c.source_language),
             }
             for c in sent
         ],
