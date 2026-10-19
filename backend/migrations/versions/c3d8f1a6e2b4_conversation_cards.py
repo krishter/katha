@@ -228,6 +228,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(), nullable=False, server_default="pending"),
         sa.Column("asked_in_session_id", UUID(as_uuid=True)),
         sa.Column("asked_at", sa.DateTime(timezone=True)),
+        sa.Column("inbound_message_sid", sa.String(), unique=True),
         sa.CheckConstraint(
             _in("channel", ("whatsapp", "email")), name="ck_family_questions_channel"
         ),

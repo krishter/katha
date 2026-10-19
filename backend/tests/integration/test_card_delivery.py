@@ -47,7 +47,11 @@ def safe(monkeypatch):
         stored[key] = data
         return key
 
+    async def delete(key):
+        stored.pop(key, None)
+
     monkeypatch.setattr("cards.image.storage.upload_media", upload)
+    monkeypatch.setattr("cards.image.storage.delete_media", delete)
     return stored
 
 

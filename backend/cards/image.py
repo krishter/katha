@@ -36,8 +36,20 @@ async def render_and_store(card: ConversationCard, parent_title: str) -> str:
     )
     key = image_key(card)
     await storage.upload_media(png, key, content_type="image/png")
-    card.image_s3_key = key
+    previous, card.image_s3_key = card.image_s3_key, key
+    if previous and previous != key:
+        # The image of words the card no longer holds. Deleted here so
+        # nothing is left in S3 that DELETE /user/{user_id} cannot find.
+        try:
+            await storage.delete_media(previous)
+        except Exception:
+            logger.exception("Could not delete replaced card image %s", previous)
     return key
+
+
+def is_current(card: ConversationCard) -> bool:
+    """The stored image shows the card's current words."""
+    return bool(card.image_s3_key) and card.image_s3_key == image_key(card)
 
 
 async def try_render(card: ConversationCard, parent_title: str) -> bool:

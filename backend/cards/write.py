@@ -533,7 +533,6 @@ async def _rewrite_for_correction(card_id, turn_id, db) -> None:
         logger.info("Corrected card %s failed its fidelity check", card.id)
         return
 
-    card.image_s3_key = None
     await card_image.try_render(card, parent_title)
     review = settings.CARDS_OPERATOR_REVIEW
     state.transition(card, "operator_review" if review else "awaiting_parent")

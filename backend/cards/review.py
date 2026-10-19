@@ -102,7 +102,7 @@ async def approve(card_id: uuid.UUID, db: AsyncSession) -> ConversationCard:
         raise ReviewError(f"This card is {card.status}, not waiting for review")
     if (card.fidelity_json or {}).get("result") != "passed":
         raise ReviewError("Its last fidelity check did not pass; edit it first")
-    if not card.image_s3_key and not await card_image.try_render(
+    if not card_image.is_current(card) and not await card_image.try_render(
         card, await _parent_title(card.user_id, db)
     ):
         raise ReviewError("Its image could not be made; try again")
@@ -173,7 +173,6 @@ async def edit(card_id: uuid.UUID, fields: dict, db: AsyncSession) -> Conversati
         "passes": history,
     }
     card.operator_edited = True
-    card.image_s3_key = None
     if not problems:
         await card_image.try_render(card, parent_title)
     _mark(card, "edit")

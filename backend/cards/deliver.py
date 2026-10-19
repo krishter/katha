@@ -127,7 +127,7 @@ async def deliver(card: ConversationCard, db: AsyncSession, whatsapp, now: datet
         card.source_language or card.readback_language or "en-IN"
     )
 
-    if not card.image_s3_key:
+    if not card_image.is_current(card):
         await card_image.render_and_store(card, parent_title)
 
     # WhatsApp
@@ -212,7 +212,9 @@ async def send_due_cards(
     approved = (
         (
             await db.execute(
-                select(ConversationCard).where(ConversationCard.status == "approved")
+                select(ConversationCard)
+                .where(ConversationCard.status == "approved")
+                .execution_options(populate_existing=True)
             )
         )
         .scalars()
@@ -234,6 +236,10 @@ async def send_due_cards(
                 .where(ConversationCard.scheduled_for <= now)
                 .order_by(ConversationCard.scheduled_for)
                 .with_for_update(skip_locked=True)
+                # Decide on the row as stored, never on a copy this session
+                # loaded earlier: sessions here do not expire on commit, and
+                # a stale copy could hold words she did not approve.
+                .execution_options(populate_existing=True)
             )
         )
         .scalars()

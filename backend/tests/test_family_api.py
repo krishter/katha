@@ -225,7 +225,11 @@ def test_list_cards_returns_newest_first(db):
     rows_result = MagicMock()
     rows_result.scalars.return_value.all.return_value = [card]
 
-    db.execute = AsyncMock(side_effect=[total_result, rows_result])
+    no_conversation_cards = MagicMock()
+    no_conversation_cards.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(
+        side_effect=[total_result, rows_result, no_conversation_cards]
+    )
 
     with patch(
         "api.routes.family.storage.generate_presigned_url",
@@ -283,15 +287,23 @@ def _make_card_row():
     return card
 
 
-def _export_execute_results(atoms=None, sessions=None, cards=None):
+def _export_execute_results(
+    atoms=None, sessions=None, cards=None, conversation_cards=None, questions=None
+):
+    def rows(items):
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = items or []
+        return result
+
     profile_result = _query_result(scalar_one_or_none=_make_profile())
-    sessions_result = MagicMock()
-    sessions_result.scalars.return_value.all.return_value = sessions or []
-    atoms_result = MagicMock()
-    atoms_result.scalars.return_value.all.return_value = atoms or []
-    cards_result = MagicMock()
-    cards_result.scalars.return_value.all.return_value = cards or []
-    return [profile_result, sessions_result, atoms_result, cards_result]
+    return [
+        profile_result,
+        rows(sessions),
+        rows(atoms),
+        rows(cards),
+        rows(conversation_cards),  # CONVERSATION_CARDS.md §11
+        rows(questions),
+    ]
 
 
 def test_export_returns_stories_and_metadata(db):

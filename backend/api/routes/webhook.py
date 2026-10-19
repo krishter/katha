@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adapters import sarvam_stt
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from cards import context as card_context
+from cards import family_inbox
 from config import settings
 from core import orchestrator, parent_consent, session_manager, usage
 from core.delivery import record_card_delivery
@@ -590,6 +591,26 @@ async def _whatsapp_incoming(
         # message arrives with no session at all, and the old path answered
         # it with "your session isn't scheduled yet".
         profile = await _load_profile_by_number(from_number, db)
+
+        # 5a. A child replying about a conversation card (CONVERSATION_CARDS.md
+        # §10.1). Only for a number that is no parent's own — the parent
+        # wins a clash — and only when cards are on for that family. With
+        # cards off, the child's number takes the unknown-number path as
+        # it always has.
+        if profile is None and settings.CONVERSATION_CARDS_ENABLED:
+            family_parent = await family_inbox.parent_for_family_number(from_number, db)
+            if family_parent is not None:
+                usage.enter_scope(user_id=family_parent.user_id)
+                await usage.record_inbound(message_sid)
+
+                async def transcribe(url: str) -> str:
+                    audio = await whatsapp.download_voice_note(url)
+                    return (await sarvam_stt.transcribe(audio)).transcript
+
+                await family_inbox.handle_whatsapp(
+                    whatsapp, family_parent, from_number, params, transcribe, db
+                )
+                return _ack()
 
         # Twilio charges for every inbound message, including ones that
         # never become a turn. Recorded after the idempotency check above,

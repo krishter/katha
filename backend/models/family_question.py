@@ -72,6 +72,11 @@ class FamilyQuestion(Base):
     asked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # The WhatsApp message it came in, so a webhook Twilio retries is not
+    # queued twice. None for email.
+    inbound_message_sid: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, unique=True
+    )
 
     @property
     def text(self) -> str:

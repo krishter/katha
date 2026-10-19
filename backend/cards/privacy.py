@@ -182,3 +182,17 @@ async def apply_share_signals(
     )
     if change and profile is not None:
         await sharing.set_preference(profile, change, db, turn_id=turn_id)
+
+
+def not_private_atom():
+    """
+    A WHERE clause keeping story atoms whose source turn is not private,
+    for everything the family reads (dashboard, export). NOT EXISTS, not
+    NOT IN: an atom with no turn must stay visible, and `NULL NOT IN (...)`
+    is not true.
+    """
+    from sqlalchemy import exists
+
+    from models.story_atom import StoryAtom
+
+    return ~exists().where(Turn.id == StoryAtom.turn_id, Turn.is_private.is_(True))

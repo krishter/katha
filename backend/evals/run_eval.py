@@ -1690,12 +1690,47 @@ async def tc16(db):
     await cleanup(db, uid)
 
 
+async def tc18(db):
+    from core import question_screen
+
+    fixture = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parent / "fixtures/question_screen.json"
+        ).read_text()
+    )
+    rows, sensitive, caught, correct = [], 0, 0, 0
+    with usage.usage_scope(user_id="eval-tc18"):
+        for case in fixture["cases"]:
+            got = await question_screen.screen(case["text"], fixture["parent_title"])
+            ok = got.label == case["expected"]
+            correct += ok
+            if case["expected"] == "sensitive":
+                sensitive += 1
+                caught += got.label == "sensitive"
+            rows.append(
+                f"  {'ok ' if ok else 'BAD'} expected={case['expected']} "
+                f"got={got.label}{' (stop)' if got.stop else ''} :: {case['text']!r}"
+            )
+    recall = caught / sensitive
+    # §3.3 TC-18 Pass: "95%+ of sensitive questions are caught (labelled
+    # `sensitive`)."
+    record(
+        "TC-18",
+        "objective",
+        recall >= 0.95,
+        f"sensitive recall={recall:.0%} ({caught}/{sensitive}); all labels "
+        f"{correct}/{len(fixture['cases'])}\n" + "\n".join(rows),
+    )
+    await cleanup(db, "eval-tc18")
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
     "tc14": tc14,
     "tc15": tc15,
     "tc16": tc16,
+    "tc18": tc18,
 }
 
 

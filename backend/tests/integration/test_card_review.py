@@ -16,6 +16,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from cards import image as card_image
 from cards import review, state
 from main import app
 from models.conversation_card import ConversationCard
@@ -44,7 +45,11 @@ def operator(monkeypatch):
     async def presign(key, expires_in=900):
         return f"https://s3.test/{key}?sig"
 
+    async def delete(key):
+        stored.pop(key, None)
+
     monkeypatch.setattr("cards.image.storage.upload_media", upload)
+    monkeypatch.setattr("cards.image.storage.delete_media", delete)
     monkeypatch.setattr(
         "api.routes.admin_cards.storage.generate_presigned_url", presign
     )
@@ -282,7 +287,7 @@ async def test_an_edit_that_fails_its_check_blocks_approval(real_db, client):
     )
     card = await reload(real_db, made.card_id)
     assert card.fidelity_json["result"] == "failed"
-    assert card.image_s3_key is None
+    assert not card_image.is_current(card)
     await client.post(f"/admin/cards/{made.card_id}/approve", headers=AUTH, data=form())
     assert (await reload(real_db, made.card_id)).status == "operator_review"
 
