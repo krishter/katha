@@ -65,6 +65,24 @@
     <circle cx="186" cy="174" r="9" fill="#8F5A40"/>
   </symbol>
 
+  <!-- The child on a call: same figure as child-back, the right arm raised so the phone is at the ear.
+       The phone sits at (142, 66) in this symbol's space. -->
+  <symbol id="child-call" viewBox="0 0 210 330" overflow="visible">
+    <circle cx="146" cy="70" r="36" fill="#F2C14E" opacity="0.3"/>
+    <path d="M50 140 C 36 186, 34 238, 40 286" stroke="#2F2A73" stroke-width="24" fill="none" stroke-linecap="round"/>
+    <g filter="url(#pc-shadow)">
+      <path d="M44 146 C 46 116, 72 104, 100 104 C 128 104, 152 116, 156 146 L 164 330 H 36 Z" fill="#3A3488"/>
+    </g>
+    <path d="M100 104 V 330" stroke="#342E7C" stroke-width="2"/>
+    <rect x="88" y="84" width="24" height="26" rx="6" fill="#8F5A40"/>
+    <circle cx="100" cy="58" r="34" fill="#2A2233"/>
+    <path d="M150 138 C 176 120, 172 94, 150 82" stroke="#3A3488" stroke-width="22" fill="none" stroke-linecap="round"/>
+    <g transform="rotate(-18 142 66)">
+      <rect x="133" y="46" width="18" height="38" rx="4" fill="#241D5C"/>
+    </g>
+    <circle cx="148" cy="80" r="9" fill="#8F5A40"/>
+  </symbol>
+
   <!-- The grandchild: about nine, headphones on, phone held in both hands. Appears only in the bookend. -->
   <symbol id="grandchild" viewBox="0 0 200 260" overflow="visible">
     <g filter="url(#pc-shadow)">
@@ -84,7 +102,7 @@
     <path d="M97 186 L 106 192 L 97 198 Z" fill="#2FA36B"/>
   </symbol>
 
-  <!-- Vignettes linked by the quote card's flight (Act III). Same 640x600 space as the full scenes. -->
+  <!-- Vignettes linked by the card's flight (Act IV, beat 10). Same 640x600 space as the full scenes. -->
   <clipPath id="vh-cut"><path d="M60 120 C 120 20, 420 10, 560 90 C 640 140, 630 420, 560 500 C 470 590, 140 600, 70 500 C 10 420, 10 200, 60 120Z"/></clipPath>
   <clipPath id="vc-cut"><path d="M40 140 C 110 40, 430 20, 570 100 C 650 150, 640 420, 570 500 C 480 590, 130 600, 60 500 C 0 420, 0 220, 40 140Z"/></clipPath>
 
@@ -132,13 +150,23 @@
     </g>
   </symbol>
 
-  <!-- The quote card in flight: lines stand in for the quote, which is shown full size beside the scene. -->
-  <symbol id="mini-card" viewBox="0 0 120 90" overflow="visible">
-    <g filter="url(#pc-shadow)"><rect width="120" height="90" rx="9" fill="#FBF4E6"/></g>
-    <use href="#ka" x="10" y="9" width="20" height="20"/>
-    <rect x="12" y="36" width="96" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
-    <rect x="12" y="48" width="84" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
-    <rect x="12" y="60" width="58" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
-    <rect x="12" y="74" width="34" height="4" rx="2" fill="#D9A21B"/>
+  <!-- The "Did you know?" card in flight (Act IV): bars stand in for the hook, her words and the call box,
+       which are shown full size in beat 8. Portrait, like the real 1080x1350 card. -->
+  <symbol id="mini-card" viewBox="0 0 96 120" overflow="visible">
+    <g filter="url(#pc-shadow)"><rect width="96" height="120" rx="8" fill="#FBF4E6"/></g>
+    <rect x="12" y="16" width="72" height="7" rx="3.5" fill="#241D5C"/>
+    <rect x="18" y="28" width="60" height="7" rx="3.5" fill="#241D5C"/>
+    <rect x="16" y="46" width="64" height="4" rx="2" fill="#3A3488" opacity="0.55"/>
+    <rect x="22" y="55" width="52" height="4" rx="2" fill="#3A3488" opacity="0.55"/>
+    <rect x="10" y="70" width="76" height="26" rx="5" fill="#F2E4CF"/>
+    <rect x="16" y="76" width="30" height="3" rx="1.5" fill="#3A3488" opacity="0.6"/>
+    <rect x="16" y="84" width="56" height="5" rx="2.5" fill="#241D5C"/>
+    <rect x="30" y="106" width="36" height="3" rx="1.5" fill="#D9A21B"/>
+  </symbol>
+
+  <!-- The same card by email: a small envelope that lands beside the child's phone. -->
+  <symbol id="mini-envelope" viewBox="0 0 64 44" overflow="visible">
+    <g filter="url(#pc-shadow)"><rect width="64" height="44" rx="5" fill="#FBF4E6"/></g>
+    <path d="M3 5 L 32 26 L 61 5" fill="none" stroke="#3A3488" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   </symbol>
 </svg>

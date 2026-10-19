@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 1260" class="scene" role="img" aria-label="A quote card lifts out of her phone, follows a line down, and lands in her child's phone at an airport gate">
-  <use href="#vignette-her" x="0" y="0" width="640" height="600"/>
-  <use href="#vignette-child" x="0" y="660" width="640" height="600"/>
-  <path id="ft-path" d="M419 312 C 600 600, 150 720, 277 990" fill="none" stroke="#E8822F" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 13"/>
-  <g id="ft-card" transform="translate(217 945)"><use href="#mini-card" width="120" height="90"/></g>
-</svg>

@@ -335,35 +335,15 @@
         // ===== Act III =====
         cleanups.push(chatReveal($('.remembers'), $('.phone-remember'), desktop));
 
-        // The quote card lifts out of her phone, follows the line, and lands in the child's phone.
-        const card = desktop ? '#fw-card' : '#ft-card';
-        const cardPath = desktop ? '#fw-path' : '#ft-path';
-        const ft = gsap.timeline({
-          defaults: { ease: 'none' },
-          scrollTrigger: desktop
-            ? { trigger: '.flight-pin', start: 'top top', end: '+=160%', pin: true, scrub: true }
-            : { trigger: '.flight-tall', start: 'top 70%', end: 'bottom 75%', scrub: true },
-        });
-        if (window.MotionPathPlugin) {
-          ft.fromTo(card, { opacity: 0 }, { opacity: 1, duration: 0.2 }, 0)
-            .to(card, { motionPath: { path: cardPath, align: cardPath, alignOrigin: [0.5, 0.5] }, duration: 3, ease: 'power1.inOut' }, 0)
-            .fromTo(card, { scale: 0.3, transformOrigin: '50% 50%' }, { scale: 1.2, duration: 1.5, ease: 'power1.out' }, 0)
-            .to(card, { scale: 0.7, duration: 1.5, ease: 'power1.in' }, 1.5);
-        }
-        gsap.fromTo('.quote-card', { opacity: 0, y: 30 }, {
-          opacity: 1, y: 0, ease: 'none',
-          scrollTrigger: { trigger: '.quote-card', start: 'top 92%', end: 'top 65%', scrub: true },
-        });
-
         // ===== Act IV =====
-        const page = $('.story-page');
+        const page = $('.conv-card');
         const st = gsap.timeline({
           defaults: { ease: 'none' },
           scrollTrigger: desktop
             ? { trigger: '.shape-pin', start: 'top top', end: '+=170%', pin: true, scrub: true, invalidateOnRefresh: true }
-            : { trigger: '.story-page', start: 'top 80%', end: 'bottom 70%', scrub: true },
+            : { trigger: '.conv-card', start: 'top 80%', end: 'bottom 70%', scrub: true },
         });
-        st.fromTo($$('.page-kicker, .story-page h3, .page-meta'), { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.2);
+        st.fromTo($$('.cc-foot'), { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.2);
         if (desktop) {
           $$('.fragments li').forEach((frag, i) => {
             const towards = (axis) => () => {
@@ -376,13 +356,33 @@
             st.fromTo(frag, { opacity: 1, x: 0, y: 0, scale: 1 }, { opacity: 0, x: towards('x'), y: towards('y'), scale: 0.8, duration: 1 }, 0.3 + i * 0.25);
           });
         }
-        st.fromTo($$('.page-text .pl'), { opacity: 0.06 }, { opacity: 1, duration: 0.8, stagger: 0.45 }, 0.9);
+        st.fromTo($$('.cc-hook, .cc-excerpt, .cc-call'), { opacity: 0.06 }, { opacity: 1, duration: 0.8, stagger: 0.45 }, 0.9);
         st.to({}, { duration: 0.6 });
 
         gsap.fromTo('.glasses', { opacity: 0, y: -24, rotation: -4 }, {
           opacity: 1, y: 0, rotation: 0, ease: 'none',
           scrollTrigger: { trigger: '.glasses', start: 'top 95%', end: 'top 65%', scrub: true },
         });
+
+        // Beat 10, after she has said yes: the card lifts out of her phone, follows the line, and lands in
+        // the child's phone; the same card by email lands beside it.
+        const card = desktop ? '#fw-card' : '#ft-card';
+        const cardPath = desktop ? '#fw-path' : '#ft-path';
+        // The <use> inside, not the group: GSAP would overwrite the group's translate.
+        const env = desktop ? '#fw-env use' : '#ft-env use';
+        const ft = gsap.timeline({
+          defaults: { ease: 'none' },
+          scrollTrigger: desktop
+            ? { trigger: '.flight-pin', start: 'top top', end: '+=160%', pin: true, scrub: true }
+            : { trigger: '.flight-tall', start: 'top 70%', end: 'bottom 75%', scrub: true },
+        });
+        if (window.MotionPathPlugin) {
+          ft.fromTo(card, { opacity: 0 }, { opacity: 1, duration: 0.2 }, 0)
+            .to(card, { motionPath: { path: cardPath, align: cardPath, alignOrigin: [0.5, 0.5] }, duration: 3, ease: 'power1.inOut' }, 0)
+            .fromTo(card, { scale: 0.3, transformOrigin: '50% 50%' }, { scale: 1.2, duration: 1.5, ease: 'power1.out' }, 0)
+            .to(card, { scale: 0.7, duration: 1.5, ease: 'power1.in' }, 1.5);
+        }
+        ft.fromTo(env, { opacity: 0, y: -40 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power1.out' }, 2.6);
 
         // ===== Act V =====
         const spines = $$('.spine');
