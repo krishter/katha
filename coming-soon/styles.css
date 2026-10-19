@@ -266,10 +266,6 @@ fieldset { border: 0; min-width: 0; }
   .chat-body { padding-bottom: 32px; }
 }
 
-.motion .ripples circle { transform-box: fill-box; transform-origin: center; animation: ripple 2.6s ease-out infinite; }
-.motion .ripples circle:nth-child(2) { animation-delay: 0.35s; }
-.motion .ripples circle:nth-child(3) { animation-delay: 0.7s; }
-@keyframes ripple { 0% { transform: scale(0.85); } 60% { transform: scale(1.04); } 100% { transform: scale(0.85); } }
 
 .consent { padding-block: 18vh; text-align: center; }
 .consent-inner { display: flex; flex-direction: column; align-items: center; gap: 28px; }
