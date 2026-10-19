@@ -232,6 +232,55 @@ def _cards(m: dict) -> str:
     )
 
 
+def _kv(d: dict) -> str:
+    return ", ".join(f"{_e(k)} × {_e(v)}" for k, v in d.items()) or "none"
+
+
+def _conversation_cards(c: dict) -> str:
+    """CONVERSATION_CARDS.md §13."""
+    pipe, parent, deliv, child = c["pipeline"], c["parent"], c["delivery"], c["child"]
+    rows = [
+        _windows_row("Drafted", pipe["drafted"]),
+        _windows_row("Sent", deliv["sent"]),
+    ]
+    wa = deliv["whatsapp"]
+    by_country = (
+        " · ".join(
+            f"{_e(k)}: {_e(v['delivered'])}/{_e(v['sent'])}"
+            for k, v in deliv["whatsapp_by_country"].items()
+        )
+        or "none"
+    )
+    return (
+        _windows_table(rows)
+        + "<ul class=note>"
+        + f"<li>Selection: {_e(pipe['selection_calls'])} calls, none-rate "
+        f"{_pct(pipe['selection_none_rate'])}; failed fidelity "
+        f"{_e(pipe['failed_fidelity'])}</li>"
+        + f"<li>Operator: approved {_e(pipe['operator_approved'])}, edited "
+        f"{_e(pipe['operator_edited'])}, rejected {_e(pipe['operator_rejected'])}, "
+        f"waiting {_e(pipe['waiting_for_review'])}; median hours in review "
+        f"{_e(pipe['median_hours_in_review'])}</li>"
+        + f"<li>Sharing preference: {_kv(parent['share_preference'])}</li>"
+        + f"<li>Her answers: {_kv(parent['outcomes'])}; offers per card "
+        f"{_e(parent['readback_offers_per_card'])}; median days draft to sent "
+        f"{_e(parent['median_days_draft_to_sent'])}</li>"
+        + f"<li>WhatsApp delivered {_e(wa['delivered'])}/{_e(wa['sent'])} "
+        f"({_pct(wa['rate'])}); by country {by_country}; skipped "
+        f"{_kv(deliv['whatsapp_skipped'])}; stopped {_e(deliv['whatsapp_stopped'])}"
+        "</li>"
+        + f"<li>Email accepted by SES {_e(deliv['email_accepted'])} (not the same "
+        f"as delivered), failed {_e(deliv['email_failed'])}, turned off "
+        f"{_e(deliv['email_turned_off'])}</li>"
+        + f"<li>Child: didn't know {_e(child['didnt_know'])}, knew "
+        f"{_e(child['knew'])}; questions {_e(child['questions'])} "
+        f"({_kv(child['questions_by_screening'])}), asked to her "
+        f"{_e(child['questions_asked_to_her'])}</li>"
+        + f"<li><b>Calls she brought up: {_e(c['calls_brought_up'])}</b> of "
+        f"{_e(c['calls_tagged'])} tagged (tag on /admin/cards/view)</li>" + "</ul>"
+    )
+
+
 def _dashboard(d: dict) -> str:
     s = d["families_signed_in_30d"]
     return (
@@ -251,12 +300,14 @@ def _cost(c: dict) -> str:
         "claude_dialogue": "Claude · dialogue",
         "claude_extraction": "Claude · extraction",
         "claude_entities": "Claude · entities",
+        "claude_cards": "Claude · conversation cards",
         "claude_other": "Claude · other",
         "sarvam_stt": "Sarvam · speech to text",
         "sarvam_tts": "Sarvam · text to speech",
         "google_tts": "Google · text to speech",
         "twilio": "Twilio",
         "meta": "Meta templates",
+        "ses": "AWS SES · card emails",
     }
     parts = c["by_component"]["last_30d"]
     bars = _bar_rows(
@@ -342,6 +393,9 @@ def _families(rows: list[dict]) -> str:
         ("domains_covered", "Chapters", True),
         ("cards_delivered", "Cards ✓", True),
         ("cards_failed", "Cards ✗", True),
+        ("cards_sent_30d", "Conv. cards 30d", True),
+        ("last_card_sent_at_ist", "Last conv. card", False),
+        ("pending_card_status", "Card in progress", False),
         ("cost_30d_inr", "₹ 30d", True),
         ("cost_per_conversation_30d_inr", "₹/conv 30d", True),
     ]
@@ -409,6 +463,7 @@ account(s) excluded · day boundaries in IST</p>
 <h2>Engagement and retention</h2>{_engagement(m["engagement"])}
 <h2>Story atoms</h2>{_atoms(m["story_atoms"])}
 <h2>Memory cards</h2>{_cards(cards)}
+<h2>Conversation cards</h2>{_conversation_cards(m["conversation_cards"])}
 <h2>Family dashboard</h2>{_dashboard(m["dashboard"])}
 <h2>Stories</h2><p class=note>{_e(m["stories"]["reason"])}</p>
 <h2>Cost to serve</h2>{_cost(cost)}

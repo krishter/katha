@@ -33,14 +33,16 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import delivery, freemium, pricing, session_manager
 from models.api_usage import ApiUsage
 from models.consent_record import ConsentRecord
+from models.conversation_card import ConversationCard
 from models.crisis_event import CrisisEvent
 from models.family_account import FamilyAccount
+from models.family_question import FamilyQuestion
 from models.magic_link_token import MagicLinkToken
 from models.memory_card import MemoryCard
 from models.session import Session
@@ -129,6 +131,11 @@ class _World:
     sign_ins: list[SimpleNamespace]
     usage: list[SimpleNamespace]
     families_deleted: int
+    # Conversation cards (CONVERSATION_CARDS.md §13). Status and time
+    # columns only: no card text, no question text, no phone number.
+    conv_cards: list[SimpleNamespace]
+    questions: list[SimpleNamespace]
+    sharing: list[SimpleNamespace]
 
 
 def _rows(result) -> list[SimpleNamespace]:
@@ -280,6 +287,81 @@ async def _load(db: AsyncSession, excluded: frozenset[str]) -> _World:
         )
     ).scalar_one()
 
+    country = case(
+        (UserProfileModel.family_whatsapp_number.like("+91%"), "+91"),
+        (UserProfileModel.family_whatsapp_number.like("+1%"), "+1"),
+        (UserProfileModel.family_whatsapp_number.is_(None), "none"),
+        else_="other",
+    ).label("child_country")
+    conv_cards = [
+        c
+        for c in _rows(
+            await db.execute(
+                select(
+                    ConversationCard.user_id,
+                    ConversationCard.status,
+                    ConversationCard.created_at,
+                    ConversationCard.operator_action,
+                    ConversationCard.operator_edited,
+                    ConversationCard.operator_reviewed_at,
+                    ConversationCard.readback_offers,
+                    ConversationCard.correction_round,
+                    ConversationCard.parent_answer,
+                    ConversationCard.scheduled_for,
+                    ConversationCard.wa_message_sid.is_not(None).label("wa_sent"),
+                    ConversationCard.wa_delivery_status,
+                    ConversationCard.wa_skipped_reason,
+                    ConversationCard.email_status,
+                    ConversationCard.child_reaction,
+                    ConversationCard.call_tag,
+                    country,
+                ).join(
+                    UserProfileModel,
+                    UserProfileModel.user_id == ConversationCard.user_id,
+                    isouter=True,
+                )
+            )
+        )
+        if c.user_id in storytellers
+    ]
+    questions = [
+        q
+        for q in _rows(
+            await db.execute(
+                select(
+                    FamilyQuestion.user_id,
+                    FamilyQuestion.card_id,
+                    FamilyQuestion.kind,
+                    FamilyQuestion.screening,
+                    FamilyQuestion.status,
+                    FamilyQuestion.channel,
+                    FamilyQuestion.created_at,
+                )
+            )
+        )
+        if q.user_id in storytellers
+    ]
+    sharing = [
+        r
+        for r in _rows(
+            await db.execute(
+                select(
+                    UserProfileModel.user_id,
+                    UserProfileModel.share_preference,
+                    UserProfileModel.card_whatsapp_enabled,
+                    FamilyAccount.card_email_enabled,
+                )
+                .join(
+                    FamilyAccount,
+                    FamilyAccount.user_id == UserProfileModel.user_id,
+                    isouter=True,
+                )
+                .where(UserProfileModel.conversation_cards_enabled.is_(True))
+            )
+        )
+        if r.user_id in storytellers
+    ]
+
     return _World(
         storytellers=storytellers,
         families=families,
@@ -291,6 +373,9 @@ async def _load(db: AsyncSession, excluded: frozenset[str]) -> _World:
         sign_ins=sign_ins,
         usage=usage,
         families_deleted=families_deleted,
+        conv_cards=conv_cards,
+        questions=questions,
+        sharing=sharing,
     )
 
 
@@ -545,6 +630,128 @@ def _memory_cards(world: _World, w: _Windows) -> dict:
                 ).items()
             )
         )
+    }
+
+
+_SENT_OR_ON_ITS_WAY = {"approved", "scheduled", "sent"}
+
+
+def _conversation_cards(world: _World, w: _Windows) -> dict:
+    """CONVERSATION_CARDS.md §13. All time unless a window is named."""
+    cards = [c for c in world.conv_cards if _aware(c.created_at) <= w.now]
+    sent = [c for c in cards if c.status == "sent"]
+    select_calls = sum(
+        1
+        for u in world.usage
+        if u.vendor == "anthropic" and u.operation == "card_select"
+    )
+    # A selection that chose a card wrote a row (drafted, or failed its
+    # check); the rest chose none.
+    chosen = len(cards)
+    reviewed = [c for c in cards if c.operator_reviewed_at is not None]
+    review_hours = [
+        (_aware(c.operator_reviewed_at) - _aware(c.created_at)).total_seconds() / 3600
+        for c in reviewed
+    ]
+    offered = [c for c in cards if (c.readback_offers or 0) > 0]
+    days_to_send = [
+        (_aware(c.scheduled_for) - _aware(c.created_at)).total_seconds() / 86400
+        for c in sent
+        if c.scheduled_for
+    ]
+
+    def delivered_rate(rows):
+        attempted = [c for c in rows if c.wa_sent]
+        done = [
+            c for c in attempted if c.wa_delivery_status in delivery.DELIVERED_STATUSES
+        ]
+        return {
+            "sent": len(attempted),
+            "delivered": len(done),
+            "rate": rate(len(done), len(attempted)),
+        }
+
+    by_country = defaultdict(list)
+    for c in sent:
+        by_country[c.child_country].append(c)
+
+    reactions = Counter(c.child_reaction for c in sent if c.child_reaction)
+    questions = [q for q in world.questions if q.kind == "question"]
+    return {
+        "pipeline": {
+            "drafted": w.count(cards, lambda c: c.created_at),
+            "selection_calls": select_calls,
+            "selection_none_rate": rate(select_calls - chosen, select_calls)
+            if select_calls
+            else None,
+            "failed_fidelity": sum(1 for c in cards if c.status == "failed_fidelity"),
+            "operator_approved": sum(
+                1 for c in cards if c.operator_action == "approve"
+            ),
+            "operator_edited": sum(1 for c in cards if c.operator_edited),
+            "operator_rejected": sum(1 for c in cards if c.status == "rejected"),
+            "waiting_for_review": sum(
+                1 for c in cards if c.status == "operator_review"
+            ),
+            "median_hours_in_review": _median(review_hours),
+        },
+        "parent": {
+            "share_preference": dict(
+                sorted(Counter(r.share_preference for r in world.sharing).items())
+            ),
+            "readback_offers_per_card": round(
+                statistics.fmean(c.readback_offers for c in offered), 2
+            )
+            if offered
+            else None,
+            "outcomes": {
+                "approved": sum(1 for c in cards if c.status in _SENT_OR_ON_ITS_WAY),
+                "corrected": sum(1 for c in cards if (c.correction_round or 0) > 0),
+                "kept_private": sum(1 for c in cards if c.status == "kept_private"),
+                "expired": sum(1 for c in cards if c.status == "expired"),
+                "withdrawn": sum(1 for c in cards if c.status == "withdrawn"),
+                "waiting_for_her": sum(
+                    1 for c in cards if c.status == "awaiting_parent"
+                ),
+            },
+            "median_days_draft_to_sent": _median(days_to_send),
+        },
+        "delivery": {
+            "sent": w.count(sent, lambda c: c.scheduled_for),
+            "whatsapp": delivered_rate(sent),
+            "whatsapp_by_country": {
+                k: delivered_rate(v) for k, v in sorted(by_country.items())
+            },
+            "whatsapp_skipped": dict(
+                sorted(
+                    Counter(
+                        c.wa_skipped_reason for c in sent if c.wa_skipped_reason
+                    ).items()
+                )
+            ),
+            "email_accepted": sum(1 for c in sent if c.email_status == "accepted"),
+            "email_failed": sum(1 for c in cards if c.email_status == "failed"),
+            "email_turned_off": sum(
+                1 for r in world.sharing if r.card_email_enabled is False
+            ),
+            "whatsapp_stopped": sum(
+                1 for r in world.sharing if r.card_whatsapp_enabled is False
+            ),
+        },
+        "child": {
+            "didnt_know": reactions.get("didnt_know", 0),
+            "knew": reactions.get("knew", 0),
+            "questions": len(questions),
+            "questions_per_sent_card": rate(len(questions), len(sent)),
+            "questions_by_screening": dict(
+                sorted(Counter(q.screening or "none" for q in questions).items())
+            ),
+            "questions_asked_to_her": sum(1 for q in questions if q.status == "asked"),
+        },
+        # Tagged by hand on /admin/cards/view (§13): she brought up a call
+        # with her child about the card, unprompted.
+        "calls_brought_up": sum(1 for c in sent if c.call_tag == "brought_up"),
+        "calls_tagged": sum(1 for c in sent if c.call_tag),
     }
 
 
@@ -845,6 +1052,42 @@ def _families(world: _World, w: _Windows) -> list[dict]:
                 "cards_failed": sum(
                     1 for c in cards if c.delivery_status in ("failed", "undelivered")
                 ),
+                "cards_sent_30d": sum(
+                    1
+                    for c in world.conv_cards
+                    if c.user_id == user_id
+                    and c.status == "sent"
+                    and w.contains("last_30d", c.scheduled_for)
+                ),
+                "last_card_sent_at_ist": ist_iso(
+                    max(
+                        (
+                            _aware(c.scheduled_for)
+                            for c in world.conv_cards
+                            if c.user_id == user_id
+                            and c.status == "sent"
+                            and c.scheduled_for
+                        ),
+                        default=None,
+                    )
+                ),
+                "pending_card_status": next(
+                    (
+                        c.status
+                        for c in world.conv_cards
+                        if c.user_id == user_id
+                        and c.status
+                        in (
+                            "draft",
+                            "operator_review",
+                            "awaiting_parent",
+                            "correction",
+                            "approved",
+                            "scheduled",
+                        )
+                    ),
+                    None,
+                ),
                 "cost_30d_inr": inr(cost_30d),
                 "cost_per_conversation_30d_inr": (
                     inr(cost_30d / conversations_30d) if conversations_30d else None
@@ -886,6 +1129,7 @@ async def compute_metrics(
         "engagement": _engagement(world, w),
         "story_atoms": _story_atoms(world, w),
         "memory_cards": _memory_cards(world, w),
+        "conversation_cards": _conversation_cards(world, w),
         "dashboard": _dashboard(world, w),
         "stories": dict(STORIES_PLACEHOLDER),
         "cost": _cost(world, w, conversations["conversations"]),
