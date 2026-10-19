@@ -419,10 +419,10 @@ At 2 cards a week that is roughly ₹50–55 per family per month. It replaces t
 
 **Step 0: verify before building the delivery code**
 
-- [ ] Submit `katha_conversation_card_v1` and record the category Meta gives. Check the body passes Meta's variable-placement rules.
-- [ ] If a US number is available, send a test to it.
-- [ ] Check the existing memory-card template's category in `META_TEMPLATE_CATEGORIES`, as a precedent.
-- [ ] SES: production access, Easy DKIM, SPF and DMARC on `katha.life`.
+- [x] Submit the template and record the category Meta gives. **Done 2026-10-19:** `katha_conversation_card_v2` approved as **Marketing**. v1 was rejected because its image sample was a made-up S3 key Meta couldn't download (see `CONVERSATION_CARDS_STEP0.md` §1.3). So cards to +1 numbers go by email only, as §16 planned for.
+- [ ] If a US number is available, send a test to it. Not needed for a Marketing template: the code skips WhatsApp for +1 numbers.
+- [x] Check the existing memory-card template's category in `META_TEMPLATE_CATEGORIES`, as a precedent.
+- [x] SES: production access, Easy DKIM, SPF and DMARC on `katha.life`. **Done 2026-10-19.** katha.life's DNS is at GoDaddy, which holds two `_dmarc` records it won't let you delete; card mail aligns through DKIM and `mail.katha.life`, so it passes under either (STEP0 §2.4).
 
 **Step 1: build behind `CONVERSATION_CARDS_ENABLED`** (default off). Order of work in the PR: migration → classifiers and extraction fields → selection, writing and fidelity → image → admin page → read-back in the session → WhatsApp and email delivery → family routing and questions → metrics.
 
@@ -467,12 +467,12 @@ At 2 cards a week that is roughly ₹50–55 per family per month. It replaces t
 - [ ] With the flag off, behaviour matches today's, including the memory card.
 - [ ] TC-12 to TC-18 meet their targets; TC-01 to TC-11 still pass.
 - [ ] Deletion removes both new tables and card images; export includes sent cards.
-- [ ] Step 0 checks recorded in this spec, including the category Meta assigned.
+- [x] Step 0 checks recorded in this spec, including the category Meta assigned.
 - [ ] `ADMIN_METRICS.md`, `PILOT_RUNBOOK.md`, `TECH_DESIGN.md`, `CLAUDE.md` (Critical Constraints: card approval, template category) and the privacy page updated.
 
 ## 18. Build notes (2026-10-19, `feature/conversation-cards`)
 
-Step 1 of §15 is built, behind `CONVERSATION_CARDS_ENABLED` (default off). Step 0 is not done; it's a checklist in `CONVERSATION_CARDS_STEP0.md`. With the switch off, every prompt is byte-identical to before (checked against `main`), and the memory card path is unchanged.
+Step 1 of §15 is built, behind `CONVERSATION_CARDS_ENABLED` (default off). Step 0 was done by hand on 2026-10-19 from `CONVERSATION_CARDS_STEP0.md`; the template came back Marketing (§15). With the switch off, every prompt is byte-identical to before (checked against `main`), and the memory card path is unchanged.
 
 This section records what the build decided, changed from the spec, or measured.
 
@@ -546,8 +546,8 @@ This section records what the build decided, changed from the spec, or measured.
 **TC-16 wording fix.** TC-16 failed once in the final run: the model asked its own question as well as the child's. The relay instruction now says the child's question is the reply's only question.
 
 **Still open**
-- **Step 0:** the Meta template and its category, SES production access, DKIM, SPF and DMARC. See `CONVERSATION_CARDS_STEP0.md`.
+- **Appealing the template's Marketing category** is optional. It matters only if US-based children are common in the pilot.
+- **katha.life has two DMARC records** that GoDaddy won't let you delete. Ask GoDaddy support to remove the `p=none` one.
 - **The TC-15 fixture's Tamil and Hindi lines need a native speaker's check.** TC-17 uses synthetic transcripts; real consented pilot transcripts should replace them.
 - **Q1–Q3 as proposed.** Child questions are relayed as text only; never-share is handled by the operator; SES bounce and complaint handling is a follow-up.
-- **The dashboard's cards page doesn't show conversation cards yet.** `/family/cards` returns them under `conversation_cards`.
 - **A possible small effect on TC-08 with cards on is worth watching in the self-trial.**

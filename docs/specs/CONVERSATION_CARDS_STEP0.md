@@ -3,6 +3,7 @@
 **For:** `docs/specs/CONVERSATION_CARDS.md` §15 Step 0. It must be done before the self-trial sends a real card.
 **Who:** Krish. Every item is an action in an external console (Twilio, Meta, AWS, DNS). None of it is done by code.
 **When an item is done:** record the result in the spec's §15 checklist, and the template's category in `META_TEMPLATE_CATEGORIES`.
+**Status:** done 2026-10-19. `katha_conversation_card_v2` was approved as Marketing (v1 was rejected; see §1.3). The corrections below come from doing it.
 
 The code is written so that skipping this fails safe:
 - With no template set, cards go by email only.
@@ -11,7 +12,7 @@ The code is written so that skipping this fails safe:
 
 ---
 
-## 1. The WhatsApp template: `katha_conversation_card_v1`
+## 1. The WhatsApp template: `katha_conversation_card_v2`
 
 ### 1.1 What to create
 
@@ -19,16 +20,16 @@ Create it in the Twilio Console under **Messaging → Content Template Builder �
 
 | Field | Value |
 |---|---|
-| Friendly name | `katha_conversation_card_v1` |
+| Friendly name | `katha_conversation_card_v2` (v1 was rejected, and a rejected name can't be reused) |
 | Language | English |
-| Content type | **`twilio/card`**: a media header, a body and quick-reply buttons. Check in the builder that it offers a media URL together with up to three quick replies for WhatsApp. If it doesn't, use `twilio/media` with quick replies. |
+| Content type | **`twilio/card`**: media, text and quick-reply buttons. |
 | Category to request | **Utility** (see §1.4) |
 
 **Media URL:** `https://<TWILIO_TEMPLATE_MEDIA_HOST>/{{1}}`
 - Use the same host the memory-card template uses, the value of `TWILIO_TEMPLATE_MEDIA_HOST`. Twilio allows a variable in a media URL only after a fixed host.
 - `{{1}}` is the presigned key plus query string. The adapter fills it in (`adapters/whatsapp.py`, `_template_media_suffix`).
 
-**Body.** Copy this exactly:
+**Text.** On WhatsApp all of a card's text goes in **Title**, which is required. Leave **Body** (RCS only) and **Subtitle** (the footer; no variables) empty. Copy this exactly:
 
 ```
 A memory {{2}} agreed to share with you, from talking with Katha.
@@ -55,9 +56,17 @@ If you'd rather keep the spec's wording for an all-mothers pilot, change only th
 
 | Variable | Sample |
 |---|---|
-| `{{1}}` | `cards/conv/3f2a9c1e-6b1d-4c4e-9f0e-1a2b3c4d5e6f-9eabb2c97d1f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900` |
+| `{{1}}` | A **real, downloadable** image: see below |
 | `{{2}}` | `Amma` |
 | `{{3}}` | `What do you remember about that first film?` |
+
+**The `{{1}}` sample must be a file Meta can download.** v1 used a made-up key, and Meta rejected it: "Error downloading invalid media URL". The bucket is private, so:
+
+1. Render a sample card from made-up text with `memory_cards.generator.render_conversation_card` (never a real family's card).
+2. Upload it: `aws s3 cp sample.png s3://<bucket>/samples/conversation-card-sample.png --region ap-south-1`.
+3. Presign it for 7 days, the longest S3 allows: `aws s3 presign s3://<bucket>/samples/conversation-card-sample.png --expires-in 604800 --region ap-south-1`.
+4. The sample is everything after `https://<TWILIO_TEMPLATE_MEDIA_HOST>/`, query string included. If your terminal shows `&amp;`, write it as `&`, or the signature fails.
+5. Open the full link in a private window before submitting, and submit before it expires. Delete the sample from S3 once the template is approved.
 
 The body follows Meta's variable rules:
 - it doesn't start or end with a variable;
@@ -124,10 +133,11 @@ DKIM matters here for two reasons:
 
 ### 2.4 DMARC
 
-- [ ] Add **TXT** `_dmarc.katha.life` → `v=DMARC1; p=none; rua=mailto:dmarc@katha.life; adkim=r; aspf=r`
-  - Start at `p=none` and watch the reports for two weeks. If everything passes, move to `p=quarantine`.
-  - Point `rua` at a mailbox that exists.
-- [ ] If a DMARC record already exists, edit it rather than adding a second one. Two records invalidate both.
+katha.life's DNS is at **GoDaddy**. As of 2026-10-19 it has **two** `_dmarc` records, `v=DMARC1; p=none;` and a GoDaddy-added `p=quarantine` one reporting to `onsecureserver.net`, and GoDaddy's DNS editor won't delete either. Two records mean most receivers apply no DMARC policy.
+
+- [ ] This doesn't block cards. With the DKIM and `mail.katha.life` records above, card mail aligns for katha.life and passes under either record. The §2.5 check confirms it.
+- [ ] Ask GoDaddy support to remove the `p=none` record and keep `p=quarantine`, which is safe once DKIM passes.
+- [ ] Don't add a `rua=mailto:…@katha.life` address: katha.life has no MX record, so there is no mailbox to receive reports.
 
 ### 2.5 Check it works
 

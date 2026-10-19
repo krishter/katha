@@ -201,7 +201,7 @@ class Settings(BaseSettings):
     # Where "a card is waiting for review" and "she said never share"
     # alerts go. Empty: logged only.
     OPERATOR_EMAIL: str = ""
-    # katha_conversation_card_v1 (§8.1). Variable mapping:
+    # katha_conversation_card_v2 (§8.1). Variable mapping:
     #   {{1}}  media — the card image (injected by the adapter, via
     #          TWILIO_TEMPLATE_MEDIA_HOST, as for the memory card)
     #   {{2}}  parent_title, what the child calls her ("Amma")

@@ -7,7 +7,7 @@ Every minute the scheduler calls send_due_cards:
    (cards/schedule.py). Normally that happens the moment she says yes;
    this catches one that did not.
 2. Every scheduled card whose time has come is sent, on both channels:
-   - WhatsApp, through the approved katha_conversation_card_v1 template,
+   - WhatsApp, through the approved katha_conversation_card_v2 template,
      never free-form (the child has no open 24-hour window). Skipped when
      the child said "stop", when no template is configured, or for a +1
      number while Meta has the template as Marketing: Meta has paused
