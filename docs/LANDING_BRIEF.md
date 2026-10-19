@@ -2,6 +2,7 @@
 
 **Owner:** Krish · **Written:** 2026-10-15 · **For:** Claude Code
 **Status:** approach and visual treatment agreed; two defaults flagged in §9 for Krish to confirm.
+**Updated 2026-10-19** to the current product flow (`docs/specs/LANDING_FLOW_UPDATE.md`): she starts every conversation, cards replace the daily quote card, and her words are kept, not her voice. §4–§6 describe the page as it is now.
 
 ---
 
@@ -13,7 +14,7 @@ by walking the visitor through the journey a family goes through with it, step b
 
 - **Reader:** the adult child ("the child"). **Subject:** their elderly parent ("the parent"). The page alternates between the child's view and the parent's view, and the two meet at the end.
 - **Reference for mechanics only:** seasats.com. Borrow its pinned scroll sections, full-screen pauses and short display lines. Do **not** borrow its product-catalogue structure. This is one story, told in order.
-- **Narrative device:** *one voice note becoming a book.* A single continuous "thread" carries the story: a waveform in the hero turns into words, then a quote card, then a first-person story, then a chapter, then a bookshelf.
+- **Narrative device:** *her words becoming an archive.* A single continuous "thread" carries the story: a waveform in the hero turns into words, then a card she approves, then the child's call, then a chapter, then a bookshelf.
 
 ## 2. Where it lives and how it's built
 
@@ -49,7 +50,7 @@ Drafts for all three are in `docs/brand/landing/`. Match them:
 ### Character sheet (define once in `art/characters.svg` as `<symbol>`s, then reuse)
 - **Her (the parent):** grey hair in a bun, round reading glasses, saffron saree with a gold border, warm brown skin. No facial features beyond the glasses. She stays recognisable across every scene she appears in.
 - **The child:** adult in their 40s, indigo shirt, shown from behind or in profile, phone in hand, in a city flat window or at an airport gate.
-- **The grandchild:** about 9 years old, headphones on. Appears only in the final bookend.
+- **The grandchild:** about 9 years old, headphones round the neck (not on: no voice is kept to play). Appears only in the final bookend.
 
 ### Objects that carry the emotion
 Steel tumbler, reading glasses on a folded newspaper, an old transistor radio, an arched window with morning sun, an armchair, a phone propped against a jar. Rangoli or kolam patterns appear **only** as faint line texture.
@@ -64,7 +65,7 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
 "Pin" means the section stays fixed in place while scrolling progresses through its steps.
 
 ### Act I — The distance *(Abstract, indigo)*
-1. **Hero** (full screen). A faint waveform pulses. Line: *"Amma has told the Bombay Diwali story a dozen times. Nobody has written it down."* Below it, a small line: *Katha keeps your parent's stories, in their own voice.* A scroll cue at the bottom.
+1. **Hero** (full screen). A faint waveform pulses. Line: *"Amma has told the Bombay Diwali story a dozen times. Nobody has written it down."* Below it, a small line: *Katha keeps your parent's stories, in their own words.* A scroll cue at the bottom.
    *Motion:* the waveform breathes slowly. On scroll, it stretches into the thread line that leads down the page.
 2. **Pinned, three lines in sequence:** *You call on Sundays. / She says she's fine. / There are questions you've never thought to ask.* Abstract art: two clocks in different time zones, and a phone with the call ended.
 3. **What fades** *(the bridge: why this matters).* Opening line: *"And the answers live in one place."* Then, pinned, one detail per scroll step, each fading as the next appears:
@@ -74,35 +75,38 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
    *Tone:* gentle, never fear-based. No "before it's too late", no mention of illness or death, and no guilt aimed at the child. The fault is "no one asked", not "you didn't".
 4. **Katha, introduced** *(the dawn starts here).* The drifting dots gather into the voice waveform, and the Katha mark (க/क) appears.
    *"Katha asks."*
-   *"A warm voice on WhatsApp that talks with your parent most days, in their language — and keeps every story they tell."*
+   *"A warm voice on WhatsApp that listens whenever your parent feels like talking, in their language — and keeps every story they tell."*
    A small line under it, *"Here's how it works,"* leads into Act II. The indigo background starts warming here.
 
 ### Act II — The beginning *(dawn → parchment, Paper-cut; a phone mockup pinned on the right on desktop)*
-3. **You set it up in about five minutes.** Her name, the time she likes to talk, her language, a few hints ("Amma grew up in Madurai"). *Art:* the child at a window, phone in hand.
-4. **She decides.** *"Katha asks her separately, in her language. She says yes in her own words. If she doesn't, Katha stays silent."* Give this its own full-width moment.
-5. **10:30 the next morning, her phone buzzes.** The style-draft scene. *"It's a voice, not an app."* The pinned phone plays a short WhatsApp exchange: Katha's voice note, then her reply, then the "listening…" state.
+3. **You set it up in about five minutes.** Her name, her language, when you usually call her, a few hints ("Amma grew up in Madurai"). Setup mock: *Her name: Amma · Her language: Tamil · You usually call her: Sundays, 11 am · A few hints*, and the button *Send her the link*. *Art:* the child at a window, phone in hand.
+4. **She decides.** *"You send her a link. When she taps it, Katha introduces itself — honestly, as an AI — and asks if she'd like to talk, in her language. She says yes in her own words. If she doesn't, Katha stays silent."* Give this its own full-width moment.
+5. **The next morning, she presses the mic and starts talking.** *"It's a voice, not an app. She talks when she feels like it, and Katha always answers."* She leans towards the phone and speaks; the phone is not ringing. The pinned phone plays her voice note first, then Katha's reply, then the "listening…" state. Katha's bubble never comes before hers.
 
 ### Act III — The days *(Paper-cut)*
-6. **She talks. Katha remembers.** One exchange where Katha brings up something she said last week ("Last time you mentioned the river house…").
-7. **A quote card reaches your WhatsApp** a few minutes after she finishes. *Motion:* the card lifts out of her phone, follows the thread, and lands in the child's phone (two scenes linked by the line).
+6. **She talks. Katha remembers.** One exchange where Katha brings up something she said last week ("Last time you mentioned the river house…"). Then: *"And before she goes, Katha tells her what it has kept safe."*
+
+Beat 7 (the quote card that reached the child after every conversation) was removed on 2026-10-19. The card now appears in Act IV, after she has approved it.
 
 ### Act IV — Her story, her say *(the emotional peak, Paper-cut)*
-8. **A story takes shape.** Transcript fragments rearrange into a short story page written in first person ("When I was nine, we lived near the river…"). Label it *Illustrative*.
-9. **Full-screen moment:** *"She reads it first. Nothing reaches the family until she says yes. And no one edits it. It's her story. It stays hers."* Just type, with one small paper-cut detail: her glasses resting on the page.
+8. **Something worth sharing takes shape.** *"From what she's told Katha, it picks one thing you might not know, in her words, translated into English."* Transcript fragments gather into a **card**, drawn like the real one (`memory_cards/generator.py`, `render_conversation_card`): the hook as the header (*Did you know Amma could hear Appa's cycle bell long before she saw him?*), her words, an *On your next call* box with the question itself (*Where was Appa cycling home from?*), and the footer *Shared with Amma's permission · translated from Tamil*. Label it *Illustrative*.
+9. **Full-screen moment:** *"Katha reads it to her first, in her language. No card is sent to you until she says yes. Your family can't change a word. It's her story. It stays hers."* Art: her glasses on the card, and Katha's voice note beside them, because it is read *to* her. Once the dashboard shows only what she approved (LANDING_FLOW_UPDATE D1), the second line may become *"Nothing reaches you until she says yes."*
+10. **Then it reaches you.** *"By email and on WhatsApp, a few hours before you usually call. Up to twice a week."* Small line: *"For US numbers, by email only for now."* *Motion:* the card lifts out of her phone, follows the thread, and lands in the child's phone; an envelope lands beside it. This runs after beat 9, never before.
+11. **You call. You ask.** *"Or reply with a question of your own. Katha will ask her in a coming conversation, and tell her it came from you."* Small line: *"If she'd like to share her answer, it comes back to you the same way — once she's said yes."* *Art:* the child at the city-flat window at night, phone at the ear. The scene comes before the text so the thread reaches it first.
 
 ### Act V — The archive *(darkening to indigo, Abstract)*
-10. **Eight chapters fill in** as you scroll. Use the eight life domains from `TECH_DESIGN.md` §2.2: Childhood & Home · Family & Ancestors · Education & Coming of Age · Career & Work Life · Love, Marriage & Family · Historical Events Witnessed · Hobbies, Passions & Talents · Wisdom & Life Lessons. If the dashboard uses shorter labels, use those instead. Book spines rise on a shelf; each spine lights up as its label appears.
-11. **Bookend:** years later, the grandchild presses play and her voice plays. Silence, then one line: *"Their voice. Their words. Yours to keep."*
+12. **Eight chapters fill in** as you scroll. No sub-line until D1 ships; then *"Everything she agrees to share is kept for your family, chapter by chapter of her life."* Use the eight life domains from `TECH_DESIGN.md` §2.2: Childhood & Home · Family & Ancestors · Education & Coming of Age · Career & Work Life · Love, Marriage & Family · Historical Events Witnessed · Hobbies, Passions & Talents · Wisdom & Life Lessons. If the dashboard uses shorter labels, use those instead. Book spines rise on a shelf; each spine lights up as its label appears.
+13. **Bookend:** years later, the grandchild reads one of her cards on a phone, headphones round the neck. Silence, then one line: *"Her words. Her stories. Yours to keep."*
 
 ### Act VI — Invitation *(parchment, type-led)*
-12. *"We're inviting a small number of families to try Katha with us."* Sign-up form (§5).
-13. **Trust strip:** four short statements with simple line icons (§6 lists what's allowed).
-14. **Footer:** © 2026 Katha · a product of ONENOTSEVEN LABS (107 Labs) · Privacy · "Katha is a companion, not therapy or medical care."
+14. *"We're inviting a small number of families to try Katha with us."* Sign-up form (§5).
+15. **Trust strip:** six short statements with simple line icons, 3 × 2 on desktop and 2 columns on phones (§6 lists what's allowed).
+16. **Footer:** © 2026 Katha · a product of ONENOTSEVEN LABS (107 Labs) · Privacy · "Katha is a companion, not therapy or medical care."
 
 ## 5. Pilot sign-up form
 
 - Keep the existing Formspree endpoint (`https://formspree.io/f/maqrorwa`) and the existing fetch-based submit with inline status message.
-- **Fields:** your name · email · your WhatsApp number (optional) · parent's preferred language (select: Tamil, Hindi, Malayalam, Kannada, Telugu, Bengali, Marathi, Gujarati, English, Other) · city where your parent lives · where you live relative to them (same home / same city / different city / abroad) · anything you'd like us to know (optional textarea).
+- **Fields:** your name · email · your WhatsApp number (optional) · parent's preferred language (select: Tamil, Hindi, Malayalam, Kannada, Telugu, Bengali, Marathi, Gujarati, English, Other) · city where your parent lives · where you live relative to them (same home / same city / different city / abroad) · when you usually call your parent (optional, `call_time`, placeholder *e.g. Sundays around 11*) · anything you'd like us to know (optional textarea).
 - Button label: **"Request a pilot spot"**. Note under it: *"We'll write to you personally. We'll only contact your parent after you both agree."*
 - Use real `<label>` elements, required-field validation, and work at phone width with no horizontal scrolling.
 
@@ -111,9 +115,22 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
 - **No testimonials, user counts or outcome claims.** Remove "128 stories and counting" and "Shared with 4 family members" from the old page.
 - Every name, quote and story fragment in the art is labelled *Illustrative*.
 - **No claims about loneliness or health benefits.** No statistics unless Krish supplies a cited source.
-- **Trust strip may say only:** "Her stories are stored in India." · "You, or she, can delete everything, anytime." · "She can stop whenever she likes." · "We never use her stories to train AI."
+- **Trust strip may say only:** "Her stories are stored in India." · "You, or she, can delete everything, anytime." · "She can stop whenever she likes." · "We never use her stories to train AI." · "She hears every card before you do." · "She can keep anything just between her and Katha."
   Do **not** say data "never leaves India". Speech and AI processing use third-party services.
 - **Language:** she speaks in her own language. Family-facing stories are in English for now (MVP scope). Copy must not suggest stories are written up in her language.
+
+Added 2026-10-19 (`LANDING_FLOW_UPDATE.md` §5):
+1. Never say Katha calls, rings, buzzes, reminds or messages her first. She starts every conversation.
+2. Never say her voice is kept, played or heard later. Use "her words".
+3. Card frequency is "up to twice a week". Never "every day" or "after every conversation".
+   - 3a. Cards reach US (+1) numbers by email only while the card template is Marketing. Don't promise WhatsApp to every child.
+4. Never say the card is in her language. It is English, labelled as translated. Only the read-back is in her language.
+5. Never promise the child an answer to their question, or say when it will be asked.
+6. Don't say "no one edits it". Say the family can't change it.
+7. "Nothing reaches you until she says yes" only once the dashboard shows approved content only (D1). Until then, "No card is sent to you until she says yes".
+8. Don't describe first-person Stories or a book as something families get now.
+
+**Depends on cards being on.** Beat 6's "kept safe" line and the trust line "She can keep anything just between her and Katha" are true only for families with conversation cards switched on (the recap and private marking run only then). Every new pilot family should get cards on; if that changes, change these lines.
 
 ## 7. Motion, accessibility, performance
 
@@ -126,7 +143,7 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
 
 ## 8. Done means
 
-- [ ] All 14 beats implemented with art in the agreed styles and the colour arc working end to end.
+- [ ] All 16 beats implemented with art in the agreed styles and the colour arc working end to end.
 - [ ] The thread line draws continuously from the hero to the bookshelf on desktop.
 - [ ] Playwright screenshots at 390×844 and 1440×900 for every act, plus a reduced-motion run, attached to the PR.
 - [ ] Form submits to Formspree and shows success and error states (test with one real submission).
@@ -136,9 +153,9 @@ Copy below is **draft**: use it as written, and mark it with `<!-- COPY: draft -
 
 ## 9. Open items for Krish
 
-1. **Sound (default chosen: include).** Add an optional "Hear Katha" button in Act II, muted until pressed. It plays `coming-soon/audio/katha-sample.mp3`, a short voice sample Krish generates and approves (Bulbul voice, scripted greeting). **If the file is missing, hide the button.**
+1. **Sound (default chosen: include).** Add an optional "Hear Katha" button in Act II, muted until pressed. It plays `coming-soon/audio/katha-sample.mp3`, a short voice sample Krish generates and approves (scripted greeting, in the voice new families hear: Gemini, the default persona voice in `media/tts.py`, not Bulbul). **If the file is missing, hide the button.**
 2. **Sign-up channel (default chosen: form only).** No WhatsApp click-to-chat link until Krish provides a number for it.
-3. **Check product claims against what's live before launch:** parent approval before the family sees a story (decided 2026-10-11; confirm it's built), quote card delivered after each session, and Katha's voice notes in her language.
+3. ~~**Check product claims against what's live before launch.**~~ Done 2026-10-19 (`LANDING_FLOW_UPDATE.md`): the page now describes cards approved after a read-back, sent up to twice a week, and a parent who starts each conversation.
 4. **Final copy pass:** all `COPY: draft` lines.
 
 ## 10. Out of scope
