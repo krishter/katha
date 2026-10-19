@@ -264,7 +264,8 @@ async def test_offer_at_the_opening_then_read_then_her_yes(real_db):
         answer, turn_id, session_id=session_id, user_id=user_id, db=real_db
     )
     card = await get(real_db, ConversationCard, card_id)
-    assert card.status == "approved"
+    # Approved, and given a send time before the child's next call.
+    assert card.status == "scheduled" and card.scheduled_for is not None
     assert card.parent_answer == "approve"
     assert card.approved_hash == card.readback_hash
     assert card.parent_answer_turn_id == turn_id

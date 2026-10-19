@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.whatsapp_stub import get_whatsapp_adapter
+from cards import deliver as card_delivery
 from config import settings
 from core import freemium, orchestrator, parent_consent, session_manager, usage
 from media import tts
@@ -260,9 +261,36 @@ async def _send_followups(db: AsyncSession, whatsapp) -> None:
                 )
 
 
+async def send_conversation_cards(db_session_factory) -> None:
+    """
+    Every minute: send approved conversation cards whose time has come
+    (docs/specs/CONVERSATION_CARDS.md §8). Does nothing unless
+    CONVERSATION_CARDS_ENABLED. Never raises: a failure here must not take
+    the scheduler down.
+    """
+    if not settings.CONVERSATION_CARDS_ENABLED:
+        return
+    try:
+        async with db_session_factory() as db:
+            sent = await card_delivery.send_due_cards(db, get_whatsapp_adapter())
+        if sent:
+            logger.info("Scheduler: sent %d conversation card(s)", sent)
+    except Exception:
+        logger.exception("Scheduler: sending conversation cards failed")
+
+
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        send_conversation_cards,
+        trigger="cron",
+        minute="*",
+        kwargs={"db_session_factory": db_session_factory},
+        id="send_conversation_cards",
+        replace_existing=True,
+        misfire_grace_time=30,
+    )
     scheduler.add_job(
         initiate_sessions,
         trigger="cron",

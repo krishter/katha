@@ -49,6 +49,7 @@ class StubWhatsAppAdapter:
         template_sid: str | None = None,
         template_variables: dict | None = None,
         media_variable: str = "1",
+        operation: str = "outbound_card",
     ) -> str:
         sid = self._fake_sid()
         logger.info(
@@ -60,7 +61,7 @@ class StubWhatsAppAdapter:
             template_variables,
             sid,
         )
-        await usage.record_outbound("outbound_card", sid, template_sid)
+        await usage.record_outbound(operation, sid, template_sid)
         return sid
 
     async def send_text(

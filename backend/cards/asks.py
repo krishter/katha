@@ -37,7 +37,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cards import state
+from cards import schedule, state
 from cards.context import family_of
 from config import settings
 from core import parent_answers, sharing
@@ -495,6 +495,14 @@ async def after_turn_saved(
         card = await _card(plan.answered_card_id, db)
         if card is not None:
             card.parent_answer_turn_id = turn_id
+            if card.status == "approved":
+                # On its way: a send time before the child's next call
+                # (cards/schedule.py). If this fails, the delivery job
+                # schedules it on its next run.
+                try:
+                    await schedule.schedule_card(card, db)
+                except Exception:
+                    logger.exception("Could not schedule card %s", card.id)
     await db.commit()
     if plan.share_decision is not None:
         profile = await _profile(user_id, db)
