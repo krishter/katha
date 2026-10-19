@@ -212,6 +212,10 @@ class Settings(BaseSettings):
     # check is what keeps words out of her mouth, so it runs on the larger
     # model.
     LLM_CARD_MODEL: str = "claude-sonnet-5-5"
+    # output_config.effort for those calls. At the model's default a
+    # Hindi card used its whole token budget thinking and returned no text
+    # (TC-17, 2026-10-19).
+    LLM_CARD_EFFORT: str = "medium"
     # Her answers to an ask, and screening the child's questions (§9.3,
     # §10.2).
     LLM_CLASSIFIER_MODEL: str = "claude-haiku-5-5"

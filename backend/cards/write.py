@@ -21,6 +21,7 @@ Runs off the critical path after a session. Logs and never raises.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Optional
@@ -47,9 +48,12 @@ from prompts.system_prompt import _language_name
 
 logger = logging.getLogger(__name__)
 
-SELECT_MAX_TOKENS = 1000
-WRITE_MAX_TOKENS = 2000
-FIDELITY_MAX_TOKENS = 3000
+# Room for the model's thinking as well as the JSON: a reply in an Indic
+# script is token-heavy, and a budget sized for the JSON alone came back
+# empty (TC-17).
+SELECT_MAX_TOKENS = 4000
+WRITE_MAX_TOKENS = 8000
+FIDELITY_MAX_TOKENS = 8000
 # Same budget as consolidation/pipeline._MAX_FIDELITY_PASSES: the first
 # check, one rewrite, one re-check.
 MAX_FIDELITY_PASSES = 2
@@ -82,8 +86,11 @@ async def _ask(prompt: str, purpose: str, max_tokens: int) -> dict:
         [Message(role="user", content=prompt)],
         max_tokens=max_tokens,
         model=settings.LLM_CARD_MODEL,
+        effort=settings.LLM_CARD_EFFORT,
         purpose=purpose,
     )
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        logger.warning("%s reply was cut off at %d tokens", purpose, max_tokens)
     return parse_json_object(response.content)
 
 
@@ -91,8 +98,13 @@ def _words(text: Optional[str]) -> int:
     return len((text or "").split())
 
 
-def shape_problems(fields: dict) -> list[str]:
-    """The §7.3 rules code can check."""
+def _normal(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().casefold()
+
+
+def shape_problems(fields: dict, readback_language: Optional[str] = None) -> list[str]:
+    """The §7.3 rules code can check. `readback_language` is the language
+    she will hear the card in."""
     problems = []
     for name in ("title", "hook", "excerpt", "call_prompt", "readback_text"):
         if not str(fields.get(name) or "").strip():
@@ -116,6 +128,20 @@ def shape_problems(fields: dict) -> list[str]:
         )
     if bool(fields.get("original_quote")) != bool(fields.get("original_quote_gloss")):
         problems.append("original_quote and its gloss go together")
+    # D8: she hears the card in her language. A read-back that carries the
+    # English hook untranslated asks her to approve words she may not
+    # understand (found in TC-17: a Marathi read-back that switched to
+    # English halfway).
+    if (
+        readback_language
+        and not readback_language.startswith("en")
+        and hook
+        and _normal(hook) in _normal(fields.get("readback_text") or "")
+    ):
+        problems.append(
+            "readback_text repeats the English hook untranslated; all of it "
+            "must be in her language"
+        )
     return problems
 
 
@@ -268,7 +294,7 @@ async def _check_and_rewrite(
     passes = []
     for attempt in range(MAX_FIDELITY_PASSES):
         sentences, problems = await check_fidelity(fields, source_turns, parent_title)
-        problems = shape_problems(fields) + problems
+        problems = shape_problems(fields, card.readback_language) + problems
         passes.append(
             {"fields": dict(fields), "sentences": sentences, "problems": problems}
         )

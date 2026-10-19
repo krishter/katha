@@ -1724,12 +1724,144 @@ async def tc18(db):
     await cleanup(db, "eval-tc18")
 
 
+_YES_NO_OPENINGS = {
+    "do",
+    "does",
+    "did",
+    "is",
+    "are",
+    "was",
+    "were",
+    "have",
+    "has",
+    "had",
+    "can",
+    "could",
+    "would",
+    "will",
+    "should",
+    "shall",
+}
+
+
+async def tc17(db):
+    """§3.3 TC-17: card writing on the fixture sessions, through the real
+    pipeline (cards/write.draft_for_session) and the real model. Images are
+    rendered but stored nowhere: S3 is replaced for the run."""
+    import media.storage as storage_module
+    from cards import state as card_state
+    from cards import write as card_write
+
+    async def _no_upload(data, key, content_type="audio/ogg"):
+        return key
+
+    async def _no_delete(key):
+        return None
+
+    storage_module.upload_media = _no_upload
+    storage_module.delete_media = _no_delete
+
+    async def _no_alert(subject, body):
+        return None
+
+    # Cards run only with the switch on; and this run emails nobody.
+    settings.CONVERSATION_CARDS_ENABLED = True
+    card_write.send_operator_alert = _no_alert
+
+    fixture = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parent / "fixtures/card_sessions.json"
+        ).read_text()
+    )
+    rows, drafted, problems = [], 0, []
+    for case in fixture["sessions"]:
+        uid = f"eval-tc17-{case['name']}"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language=case["language"])
+        state = await session_manager.start_session(uid, db)
+        for i, (asked, said, quote) in enumerate(case["turns"]):
+            turn = Turn(
+                id=uuid.uuid4(),
+                session_id=uuid.UUID(state.session_id),
+                user_id=uid,
+                turn_number=i + 1,
+                transcript=said,
+                detected_language=case["language"],
+                response_text=case["turns"][i + 1][0]
+                if i + 1 < len(case["turns"])
+                else "Thank you.",
+            )
+            db.add(turn)
+            await db.flush()
+            db.add(
+                StoryAtom(
+                    session_id=uuid.UUID(state.session_id),
+                    turn_id=turn.id,
+                    user_id=uid,
+                    domain="childhood",
+                    title=f"{case['name']} {i + 1}",
+                    narrative=said,
+                    verbatim_quote=quote,
+                )
+            )
+        # The first turn answers the session's opening question.
+        await db.commit()
+
+        with usage.usage_scope(user_id=uid, session_id=state.session_id):
+            outcome = await card_write.draft_for_session(state.session_id, uid, db)
+        card = None
+        if outcome.card_id:
+            card = (
+                await db.execute(
+                    select(ConversationCard).where(
+                        ConversationCard.id == outcome.card_id
+                    )
+                )
+            ).scalar_one()
+        line = f"  [{case['name']}] {outcome.result}"
+        if card is not None and card.status in ("operator_review", "awaiting_parent"):
+            drafted += 1
+            sentences = card.fidelity_json.get("sentences") or []
+            unsupported = [s for s in sentences if s.get("verdict") == "unsupported"]
+            shape = card_write.shape_problems(
+                {n: getattr(card, n) for n in card_state.TEXT_FIELDS},
+                card.readback_language,
+            )
+            first = (card.call_prompt or "").strip().split(" ")[0].lower()
+            closed = first in _YES_NO_OPENINGS
+            if unsupported or shape or closed:
+                problems.append(case["name"])
+            line += (
+                f" unsupported={len(unsupported)} shape={shape} "
+                f"closed_call_prompt={closed}\n    hook: {card.hook!r}\n"
+                f"    excerpt: {card.excerpt!r}\n    call: {card.call_prompt!r}\n"
+                f"    readback: {card.readback_text[:160]!r}"
+            )
+        elif outcome.reason:
+            line += f" ({outcome.reason[:200]})"
+        rows.append(line)
+        await cleanup(db, uid)
+
+    traps_ok = all("health_and_property" not in r or "drafted" not in r for r in rows)
+    # §3.3 TC-17 Pass: "100% on fidelity across the cards that pass to
+    # review." Also reported: length limits, open call prompts, the traps.
+    passed = drafted > 0 and not problems
+    record(
+        "TC-17",
+        "objective",
+        passed,
+        f"cards to review={drafted}/{len(fixture['sessions'])} "
+        f"with problems={problems} traps_avoided={traps_ok}\n" + "\n".join(rows),
+    )
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
     "tc14": tc14,
     "tc15": tc15,
     "tc16": tc16,
+    "tc17": tc17,
     "tc18": tc18,
 }
 

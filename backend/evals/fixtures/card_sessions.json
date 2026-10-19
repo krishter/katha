@@ -1,0 +1,85 @@
+{
+  "_about": "TC-17 (TECH_DESIGN.md §3.3): ten synthetic sessions, written for this fixture to resemble pilot conversations; no real parent's words. Each turn is (what Katha had asked, what the parent said, the verbatim quote extraction would keep). Two are traps: 'health_and_property' should not become a card about either, and 'thin' has nothing worth a card. Replace with consented real pilot transcripts when they exist (spec §12 asks for real ones).",
+  "sessions": [
+    {
+      "name": "talkies",
+      "language": "en-IN",
+      "turns": [
+        ["What did you do for fun as a girl?", "My friend Saro and I once walked six kilometres to the talkies in Kumbakonam to see our first film. We didn't tell anyone at home.", "we didn't tell anyone at home"],
+        ["What happened when you got back?", "My mother was waiting at the gate. She didn't shout. She just gave us buttermilk and said next time take your brother.", "next time take your brother"]
+      ]
+    },
+    {
+      "name": "cycle",
+      "language": "hi-IN",
+      "turns": [
+        ["आपने साइकिल चलाना कब सीखा?", "मैं बारह साल की थी, भैया की साइकिल चुपके से ले गई और नहर में गिर गई। पूरी साइकिल कीचड़ में।", "पूरी साइकिल कीचड़ में"],
+        ["फिर क्या हुआ?", "भैया ने किसी को नहीं बताया, खुद धोकर रख दी। उस दिन से वो मेरा सबसे अच्छा दोस्त बन गया।", "वो मेरा सबसे अच्छा दोस्त बन गया"]
+      ]
+    },
+    {
+      "name": "first_job",
+      "language": "en-IN",
+      "turns": [
+        ["How did you get your first job?", "I answered an advertisement for a typist at the telegraph office in 1966. They tested us on a machine where the 'e' key was stuck, and I was the only one who noticed and used the shift trick.", "the 'e' key was stuck"],
+        ["What was the shift trick?", "You pressed shift and the key below it together, it unstuck it for a second. My father taught me that on his old Remington.", "my father taught me that on his old Remington"]
+      ]
+    },
+    {
+      "name": "kolam",
+      "language": "ta-IN",
+      "turns": [
+        ["காலையில் வீட்டில் என்ன நடக்கும்?", "ஒவ்வொரு மார்கழியும் நான் பெரிய கோலம் போடுவேன். ஒரு வருஷம் தெருவிலேயே பெரிய கோலம் என்னுடையது தான், நூற்றியெட்டு புள்ளி.", "நூற்றியெட்டு புள்ளி"],
+        ["அதை யார் கற்றுக்கொடுத்தார்கள்?", "என் பாட்டி. அவங்க விரல் கொஞ்சம் கூட நடுங்காது.", "அவங்க விரல் கொஞ்சம் கூட நடுங்காது"]
+      ]
+    },
+    {
+      "name": "boat_race",
+      "language": "ml-IN",
+      "turns": [
+        ["കുട്ടിക്കാലത്തെ ഓണം എങ്ങനെയായിരുന്നു?", "ഞങ്ങളുടെ ഗ്രാമത്തിന്റെ വള്ളംകളിയിൽ എന്റെ അച്ഛൻ തുഴക്കാരനായിരുന്നു. ഒരു വർഷം അവർ ഒന്നാമതെത്തി.", "ഒരു വർഷം അവർ ഒന്നാമതെത്തി"],
+        ["അന്ന് നിങ്ങൾ എവിടെയായിരുന്നു?", "കരയിൽ നിന്ന് ഞാൻ ഉറക്കെ വിളിച്ചു, ശബ്ദം പോയി. മൂന്ന് ദിവസം മിണ്ടാൻ പറ്റിയില്ല.", "മൂന്ന് ദിവസം മിണ്ടാൻ പറ്റിയില്ല"]
+      ]
+    },
+    {
+      "name": "radio",
+      "language": "hi-IN",
+      "turns": [
+        ["Ghar mein pehli cheez kaunsi aayi thi jo yaad hai?", "Ek Murphy radio, 1962 mein. Pura mohalla hamare ghar aata tha Binaca Geetmala sunne, Wednesday raat ko.", "Binaca Geetmala sunne, Wednesday raat ko"],
+        ["Aap kahan baithti thi?", "Main radio ke paas zameen pe, kyunki mujhe volume ghumane ki duty milti thi.", "mujhe volume ghumane ki duty milti thi"]
+      ]
+    },
+    {
+      "name": "wedding_bus",
+      "language": "en-IN",
+      "turns": [
+        ["How did you travel to your own wedding?", "The bus broke down near Salem, so the whole wedding party walked the last two miles with the trunks on their heads. I walked in my wedding saree.", "I walked in my wedding saree"],
+        ["Were you worried?", "I think I laughed the whole way. Or maybe that was my sister, I don't remember exactly.", "or maybe that was my sister"]
+      ]
+    },
+    {
+      "name": "mango_tree",
+      "language": "mr-IN",
+      "turns": [
+        ["तुमच्या घराबद्दल काय आठवतं?", "आमच्या अंगणात एक मोठं आंब्याचं झाड होतं. मी त्याला नाव दिलं होतं, राजा.", "मी त्याला नाव दिलं होतं, राजा"],
+        ["राजाबद्दल अजून सांगा.", "उन्हाळ्यात मी त्याच्या फांदीवर बसून अभ्यास करायचे. आईला वाटायचं मी झोपले आहे.", "आईला वाटायचं मी झोपले आहे"]
+      ]
+    },
+    {
+      "name": "health_and_property",
+      "language": "en-IN",
+      "turns": [
+        ["What has been on your mind lately?", "My knee surgery last year was very painful, and the doctor says the sugar is high again.", "the sugar is high again"],
+        ["That sounds hard.", "And my brothers are still fighting about the land in the village after father's will. I don't want to talk about it with the children.", "I don't want to talk about it with the children"]
+      ]
+    },
+    {
+      "name": "thin",
+      "language": "en-IN",
+      "turns": [
+        ["How are you today?", "I'm fine. It was hot today.", "it was hot today"],
+        ["What did you do this morning?", "Nothing much. Watched TV.", "watched TV"]
+      ]
+    }
+  ]
+}

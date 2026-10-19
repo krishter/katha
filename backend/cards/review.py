@@ -156,7 +156,7 @@ async def edit(card_id: uuid.UUID, fields: dict, db: AsyncSession) -> Conversati
     except Exception:
         logger.exception("Fidelity check failed for edited card %s", card.id)
         sentences, problems = [], ["the fidelity check could not run; try again"]
-    problems = write.shape_problems(edited) + problems
+    problems = write.shape_problems(edited, card.readback_language) + problems
     history = list((card.fidelity_json or {}).get("passes") or [])
     history.append(
         {

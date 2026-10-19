@@ -199,8 +199,9 @@ did not say.
 {language_name}, as one short voice note: first one line saying this is what \
 you wrote from what they told you, for {child_name}; then the hook, the \
 excerpt and the call prompt; then the question "Shall I send this to \
-{child_name}?". Keep original_quote exactly as said. Plain spoken sentences, \
-no labels, no emoji.
+{child_name}?". All of it in {language_name}: translate the hook too, never \
+leave English sentences in it (unless {language_name} is English). Keep \
+original_quote exactly as said. Plain spoken sentences, no labels, no emoji.
 {fix_block}
 TRANSCRIPTS (the only source of truth)
 {render_turns(turns)}

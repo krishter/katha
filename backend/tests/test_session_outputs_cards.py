@@ -90,3 +90,22 @@ def test_shape_problems_catch_what_code_can():
         "original_quote and its gloss go together"
     ]
     assert "readback_text is empty" in shape_problems(dict(good, readback_text=""))
+
+
+def test_a_readback_that_leaves_the_english_hook_untranslated_is_a_problem():
+    from cards.write import shape_problems
+
+    fields = {
+        "title": "t",
+        "hook": "Did you know Appa named the mango tree Raja?",
+        "excerpt": "I named it Raja.",
+        "call_prompt": "What was Raja like?",
+        "readback_text": "प्रिया साठी. Did you know Appa named the mango tree Raja?",
+    }
+    assert any("untranslated" in p for p in shape_problems(fields, "mr-IN"))
+    # English for an English speaker is the point.
+    assert shape_problems(fields, "en-IN") == []
+    translated = dict(
+        fields, readback_text="प्रिया साठी. अप्पांनी आंब्याच्या झाडाला राजा नाव दिलं."
+    )
+    assert shape_problems(translated, "mr-IN") == []
