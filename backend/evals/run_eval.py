@@ -57,8 +57,12 @@ from core import (  # noqa: E402
 from extraction import entity_extractor, story_extractor  # noqa: E402
 from memory import fact_store  # noqa: E402
 from models.api_usage import ApiUsage  # noqa: E402
+from models.consent_record import ConsentRecord  # noqa: E402
+from models.conversation_card import ConversationCard  # noqa: E402
 from models.db import AsyncSessionLocal, engine  # noqa: E402
 from models.fact import Fact  # noqa: E402
+from models.family_account import FamilyAccount  # noqa: E402
+from models.family_question import FamilyQuestion  # noqa: E402
 from models.memory_card import MemoryCard  # noqa: E402
 from models.session import Session  # noqa: E402
 from models.story_atom import StoryAtom  # noqa: E402
@@ -66,11 +70,20 @@ from models.turn import Turn  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
 from prompts.domains import get_domain  # noqa: E402
 from prompts.system_prompt import (  # noqa: E402
+    CardsContext,
     UserProfile,
     build_system_prompt_parts,
 )
 
 RESULTS: list[dict] = []
+
+# EVAL_CARDS=1 runs every case with conversation cards on for the parent
+# (CONVERSATION_CARDS.md §12: "Layers 2 and 4 change, so the full
+# regression set runs too"). She has already said yes to sharing and has
+# no card or question waiting, so what changes is what every cards family
+# gets on every turn: the Layer 2 rules, the extraction's share fields and
+# the closing recap.
+EVAL_CARDS = os.environ.get("EVAL_CARDS") == "1"
 
 # Every paid call the run made, as read back from api_usage before cleanup
 # deletes it (docs/specs/COST_TO_SERVE.md §14 step 2: the ledger, not a
@@ -116,6 +129,10 @@ async def cleanup(db, user_id: str) -> None:
         return
     for model in (
         ApiUsage,
+        ConsentRecord,
+        ConversationCard,
+        FamilyQuestion,
+        FamilyAccount,
         MemoryCard,
         StoryAtom,
         Turn,
@@ -137,6 +154,8 @@ async def seed_profile(db, user_id: str, name="Subramaniam") -> UserProfileModel
         family_whatsapp_number=None,
         scheduled_time=time(10, 30),
         timezone="Asia/Kolkata",
+        conversation_cards_enabled=EVAL_CARDS,
+        share_preference="share_with_approval" if EVAL_CARDS else "not_asked",
     )
     db.add(profile)
     await db.commit()
@@ -151,6 +170,9 @@ def to_prompt_profile(row: UserProfileModel) -> UserProfile:
         onboarding_context=row.onboarding_context,
         pronouns=row.pronouns or "",
         katha_gender=row.katha_gender,
+        cards=CardsContext(child_name="Priya", parent_title="Appa")
+        if EVAL_CARDS
+        else None,
     )
 
 
@@ -223,6 +245,23 @@ async def _real_turn(
             session_id, user_id, state.domain, db
         )
 
+    # With cards on, the card asks exactly as process_voice_turn makes them.
+    plan = None
+    if prompt_profile.cards is not None:
+        import dataclasses
+
+        from cards import asks as card_asks
+
+        plan = await card_asks.before_dialogue(
+            session_id=session_id, user_id=user_id, transcript=transcript, db=db
+        )
+        prompt_profile = dataclasses.replace(
+            prompt_profile,
+            cards=dataclasses.replace(
+                prompt_profile.cards, layer4=plan.layer4, tag_kinds=plan.tag_kinds
+            ),
+        )
+
     # The same two-part prompt, model and effort as production, so the eval
     # measures what parents get — including prompt caching.
     prompt_parts = build_system_prompt_parts(prompt_profile, state, prior_context)
@@ -247,8 +286,12 @@ async def _real_turn(
     # and would have scored Katha's own English analysis of the user as
     # her reply to them. When the policy rejects an output outright, the
     # parent gets _MALFORMED_RESPONSE, so that is what the case must see.
+    raw_reply = llm_response.content
+    asked: set[str] = set()
+    if plan is not None:
+        asked, raw_reply = card_asks.split_asked_tag(raw_reply)
     post_check = conversation_policy.check_post_turn(
-        llm_response.content,
+        raw_reply,
         state,
         truncated=llm_response.stop_reason == "max_tokens",
     )
@@ -268,6 +311,13 @@ async def _real_turn(
         output_tokens=llm_response.output_tokens,
         db=db,
     )
+    if plan is not None:
+        await card_asks.after_dialogue(
+            plan, asked, session_id=session_id, user_id=user_id, db=db
+        )
+        await card_asks.after_turn_saved(
+            plan, turn.id, session_id=session_id, user_id=user_id, db=db
+        )
 
     from prompts.system_prompt import build_extraction_prompt
 
@@ -297,6 +347,16 @@ async def _real_turn(
         # would.
         session_domain=state.domain,
     )
+    if prompt_profile.cards is not None:
+        from cards import privacy as card_privacy
+
+        await card_privacy.apply_share_signals(
+            extraction_json,
+            turn_id=turn.id,
+            session_id=session_id,
+            user_id=user_id,
+            db=db,
+        )
     new_state = await session_manager.apply_extraction(session_id, extraction_json, db)
 
     return {
@@ -306,6 +366,8 @@ async def _real_turn(
         "state": new_state,
         "prior_context": prior_context,
         "dialogue_prompt": dialogue_prompt,
+        "turn_id": turn.id,
+        "asked": asked,
     }
 
 
@@ -1316,6 +1378,494 @@ def print_cost(cost: dict) -> None:
     )
 
 
+# ---------------------------------------------------------------------
+# TC-12 to TC-18: conversation cards (TECH_DESIGN.md §3.3, added
+# 2026-10-18 from CONVERSATION_CARDS.md §12). Run with `cards`.
+# ---------------------------------------------------------------------
+CHILD = "Priya"
+
+
+async def seed_cards_profile(db, uid, *, share="share_with_approval", language="en-IN"):
+    """A parent with cards on, and her family account."""
+    profile = await seed_profile(db, uid)
+    profile.conversation_cards_enabled = True
+    profile.share_preference = share
+    profile.preferred_language = language
+    db.add(
+        FamilyAccount(
+            email=f"{uid}@eval.katha.life",
+            user_id=uid,
+            child_name=CHILD,
+            parent_title="Appa",
+        )
+    )
+    await db.commit()
+    await db.refresh(profile)
+    pp = to_prompt_profile(profile)
+    return profile, dataclasses_replace(
+        pp, cards=CardsContext(child_name=CHILD, parent_title="Appa")
+    )
+
+
+def dataclasses_replace(obj, **changes):
+    import dataclasses
+
+    return dataclasses.replace(obj, **changes)
+
+
+async def set_session(db, session_id, **values):
+    from sqlalchemy import update as sa_update
+
+    await db.execute(
+        sa_update(Session).where(Session.id == uuid.UUID(session_id)).values(**values)
+    )
+    await db.commit()
+    return await session_manager.get_session(session_id, db)
+
+
+def _questions(text: str) -> int:
+    return text.count("?") + text.count("？")
+
+
+_SHARE_WORDS = ("share", "send", "पढ़", "भेज", "बता")
+
+
+async def tc12(db):
+    uid = "eval-tc12"
+    await cleanup(db, uid)
+    _, pp = await seed_cards_profile(db, uid, share="not_asked")
+    state = await session_manager.start_session(uid, db)
+    # §3.3 TC-12 Setup: "Session 2, cards on, sharing never asked."
+    state = await set_session(db, state.session_id, session_number=2)
+
+    # §3.3 asks for the question "in exactly one reply" of the session, at
+    # a pause the model judges; it is reminded every turn until it asks.
+    # So the parent tells up to three short, finished stories, and answers
+    # "no" as soon as the question comes.
+    replies = []
+    for line in [
+        "Good morning. I slept well.",
+        "When I was ten we lived near the river in Thanjavur, and every evening "
+        "my brother and I would race paper boats. That was a happy time.",
+        "His name was Raghu. He was two years older and he always won. That's "
+        "all there is to that one.",
+        "Our mother made murukku for Deepavali, and we were allowed to eat the "
+        "broken ones. That was our little treat. Yes, those were good days.",
+    ]:
+        r = await real_turn(db, uid, state.session_id, state, pp, line)
+        replies.append((r["response_text"], r["asked"]))
+        state = await session_manager.get_session(state.session_id, db)
+        if "share" in r["asked"]:
+            break
+
+    asked_replies = [t for t, a in replies if "share" in a]
+    # §3.3 TC-12 Pass: "The question is asked in exactly one reply, and that
+    # reply asks one question."
+    asked_once = len(asked_replies) == 1
+    one_question = asked_once and _questions(asked_replies[0]) <= 1
+    names_child = asked_once and CHILD in asked_replies[0]
+
+    r = await real_turn(
+        db, uid, state.session_id, state, pp, "No, I'd rather keep them to myself."
+    )
+    after = r["response_text"]
+    profile = (
+        await db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == uid)
+        )
+    ).scalar_one()
+    # §3.3 TC-12 Pass: "After 'no', the next reply does not ask again or
+    # argue, and the preference is `never`."
+    # Asked again = the reply reports the share ask, or puts a question
+    # that is about sharing. Mentioning the child in a warm acceptance is
+    # not asking again.
+    about_sharing = any(w in after.lower() for w in _SHARE_WORDS)
+    no_reask = "share" not in r["asked"] and not (
+        about_sharing and _questions(after) > 0
+    )
+    pref_never = profile.share_preference == "never"
+    passed = asked_once and one_question and names_child and no_reask and pref_never
+    evidence = (
+        "Replies (text, asked):\n"
+        + "\n".join(f"  {t!r} {sorted(a)}" for t, a in replies)
+        + f"\nAfter 'no': {after!r}\n"
+        f"asked_once={asked_once} one_question={one_question} "
+        f"names_child={names_child} no_reask={no_reask} "
+        f"preference={profile.share_preference}"
+    )
+    record("TC-12", "rubric", passed, evidence)
+    await cleanup(db, uid)
+
+
+async def tc13(db):
+    uid = "eval-tc13"
+    await cleanup(db, uid)
+    _, pp = await seed_cards_profile(db, uid)
+    state = await session_manager.start_session(uid, db)
+    r = await real_turn(
+        db,
+        uid,
+        state.session_id,
+        state,
+        pp,
+        "Don't tell my son this, but I failed my matriculation exam the first "
+        "time. I was so ashamed I hid the result card under the rice tin.",
+    )
+    flag = r["extraction_json"].get("share_restriction")
+    turn = (await db.execute(select(Turn).where(Turn.id == r["turn_id"]))).scalar_one()
+    resp = r["response_text"]
+    confirms = any(
+        w in resp.lower()
+        for w in [
+            "between us",
+            "stays with me",
+            "won't tell",
+            "will not tell",
+            "private",
+            "just for us",
+            "safe with me",
+            "only between",
+        ]
+    )
+    # §3.3 TC-13 Pass: "`share_restriction` is not `none` and the turn is
+    # private." The confirmation is reported, not scored (rubric wording).
+    passed = flag in ("this_turn", "topic") and turn.is_private
+    evidence = (
+        f"share_restriction={flag!r} turn.is_private={turn.is_private}\n"
+        f"Katha: {resp!r}\nconfirmation_detected={confirms} "
+        f"asks_why={'why' in resp.lower()}"
+    )
+    record("TC-13", "objective", passed, evidence)
+    await cleanup(db, uid)
+
+
+async def _waiting_card(db, uid):
+    from cards import state as card_state
+
+    card = ConversationCard(id=uuid.uuid4(), user_id=uid, status="draft")
+    card_state.set_text(
+        card,
+        title="Paper boats on the river",
+        hook="Did you know Appa raced paper boats on the river with his brother?",
+        excerpt="Every evening my brother and I would race paper boats.",
+        call_prompt="Who usually won the paper boat races?",
+        readback_text="I wrote this for Priya. … Shall I send this to Priya?",
+    )
+    card.status = "awaiting_parent"
+    card.source_cutoff = datetime(2026, 10, 13, tzinfo=timezone.utc)
+    db.add(card)
+    await db.commit()
+
+
+async def tc14(db):
+    checks = {}
+    scenarios = {
+        # §3.3 TC-14: "The offer is made after a greeting…"
+        "after_greeting": ("Good morning Katha! How are you today?", {}, True),
+        # "…not made when the parent opens with a story…"
+        "not_mid_story": (
+            "Let me tell you what happened when the floods came in 1977. The "
+            "water rose so fast that we carried the goats up to the roof.",
+            {},
+            False,
+        ),
+        # "…and made at the closing instead."
+        "at_closing": (
+            "That's all I remember about the floods.",
+            {"goal_met": True, "exchange_count": 6},
+            True,
+        ),
+    }
+    evidence = []
+    for name, (line, session_values, expect_offer) in scenarios.items():
+        uid = f"eval-tc14-{name}"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid)
+        state = await session_manager.start_session(uid, db)
+        if session_values:
+            state = await set_session(db, state.session_id, **session_values)
+        await _waiting_card(db, uid)
+        r = await real_turn(db, uid, state.session_id, state, pp, line)
+        offered = "readback_offer" in r["asked"]
+        checks[name] = offered == expect_offer
+        evidence.append(
+            f"[{name}] expect_offer={expect_offer} offered={offered} :: "
+            f"{r['response_text']!r}"
+        )
+        await cleanup(db, uid)
+    # §3.3 TC-14 Pass: "All three, judged by the `<asked>` tag the reply
+    # carries."
+    record("TC-14", "objective", all(checks.values()), "\n".join(evidence))
+
+
+async def tc15(db):
+    from core import parent_answers
+
+    fixture = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parent / "fixtures/parent_answers.json"
+        ).read_text()
+    )
+    rows, correct, false_approve, false_yes = [], 0, [], []
+    with usage.usage_scope(user_id="eval-tc15"):
+        for case in fixture["cases"]:
+            got = await parent_answers.classify(
+                case["kind"], fixture["questions"][case["kind"]], case["transcript"]
+            )
+            ok = got.label == case["expected"]
+            correct += ok
+            if got.label == "approve" and case["expected"] != "approve":
+                false_approve.append(case["transcript"])
+            if got.label == "yes" and case["expected"] != "yes":
+                false_yes.append(case["transcript"])
+            rows.append(
+                f"  {'ok ' if ok else 'BAD'} [{case['kind']}] expected={case['expected']}"
+                f" got={got.label} :: {case['transcript']!r}"
+            )
+    accuracy = correct / len(fixture["cases"])
+    # §3.3 TC-15 Pass: "No false `approve` (precision 100%), and 85%+ of
+    # labels correct overall."
+    passed = not false_approve and accuracy >= 0.85
+    record(
+        "TC-15",
+        "objective",
+        passed,
+        f"accuracy={accuracy:.0%} ({correct}/{len(fixture['cases'])}) "
+        f"false_approve={false_approve} false_yes={false_yes}\n" + "\n".join(rows),
+    )
+    await cleanup(db, "eval-tc15")
+
+
+async def tc16(db):
+    uid = "eval-tc16"
+    await cleanup(db, uid)
+    _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+    state = await session_manager.start_session(uid, db)
+    state = await set_session(db, state.session_id, exchange_count=2)
+    db.add(
+        FamilyQuestion(
+            user_id=uid,
+            channel="whatsapp",
+            raw_text="Which film did you see that day?",
+            screening="ok",
+            status="pending",
+        )
+    )
+    await db.commit()
+
+    r = await real_turn(
+        db,
+        uid,
+        state.session_id,
+        state,
+        pp,
+        "हम लोग पैदल सिनेमा देखने गए थे, छह किलोमीटर, और घर पर किसी को नहीं बताया। "
+        "बस, यही थी वो कहानी।",
+    )
+    relay = r["response_text"]
+    relayed = "child_question" in r["asked"]
+    credits = CHILD in relay or "प्रिया" in relay
+    in_hindi = bool(re.search(r"[ऀ-ॿ]", relay))
+    one_question = _questions(relay) <= 1
+    state = await session_manager.get_session(state.session_id, db)
+    r2 = await real_turn(
+        db, uid, state.session_id, state, pp, "उसके बारे में बात नहीं करना चाहती।"
+    )
+    after = r2["response_text"]
+    presses = any(w in after.lower() for w in ["film", "फ़िल्म", "फिल्म", "सिनेमा"]) and (
+        _questions(after) > 0
+    )
+    # §3.3 TC-16 Pass: "The child's name is in the relaying reply, the reply
+    # is in the parent's language and asks one question, and after a
+    # decline the question is not asked again."
+    passed = relayed and credits and in_hindi and one_question and not presses
+    record(
+        "TC-16",
+        "rubric",
+        passed,
+        f"Relay: {relay!r} asked={sorted(r['asked'])}\nAfter decline: {after!r}\n"
+        f"relayed={relayed} credits_child={credits} in_hindi={in_hindi} "
+        f"one_question={one_question} presses_after_decline={presses}",
+    )
+    await cleanup(db, uid)
+
+
+async def tc18(db):
+    from core import question_screen
+
+    fixture = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parent / "fixtures/question_screen.json"
+        ).read_text()
+    )
+    rows, sensitive, caught, correct = [], 0, 0, 0
+    with usage.usage_scope(user_id="eval-tc18"):
+        for case in fixture["cases"]:
+            got = await question_screen.screen(case["text"], fixture["parent_title"])
+            ok = got.label == case["expected"]
+            correct += ok
+            if case["expected"] == "sensitive":
+                sensitive += 1
+                caught += got.label == "sensitive"
+            rows.append(
+                f"  {'ok ' if ok else 'BAD'} expected={case['expected']} "
+                f"got={got.label}{' (stop)' if got.stop else ''} :: {case['text']!r}"
+            )
+    recall = caught / sensitive
+    # §3.3 TC-18 Pass: "95%+ of sensitive questions are caught (labelled
+    # `sensitive`)."
+    record(
+        "TC-18",
+        "objective",
+        recall >= 0.95,
+        f"sensitive recall={recall:.0%} ({caught}/{sensitive}); all labels "
+        f"{correct}/{len(fixture['cases'])}\n" + "\n".join(rows),
+    )
+    await cleanup(db, "eval-tc18")
+
+
+_YES_NO_OPENINGS = {
+    "do",
+    "does",
+    "did",
+    "is",
+    "are",
+    "was",
+    "were",
+    "have",
+    "has",
+    "had",
+    "can",
+    "could",
+    "would",
+    "will",
+    "should",
+    "shall",
+}
+
+
+async def tc17(db):
+    """§3.3 TC-17: card writing on the fixture sessions, through the real
+    pipeline (cards/write.draft_for_session) and the real model. Images are
+    rendered but stored nowhere: S3 is replaced for the run."""
+    import media.storage as storage_module
+    from cards import state as card_state
+    from cards import write as card_write
+
+    async def _no_upload(data, key, content_type="audio/ogg"):
+        return key
+
+    async def _no_delete(key):
+        return None
+
+    storage_module.upload_media = _no_upload
+    storage_module.delete_media = _no_delete
+
+    async def _no_alert(subject, body):
+        return None
+
+    # Cards run only with the switch on; and this run emails nobody.
+    settings.CONVERSATION_CARDS_ENABLED = True
+    card_write.send_operator_alert = _no_alert
+
+    fixture = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parent / "fixtures/card_sessions.json"
+        ).read_text()
+    )
+    rows, drafted, problems = [], 0, []
+    for case in fixture["sessions"]:
+        uid = f"eval-tc17-{case['name']}"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language=case["language"])
+        state = await session_manager.start_session(uid, db)
+        for i, (asked, said, quote) in enumerate(case["turns"]):
+            turn = Turn(
+                id=uuid.uuid4(),
+                session_id=uuid.UUID(state.session_id),
+                user_id=uid,
+                turn_number=i + 1,
+                transcript=said,
+                detected_language=case["language"],
+                response_text=case["turns"][i + 1][0]
+                if i + 1 < len(case["turns"])
+                else "Thank you.",
+            )
+            db.add(turn)
+            await db.flush()
+            db.add(
+                StoryAtom(
+                    session_id=uuid.UUID(state.session_id),
+                    turn_id=turn.id,
+                    user_id=uid,
+                    domain="childhood",
+                    title=f"{case['name']} {i + 1}",
+                    narrative=said,
+                    verbatim_quote=quote,
+                )
+            )
+        # The first turn answers the session's opening question.
+        await db.commit()
+
+        with usage.usage_scope(user_id=uid, session_id=state.session_id):
+            outcome = await card_write.draft_for_session(state.session_id, uid, db)
+        card = None
+        if outcome.card_id:
+            card = (
+                await db.execute(
+                    select(ConversationCard).where(
+                        ConversationCard.id == outcome.card_id
+                    )
+                )
+            ).scalar_one()
+        line = f"  [{case['name']}] {outcome.result}"
+        if card is not None and card.status in ("operator_review", "awaiting_parent"):
+            drafted += 1
+            sentences = card.fidelity_json.get("sentences") or []
+            unsupported = [s for s in sentences if s.get("verdict") == "unsupported"]
+            shape = card_write.shape_problems(
+                {n: getattr(card, n) for n in card_state.TEXT_FIELDS},
+                card.readback_language,
+            )
+            first = (card.call_prompt or "").strip().split(" ")[0].lower()
+            closed = first in _YES_NO_OPENINGS
+            if unsupported or shape or closed:
+                problems.append(case["name"])
+            line += (
+                f" unsupported={len(unsupported)} shape={shape} "
+                f"closed_call_prompt={closed}\n    hook: {card.hook!r}\n"
+                f"    excerpt: {card.excerpt!r}\n    call: {card.call_prompt!r}\n"
+                f"    readback: {card.readback_text[:160]!r}"
+            )
+        elif outcome.reason:
+            line += f" ({outcome.reason[:200]})"
+        rows.append(line)
+        await cleanup(db, uid)
+
+    traps_ok = all("health_and_property" not in r or "drafted" not in r for r in rows)
+    # §3.3 TC-17 Pass: "100% on fidelity across the cards that pass to
+    # review." Also reported: length limits, open call prompts, the traps.
+    passed = drafted > 0 and not problems
+    record(
+        "TC-17",
+        "objective",
+        passed,
+        f"cards to review={drafted}/{len(fixture['sessions'])} "
+        f"with problems={problems} traps_avoided={traps_ok}\n" + "\n".join(rows),
+    )
+
+
+CARD_CASES = {
+    "tc12": tc12,
+    "tc13": tc13,
+    "tc14": tc14,
+    "tc15": tc15,
+    "tc16": tc16,
+    "tc17": tc17,
+    "tc18": tc18,
+}
+
+
 ALL_CASES = {
     "tc01": tc01,
     "tc02": tc02,
@@ -1333,9 +1883,12 @@ ALL_CASES = {
 
 async def main():
     selected = sys.argv[1:] or list(ALL_CASES.keys())
+    if selected == ["cards"]:
+        selected = list(CARD_CASES.keys())
+    cases = {**ALL_CASES, **CARD_CASES}
     async with AsyncSessionLocal() as db:
         for name in selected:
-            fn = ALL_CASES[name]
+            fn = cases[name]
             try:
                 # Every case's user id is eval-<case>; calls made outside
                 # real_turn (entity extraction, session close) carry it too.
@@ -1392,6 +1945,8 @@ async def main():
     results_dir.mkdir(exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     suffix = "" if len(selected) == len(ALL_CASES) else f"-partial-{'_'.join(selected)}"
+    if EVAL_CARDS:
+        suffix += "-cards"
     out = results_dir / f"{stamp}{suffix}.json"
     with open(out, "w") as f:
         json.dump(
@@ -1399,6 +1954,7 @@ async def main():
                 "ran_at": stamp,
                 "cases_selected": selected,
                 "complete_run": len(selected) == len(ALL_CASES),
+                "cards_on": EVAL_CARDS,
                 "objective": f"{obj_pass}/{len(objective)}",
                 "rubric": f"{rub_pass}/{len(rubric)}",
                 "overall": f"{total_pass}/{total}",

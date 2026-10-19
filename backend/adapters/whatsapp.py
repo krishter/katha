@@ -89,6 +89,7 @@ class WhatsAppAdapter(Protocol):
         template_sid: str | None = None,
         template_variables: dict | None = None,
         media_variable: str = "1",
+        operation: str = "outbound_card",
     ) -> str:
         """
         Send Twilio a short-lived presigned URL for an image ALREADY in S3.
@@ -199,6 +200,7 @@ class TwilioWhatsAppAdapter:
         template_sid: str | None = None,
         template_variables: dict | None = None,
         media_variable: str = "1",
+        operation: str = "outbound_card",
     ) -> str:
         presigned_url = await storage.generate_presigned_url(s3_key)
         kwargs: dict = {
@@ -228,7 +230,7 @@ class TwilioWhatsAppAdapter:
             msg.sid,
             template_sid or "none — free-form, needs an open 24h window",
         )
-        await usage.record_outbound("outbound_card", msg.sid, template_sid)
+        await usage.record_outbound(operation, msg.sid, template_sid)
         return msg.sid
 
     async def send_text(

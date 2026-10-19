@@ -55,6 +55,26 @@ def usage_rows(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_real_s3(request, monkeypatch):
+    """
+    No test reaches AWS. backend/.env holds real credentials, and a test
+    that forgot to stub storage would otherwise create a real S3 client
+    with them (found 2026-10-19: card review tests deleting a made-up key
+    in the real bucket). Any such call now fails loudly instead. Tests
+    stub upload_media, delete_media and generate_presigned_url themselves;
+    a test that needs the real client with dummy credentials (presigning
+    is local) marks itself real_s3_client.
+    """
+    if request.node.get_closest_marker("real_s3_client"):
+        return
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError("tests must not create a real S3 client")
+
+    monkeypatch.setattr("media.storage._s3_client", refuse)
+
+
+@pytest.fixture(autouse=True)
 def no_real_gemini(monkeypatch):
     """
     No test reaches Google with the developer's real key from backend/.env.

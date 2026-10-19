@@ -54,6 +54,60 @@ class UserProfile:
     # (media/tts.py). Not rendered: it decides how replies sound, not what
     # they say. Empty means the default for her language and persona.
     tts_voice: str = ""
+    # Conversation cards (docs/specs/CONVERSATION_CARDS.md), or None when
+    # cards are not on for her. None leaves every prompt exactly as it was
+    # before cards existed.
+    cards: Optional["CardsContext"] = None
+
+
+@dataclass
+class CardsContext:
+    """
+    What the prompts need when cards are on for her. `layer4` is this
+    turn's card instructions (the sharing ask, a read-back offer, a child's
+    question, the recap), chosen by cards/asks.py; usually empty.
+    """
+
+    child_name: str = ""
+    parent_title: str = ""
+    layer4: list[str] = field(default_factory=list)
+    # The kinds this turn's reply may report in an <asked> tag.
+    tag_kinds: list[str] = field(default_factory=list)
+
+
+def _cards_layer2(cards: CardsContext) -> str:
+    """Standing rules when cards are on (CONVERSATION_CARDS.md §5.2, §10.3)."""
+    child = cards.child_name or "their child"
+    return f"""
+
+PRIVATE REQUESTS: If the user asks for something to stay private, or not to \
+be told to their family, confirm it in one short sentence in their language \
+("Of course. This stays between us.") and do not ask why.
+
+QUESTIONS FROM {child.upper()}: You may sometimes pass on a question from \
+{child}. Always say it comes from {child}, by name; never present it as \
+your own curiosity. Ask it once. If the user would rather not answer, accept \
+that warmly and move on, and never press. Never say that what they answer \
+will be passed back."""
+
+
+def _cards_layer4(cards: CardsContext) -> str:
+    if not cards.layer4:
+        return ""
+    lines = "\n".join(f"- {line}" for line in cards.layer4)
+    return f"\n\nThis turn (conversation cards):\n{lines}"
+
+
+def _cards_layer5(cards: CardsContext) -> str:
+    if not cards.tag_kinds:
+        return ""
+    kinds = ", ".join(cards.tag_kinds)
+    return f"""
+
+When Layer 4 asked you to make an ask and your reply makes it, add one \
+line after </response>: <asked>KIND</asked>, where KIND is one or more of \
+{kinds}, comma-separated, naming only what this reply actually did. If it \
+did none of them, add nothing. This tag is never spoken."""
 
 
 @dataclass
@@ -666,19 +720,22 @@ def build_system_prompt_parts(
     prior_context: PriorContext,
 ) -> SystemPromptParts:
     """The dialogue system prompt, split for caching; see build_system_prompt."""
+    cards = user_profile.cards
+    layer2 = _layer2_therapeutic()
+    layer4 = _layer4_session_state(session_state, prior_context)
+    layer5 = _layer5_output_format()
+    if cards is not None:
+        layer2 += _cards_layer2(cards)
+        layer4 += _cards_layer4(cards)
+        layer5 += _cards_layer5(cards)
     stable = "\n\n".join(
         [
             _layer1_persona(user_profile),
-            _layer2_therapeutic(),
+            layer2,
             _layer3_life_context(user_profile, session_state, prior_context),
         ]
     )
-    per_turn = "\n\n".join(
-        [
-            _layer4_session_state(session_state, prior_context),
-            _layer5_output_format(),
-        ]
-    )
+    per_turn = "\n\n".join([layer4, layer5])
     return SystemPromptParts(stable=stable, per_turn=per_turn)
 
 
@@ -712,6 +769,32 @@ def build_system_prompt(
 _DOMAIN_ID_LIST = "\n".join(
     f"  - {d.id} ({d.name})" for d in (get_domain(i) for i in get_domain_sequence())
 )
+
+
+def _cards_extraction_fields(user_profile: UserProfile) -> str:
+    """The extraction fields cards add (CONVERSATION_CARDS.md §5.1, §5.2):
+    nothing at all when cards are off for her."""
+    if user_profile.cards is None:
+        return ""
+    return """
+
+The JSON object must also include these three fields:
+
+  "share_restriction": "none" | "this_turn" | "topic",
+  "topic_label": "string or null",
+  "share_preference_change": "none" | "share" | "never"
+
+share_restriction: "this_turn" if the user asks for what they just said to \
+stay private or not be told to their family ("don't tell my son this", "this \
+is between us"). "topic" if they ask for a whole subject to stay private \
+("never tell anyone about my brother's illness"); then topic_label names the \
+subject in a few plain words. Otherwise "none".
+
+share_preference_change: "never" if the user says none of their stories \
+should go to their family ("don't send anything to my daughter"). "share" if \
+they say their stories may be shared ("you can share my stories with \
+Priya"). Otherwise "none". Asking to keep one thing private is \
+share_restriction, not this."""
 
 
 def build_extraction_prompt(
@@ -802,7 +885,7 @@ For story_atoms: only include an entry if the user's statement actually \
 contains a coherent piece of their story — do not fabricate one from a short \
 or contentless reply. Each entry must be a JSON object with exactly the \
 fields shown above, not a plain string. If nothing story-worthy was said, \
-return an empty list.
+return an empty list.{_cards_extraction_fields(user_profile)}
 
 For significant_people: this list is for the few people who shaped this life, \
 not everyone who appears in it. Add an entry only when the user signals weight \

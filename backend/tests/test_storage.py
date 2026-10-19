@@ -3,6 +3,8 @@ import time
 from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
 
+import pytest
+
 from media.storage import delete_media, generate_presigned_url, upload_media
 
 _AUDIO = b"fake-audio-bytes"
@@ -112,6 +114,7 @@ async def test_upload_media_does_not_block_the_event_loop():
     assert max(gaps) < 0.05
 
 
+@pytest.mark.real_s3_client
 async def test_presigned_url_host_carries_the_region():
     """
     Regression for the S4.0 presign defect: every presigned URL Katha

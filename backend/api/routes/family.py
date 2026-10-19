@@ -11,18 +11,22 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cards.privacy import not_private_atom
 from config import settings
 from core import freemium, parent_consent
 from core.auth import get_current_user
 from core.freemium import FREE_SESSION_LIMIT
 from media import storage
+from models.conversation_card import ConversationCard
 from models.db import get_db
 from models.family_account import FamilyAccount
+from models.family_question import FamilyQuestion
 from models.memory_card import MemoryCard
 from models.session import Session
 from models.story_atom import StoryAtom
 from models.user_profile import UserProfileModel
 from prompts.domains import domain_label, get_domain, get_domain_sequence
+from prompts.system_prompt import _language_name
 
 # Long enough for "she/her", "they/them" or a short free-text answer, short
 # enough that the field cannot become a second notes box inside the prompt.
@@ -121,6 +125,7 @@ async def get_stats(
     domain_counts_result = await db.execute(
         select(StoryAtom.domain, func.count(StoryAtom.id))
         .where(StoryAtom.user_id == user_id)
+        .where(not_private_atom())
         .group_by(StoryAtom.domain)
     )
     counts_by_domain = dict(domain_counts_result.all())
@@ -283,7 +288,9 @@ async def list_stories(
 ) -> dict:
     user_id = current_user["user_id"]
 
-    base_filter = [StoryAtom.user_id == user_id]
+    # What she asked to keep between herself and Katha is not shown to the
+    # family (CONVERSATION_CARDS.md §5.2).
+    base_filter = [StoryAtom.user_id == user_id, not_private_atom()]
     if domain:
         base_filter.append(StoryAtom.domain == domain)
 
@@ -320,13 +327,22 @@ async def get_story(
     except ValueError:
         raise HTTPException(status_code=404, detail="Story not found")
 
-    result = await db.execute(select(StoryAtom).where(StoryAtom.id == story_uuid))
+    result = await db.execute(
+        select(StoryAtom).where(StoryAtom.id == story_uuid).where(not_private_atom())
+    )
     atom = result.scalar_one_or_none()
 
     if atom is None or atom.user_id != current_user["user_id"]:
         raise HTTPException(status_code=404, detail="Story not found")
 
     return _to_story_response(atom)
+
+
+def _translated_from(language_code: Optional[str]) -> Optional[str]:
+    """The language a card was translated from, or None for English."""
+    if not language_code or language_code.startswith("en"):
+        return None
+    return _language_name(language_code)
 
 
 @router.get("/family/cards")
@@ -352,6 +368,21 @@ async def list_cards(
     )
     rows = rows_result.scalars().all()
 
+    # Conversation cards she approved and that were sent (§11). Under their
+    # own key, so the existing memory-card list is unchanged.
+    sent = (
+        (
+            await db.execute(
+                select(ConversationCard)
+                .where(ConversationCard.user_id == user_id)
+                .where(ConversationCard.status == "sent")
+                .order_by(ConversationCard.scheduled_for.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
     return {
         "cards": [
             {
@@ -364,6 +395,25 @@ async def list_cards(
             for card in rows
         ],
         "total": total,
+        "conversation_cards": [
+            {
+                "id": str(c.id),
+                "title": c.title,
+                "hook": c.hook,
+                "excerpt": c.excerpt,
+                "original_quote": c.original_quote,
+                "original_quote_gloss": c.original_quote_gloss,
+                "call_prompt": c.call_prompt,
+                "image_url": await storage.generate_presigned_url(c.image_s3_key)
+                if c.image_s3_key
+                else None,
+                "sent_at": c.scheduled_for.isoformat() if c.scheduled_for else None,
+                # D8: the card is English; say so when the parent spoke
+                # something else.
+                "translated_from": _translated_from(c.source_language),
+            }
+            for c in sent
+        ],
     }
 
 
@@ -404,6 +454,7 @@ async def export_data(
     atoms_result = await db.execute(
         select(StoryAtom)
         .where(StoryAtom.user_id == user_id)
+        .where(not_private_atom())
         .order_by(StoryAtom.created_at)
     )
     atoms = atoms_result.scalars().all()
@@ -414,6 +465,32 @@ async def export_data(
         .order_by(MemoryCard.created_at)
     )
     cards = cards_result.scalars().all()
+
+    # Cards she approved, and the family's own questions (§11). Never a
+    # card she kept private or has not yet agreed to.
+    conversation_cards = (
+        (
+            await db.execute(
+                select(ConversationCard)
+                .where(ConversationCard.user_id == user_id)
+                .where(ConversationCard.status.in_(("approved", "scheduled", "sent")))
+                .order_by(ConversationCard.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    questions = (
+        (
+            await db.execute(
+                select(FamilyQuestion)
+                .where(FamilyQuestion.user_id == user_id)
+                .order_by(FamilyQuestion.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return {
         "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -462,5 +539,30 @@ async def export_data(
                 "created_at": c.created_at.isoformat() if c.created_at else None,
             }
             for c in cards
+        ],
+        "conversation_cards": [
+            {
+                "title": c.title,
+                "hook": c.hook,
+                "excerpt": c.excerpt,
+                "original_quote": c.original_quote,
+                "original_quote_gloss": c.original_quote_gloss,
+                "call_prompt": c.call_prompt,
+                "status": c.status,
+                "sent_at": c.scheduled_for.isoformat()
+                if c.status == "sent" and c.scheduled_for
+                else None,
+            }
+            for c in conversation_cards
+        ],
+        "family_questions": [
+            {
+                "question": q.text,
+                "kind": q.kind,
+                "channel": q.channel,
+                "status": q.status,
+                "created_at": q.created_at.isoformat() if q.created_at else None,
+            }
+            for q in questions
         ],
     }

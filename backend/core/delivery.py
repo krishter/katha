@@ -17,6 +17,8 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
+from models.conversation_card import ConversationCard
 from models.memory_card import MemoryCard
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,10 @@ async def record_card_delivery(
     )
     card = result.scalar_one_or_none()
     if card is None:
+        if settings.CONVERSATION_CARDS_ENABLED:
+            return await _record_conversation_card_delivery(
+                message_sid, status, error_code, db
+            )
         logger.debug("Status %s for %s matched no memory card", status, message_sid)
         return False
 
@@ -59,6 +65,34 @@ async def record_card_delivery(
     await db.commit()
     logger.info(
         "Memory card %s for user %s: %s%s",
+        card.id,
+        card.user_id,
+        status,
+        f" (ErrorCode={error_code})" if error_code else "",
+    )
+    return True
+
+
+async def _record_conversation_card_delivery(
+    message_sid: str, status: str, error_code: Optional[str], db: AsyncSession
+) -> bool:
+    """The same record for a conversation card's WhatsApp copy
+    (CONVERSATION_CARDS.md §8.1). Same rule: once delivered, it stays
+    delivered."""
+    result = await db.execute(
+        select(ConversationCard).where(ConversationCard.wa_message_sid == message_sid)
+    )
+    card = result.scalar_one_or_none()
+    if card is None:
+        logger.debug("Status %s for %s matched no card", status, message_sid)
+        return False
+    card.wa_delivery_status = status
+    card.wa_error_code = error_code
+    if status in DELIVERED_STATUSES and card.wa_delivered_at is None:
+        card.wa_delivered_at = datetime.now(timezone.utc)
+    await db.commit()
+    logger.info(
+        "Conversation card %s for user %s: %s%s",
         card.id,
         card.user_id,
         status,

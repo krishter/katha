@@ -55,7 +55,7 @@ export default function FamilyLayout({
             Stories
           </Link>
           <Link href="/family/cards" className="hover:text-saffron-ink">
-            Memory Cards
+            Cards
           </Link>
           <Link href="/family/settings/privacy" className="hover:text-saffron-ink">
             Settings

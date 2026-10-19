@@ -11,9 +11,11 @@ from core.auth import get_current_user
 from media import storage
 from models.api_usage import ApiUsage
 from models.consent_record import ConsentRecord
+from models.conversation_card import ConversationCard
 from models.db import get_db
 from models.fact import Fact
 from models.family_account import FamilyAccount
+from models.family_question import FamilyQuestion
 from models.magic_link_token import MagicLinkToken
 from models.memory_card import MemoryCard
 from models.session import Session
@@ -107,6 +109,23 @@ async def delete_user(
             "Failed to look up session-open audio keys for user %s", user_id
         )
 
+    # 1d. Conversation card images (CONVERSATION_CARDS.md §11).
+    try:
+        result = await db.execute(
+            select(ConversationCard.image_s3_key)
+            .where(ConversationCard.user_id == user_id)
+            .where(ConversationCard.image_s3_key.is_not(None))
+        )
+        for s3_key in result.scalars().all():
+            try:
+                await storage.delete_media(s3_key)
+            except Exception:
+                logger.exception(
+                    "Failed to delete S3 object %s for user %s", s3_key, user_id
+                )
+    except Exception:
+        logger.exception("Failed to look up card images for user %s", user_id)
+
     # 3-7. Delete rows that belong directly to this user_id
     for label, stmt in [
         ("memory_cards", delete(MemoryCard).where(MemoryCard.user_id == user_id)),
@@ -123,6 +142,16 @@ async def delete_user(
         ("api_usage", delete(ApiUsage).where(ApiUsage.user_id == user_id)),
         # Which voice she was moved between, and by whom (GEMINI_TTS.md §4.2).
         ("voice_changes", delete(VoiceChange).where(VoiceChange.user_id == user_id)),
+        # Conversation cards, kept-private ones included, and the child's
+        # questions and reactions.
+        (
+            "conversation_cards",
+            delete(ConversationCard).where(ConversationCard.user_id == user_id),
+        ),
+        (
+            "family_questions",
+            delete(FamilyQuestion).where(FamilyQuestion.user_id == user_id),
+        ),
     ]:
         try:
             await db.execute(stmt)

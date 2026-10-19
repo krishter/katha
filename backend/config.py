@@ -189,6 +189,37 @@ class Settings(BaseSettings):
     # and rehearsal users. The page reports how many, never which.
     METRICS_EXCLUDED_USER_IDS: str = ""
 
+    # Conversation cards (docs/specs/CONVERSATION_CARDS.md). Off: nothing
+    # about a session changes, the per-session memory card included. On:
+    # cards run only for parents whose profile has
+    # conversation_cards_enabled, which scripts/cards.py turns on one
+    # family at a time.
+    CONVERSATION_CARDS_ENABLED: bool = False
+    # D3: every card is reviewed by the operator before she hears it.
+    # false sends a card that passed the fidelity check straight to her.
+    CARDS_OPERATOR_REVIEW: bool = True
+    # Where "a card is waiting for review" and "she said never share"
+    # alerts go. Empty: logged only.
+    OPERATOR_EMAIL: str = ""
+    # katha_conversation_card_v2 (§8.1). Variable mapping:
+    #   {{1}}  media — the card image (injected by the adapter, via
+    #          TWILIO_TEMPLATE_MEDIA_HOST, as for the memory card)
+    #   {{2}}  parent_title, what the child calls her ("Amma")
+    #   {{3}}  the card's call prompt
+    # Empty: cards go by email only. Never sent free-form.
+    TWILIO_TEMPLATE_CONVERSATION_CARD: str = ""
+    # Card selection, writing and the fidelity check (§7). The fidelity
+    # check is what keeps words out of her mouth, so it runs on the larger
+    # model.
+    LLM_CARD_MODEL: str = "claude-sonnet-5-5"
+    # output_config.effort for those calls. At the model's default a
+    # Hindi card used its whole token budget thinking and returned no text
+    # (TC-17, 2026-10-19).
+    LLM_CARD_EFFORT: str = "medium"
+    # Her answers to an ask, and screening the child's questions (§9.3,
+    # §10.2).
+    LLM_CLASSIFIER_MODEL: str = "claude-haiku-5-5"
+
 
 settings = Settings()
 
@@ -245,6 +276,12 @@ def validate_production_config(s: Settings = settings) -> None:
             "TWILIO_TEMPLATE_MEMORY_CARD is set but TWILIO_TEMPLATE_MEDIA_HOST "
             "is empty — the card's media URL is assembled by the approved "
             "template from that host, so without it no card can be sent"
+        )
+    if s.TWILIO_TEMPLATE_CONVERSATION_CARD and not s.TWILIO_TEMPLATE_MEDIA_HOST:
+        problems.append(
+            "TWILIO_TEMPLATE_CONVERSATION_CARD is set but "
+            "TWILIO_TEMPLATE_MEDIA_HOST is empty — the card image's URL is "
+            "assembled by the template from that host"
         )
     if not s.PUBLIC_BASE_URL.startswith("https://"):
         problems.append(

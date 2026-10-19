@@ -64,9 +64,28 @@ export interface MemoryCardItem {
   created_at: string;
 }
 
+// A "Did you know?" card the parent heard read back and agreed to share
+// (docs/specs/CONVERSATION_CARDS.md). Only sent cards are returned.
+export interface ConversationCardItem {
+  id: string;
+  title: string;
+  hook: string;
+  excerpt: string;
+  original_quote: string | null;
+  original_quote_gloss: string | null;
+  call_prompt: string;
+  image_url: string | null;
+  sent_at: string | null;
+  // The language the parent spoke, when the card is a translation (D8).
+  translated_from: string | null;
+}
+
 export interface CardsResponse {
   cards: MemoryCardItem[];
   total: number;
+  // Absent from a backend older than conversation cards. Not paginated:
+  // every sent card comes back on every page.
+  conversation_cards?: ConversationCardItem[];
 }
 
 export interface ExportBundle {

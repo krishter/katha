@@ -100,6 +100,12 @@ def test_haiku_55_and_its_long_prompt_tier():
         ("entities", "claude_entities"),
         ("consolidation", "claude_other"),
         ("eval", "claude_other"),
+        ("card_select", "claude_cards"),
+        ("card_write", "claude_cards"),
+        ("card_fidelity", "claude_cards"),
+        ("parent_answer_classify", "claude_cards"),
+        ("question_screen", "claude_cards"),
+        ("private_topic_match", "claude_cards"),
     ],
 )
 def test_claude_operations_map_to_components(operation, component):
@@ -188,3 +194,20 @@ def test_eval_sarvam_rows_are_priced_by_their_units():
     )
     assert pricing.cost_breakdown(tts) == {"sarvam_tts": Decimal("2")}
     assert pricing.cost_breakdown(stt) == {"sarvam_stt": Decimal("29.40")}
+
+
+def test_a_card_email_is_priced():
+    """CONVERSATION_CARDS.md §14: SES at $0.10 per 1,000 emails."""
+    row = _row("ses", "card_email", {"emails": 1}, None)
+    assert pricing.cost_breakdown(row) == {"ses": Decimal("0.0001") * _FX}
+    assert pricing.is_priced("ses", None)
+
+
+def test_a_conversation_card_send_is_priced_like_a_template():
+    row = _row(
+        "twilio",
+        "outbound_conversation_card",
+        {"messages": 1, "meta_category": "utility"},
+        None,
+    )
+    assert set(pricing.cost_breakdown(row)) == {"twilio", "meta"}

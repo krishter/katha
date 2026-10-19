@@ -121,24 +121,40 @@ _META_INR_PER_TEMPLATE: dict[str, Decimal] = {
     "service": Decimal("0"),
 }
 
+# ---------------------------------------------------------------------------
+# AWS SES — USD per email sent, ap-south-1. Source:
+# https://aws.amazon.com/ses/pricing/ (2026-10-19). Conversation card emails
+# (CONVERSATION_CARDS.md §8.3).
+# ---------------------------------------------------------------------------
+_SES_USD_PER_EMAIL = Decimal("0.0001")
+
 # Which admin-page component an Anthropic operation belongs to.
 _CLAUDE_COMPONENT = {
     "dialogue": "claude_dialogue",
     "extraction": "claude_extraction",
     "extraction_retry": "claude_extraction",
     "entities": "claude_entities",
+    # Conversation cards (CONVERSATION_CARDS.md §14).
+    "card_select": "claude_cards",
+    "card_write": "claude_cards",
+    "card_fidelity": "claude_cards",
+    "parent_answer_classify": "claude_cards",
+    "question_screen": "claude_cards",
+    "private_topic_match": "claude_cards",
 }
 
 COMPONENTS = (
     "claude_dialogue",
     "claude_extraction",
     "claude_entities",
+    "claude_cards",
     "claude_other",
     "sarvam_stt",
     "sarvam_tts",
     "google_tts",
     "twilio",
     "meta",
+    "ses",
 )
 
 
@@ -271,6 +287,10 @@ def cost_breakdown(row: Any) -> dict[str, Decimal] | None:
             out["meta"] = messages * fee
         return out
 
+    if vendor == "ses":
+        emails = _n(units, "emails") or Decimal(1)
+        return {"ses": emails * _SES_USD_PER_EMAIL * fx}
+
     return None
 
 
@@ -292,4 +312,4 @@ def is_priced(vendor: str, model: str | None) -> bool:
         )
     if vendor == "google":
         return model in _GEMINI_TTS_USD_PER_MTOK
-    return vendor == "twilio"
+    return vendor in ("twilio", "ses")

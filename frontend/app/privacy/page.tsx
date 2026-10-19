@@ -21,6 +21,12 @@ export default function PrivacyPage() {
             number, and the family account holder&apos;s email and WhatsApp
             number
           </li>
+          <li>
+            For families using conversation cards: what the family account
+            holder calls the parent, their usual call times and time zone, and
+            any questions or reactions they send back about a card. A question
+            sent as a voice note is transcribed, and the audio is not kept.
+          </li>
         </ul>
       </section>
 
@@ -33,13 +39,25 @@ export default function PrivacyPage() {
           shared with the family account holder via the family dashboard and
           WhatsApp.
         </p>
+        <p className="mt-2 text-sm">
+          Conversation cards are different: each one is read back to the
+          parent first, and is sent to the family (by WhatsApp and email) only
+          if the parent says yes to that card. The parent can decline any
+          card, or choose not to share at all. If the parent asks for
+          something to stay private, it is never put on a card or shown on
+          the family dashboard. A question the family sends back may be asked
+          to the parent, always saying who it is from. The parent&apos;s answer
+          is never sent back directly; it reaches the family only as a later
+          card the parent agrees to.
+        </p>
       </section>
 
       <section className="mt-8">
         <h2 className="font-display text-lg font-semibold">Data residency</h2>
         <p className="mt-2 text-sm">
           All data is stored in India (AWS ap-south-1, Mumbai), in line with
-          the Digital Personal Data Protection Act, 2023.
+          the Digital Personal Data Protection Act, 2023. Card emails are sent
+          through Amazon SES in the same Mumbai region.
         </p>
         <p className="mt-2 text-sm">
           To write and speak Katha&apos;s replies, the conversation text is
@@ -68,8 +86,9 @@ export default function PrivacyPage() {
           <a href="mailto:privacy@katha.life" className="text-saffron-ink underline">
             privacy@katha.life
           </a>
-          . Deletion removes stories, memory cards, session history, and
-          profile data. A minimal, anonymized consent record is retained for
+          . Deletion removes stories, memory cards, conversation cards and
+          their images, questions sent back by the family, session history,
+          and profile data. A minimal, anonymized consent record is retained for
           legal audit purposes, with all identifying details removed.
         </p>
       </section>

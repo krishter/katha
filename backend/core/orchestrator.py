@@ -11,9 +11,13 @@ from typing import Optional
 from fastapi import BackgroundTasks
 from sqlalchemy import select, update
 
+import cards
 from adapters import llm, sarvam_stt
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
+from cards import asks as card_asks
+from cards import privacy as card_privacy
+from cards import write as card_writer
 from config import settings
 from core import conversation_policy, session_manager, usage
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
@@ -525,6 +529,27 @@ async def _produce_session_outputs(session_id: str, user_id: str, db) -> None:
     except Exception:
         logger.exception("Post-session processing failed for session %s", session_id)
 
+    # Conversation cards replace the memory card for a family that has
+    # them (CONVERSATION_CARDS.md D2): today's card reaches the child
+    # without the parent's agreement, a conversation card never does. The
+    # profile is only read when the global switch is on, so with it off
+    # this is exactly the path it always was.
+    if settings.CONVERSATION_CARDS_ENABLED:
+        try:
+            profile = await get_user_profile(user_id, db)
+        except Exception:
+            # Not knowing whether she has cards, send nothing: falling back
+            # to the memory card would reach a cards family's child without
+            # her agreement.
+            logger.exception(
+                "Could not load profile for session %s — no card of either kind",
+                session_id,
+            )
+            return
+        if cards.enabled_for(profile):
+            await card_writer.draft_for_session(session_id, user_id, db)
+            return
+
     try:
         await _generate_and_deliver_memory_card(session_id, user_id, db)
     except Exception:
@@ -641,10 +666,12 @@ async def set_turn_audio_key(turn_id: uuid.UUID, s3_key: str, db) -> None:
     await db.commit()
 
 
-async def _synthesize_and_convert(text: str, user_profile: UserProfile) -> bytes:
+async def _synthesize_and_convert(
+    text: str, user_profile: UserProfile, purpose: str = "tts_reply"
+) -> bytes:
     """TTS then OGG conversion — the two steps that must succeed together
     for a voice note to go out, or degrade to text (see _send_or_degrade)."""
-    audio_out = await tts.synthesize(text, user_profile, purpose="tts_reply")
+    audio_out = await tts.synthesize(text, user_profile, purpose=purpose)
     return await convert_wav_to_ogg(audio_out)
 
 
@@ -658,6 +685,7 @@ async def _send_or_degrade(
     turn_id: Optional[uuid.UUID] = None,
     *,
     user_profile: UserProfile,
+    tts_purpose: str = "tts_reply",
 ) -> TurnResult:
     """
     Try to synthesize voice for response_text. If TTS or the WAV->OGG
@@ -669,7 +697,9 @@ async def _send_or_degrade(
         # The voice is the one pinned on her profile, never chosen from the
         # detected language, so she hears the same voice on every turn
         # (media/tts.py).
-        audio_out = await _synthesize_and_convert(response_text, user_profile)
+        audio_out = await _synthesize_and_convert(
+            response_text, user_profile, tts_purpose
+        )
         return TurnResult(
             response_audio=audio_out,
             response_text=response_text,
@@ -823,6 +853,30 @@ async def process_voice_turn(
             user_profile=user_profile,
         )
 
+    # 3b. Conversation cards (CONVERSATION_CARDS.md §6, §9.2): answer the
+    # ask her last reply made, and plan what this turn carries. Only for a
+    # family with cards; for everyone else user_profile.cards is None and
+    # this turn is exactly what it always was.
+    plan: Optional[card_asks.TurnPlan] = None
+    if user_profile.cards is not None:
+        try:
+            plan = await card_asks.before_dialogue(
+                session_id=session_id,
+                user_id=state.user_id,
+                transcript=stt_result.transcript,
+                db=db,
+            )
+            user_profile = dataclasses.replace(
+                user_profile,
+                cards=dataclasses.replace(
+                    user_profile.cards, layer4=plan.layer4, tag_kinds=plan.tag_kinds
+                ),
+            )
+        except Exception:
+            logger.exception("Card ask handling failed for session %s", session_id)
+            await db.rollback()
+            plan = None
+
     # 4. Build real prior context from fact store + vector store
     prior_context = await prior_context_for_session(
         session_id, state.user_id, state.domain, db
@@ -835,6 +889,28 @@ async def process_voice_turn(
     #
     # The prompt goes in two parts so its stable half (Layers 1-3) can be
     # cached across the session's turns (C3).
+    if plan is not None and plan.readback_text:
+        # She said yes to hearing a card. The reply is the card's stored
+        # read-back, exactly what the operator saw, never generated now
+        # (§6.2).
+        return await _record_and_send(
+            session_id,
+            state,
+            user_profile,
+            prior_context,
+            stt_result,
+            plan.readback_text,
+            input_tokens=0,
+            output_tokens=0,
+            inbound_message_sid=inbound_message_sid,
+            background_tasks=background_tasks,
+            crisis_detected=False,
+            plan=plan,
+            asked=set(),
+            tts_purpose="card_readback_tts",
+            db=db,
+        )
+
     prompt_parts = build_system_prompt_parts(user_profile, state, prior_context)
     messages = await _load_last_turn_messages(session_id, db)
     messages.append(Message(role="user", content=stt_result.transcript))
@@ -868,10 +944,15 @@ async def process_voice_turn(
         llm_response.output_tokens,
     )
 
-    # 6. Post-turn policy check (malformed dialogue response)
+    # 6. Post-turn policy check (malformed dialogue response). With cards
+    # on, the <asked> tag is read and removed first, so it is never spoken.
+    raw_reply = llm_response.content
+    asked: set[str] = set()
+    if plan is not None:
+        asked, raw_reply = card_asks.split_asked_tag(raw_reply)
     truncated = llm_response.stop_reason == "max_tokens"
     post_check = conversation_policy.check_post_turn(
-        llm_response.content, state, truncated=truncated
+        raw_reply, state, truncated=truncated
     )
     if post_check.salvaged_untagged:
         logger.warning(
@@ -916,6 +997,46 @@ async def process_voice_turn(
         logger.warning("Katha's own response matched a crisis pattern — overriding")
         response_text = response_crisis.override_response or response_text
 
+    return await _record_and_send(
+        session_id,
+        state,
+        user_profile,
+        prior_context,
+        stt_result,
+        response_text,
+        input_tokens=llm_response.input_tokens,
+        output_tokens=llm_response.output_tokens,
+        inbound_message_sid=inbound_message_sid,
+        background_tasks=background_tasks,
+        crisis_detected=crisis_detected,
+        response_crisis=response_crisis,
+        plan=plan,
+        asked=asked,
+        db=db,
+    )
+
+
+async def _record_and_send(
+    session_id: str,
+    state: SessionState,
+    user_profile: UserProfile,
+    prior_context: PriorContext,
+    stt_result,
+    response_text: str,
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    inbound_message_sid: Optional[str],
+    background_tasks: BackgroundTasks | None,
+    crisis_detected: bool,
+    db,
+    response_crisis=None,
+    plan: Optional[card_asks.TurnPlan] = None,
+    asked: Optional[set[str]] = None,
+    tts_purpose: str = "tts_reply",
+) -> TurnResult:
+    """Steps 9-12 of a turn, shared by the dialogue reply and a card's
+    read-back."""
     # 9. Record the turn happened (exchange_count++). energy_signal,
     # session_end_suggested, and goal_met are updated later by
     # run_extraction_for_turn once structured extraction completes.
@@ -932,8 +1053,8 @@ async def process_voice_turn(
         stt_result.language_code,
         response_text,
         dict(_EMPTY_EXTRACTION),
-        llm_response.input_tokens,
-        llm_response.output_tokens,
+        input_tokens,
+        output_tokens,
         db,
     )
 
@@ -944,9 +1065,19 @@ async def process_voice_turn(
                 session_id,
                 turn.id,
                 "assistant_response",
-                response_crisis.matched_pattern or "",
+                (response_crisis.matched_pattern or "") if response_crisis else "",
                 db,
             )
+
+        if plan is not None:
+            await _record_card_asks(plan, asked or set(), turn.id, state, db)
+            if plan.correction_card_id is not None and background_tasks is not None:
+                background_tasks.add_task(
+                    card_writer.rewrite_for_correction,
+                    plan.correction_card_id,
+                    turn.id,
+                    db,
+                )
 
         # 11. Schedule structured extraction off the critical path.
         if background_tasks is not None:
@@ -972,7 +1103,25 @@ async def process_voice_turn(
             crisis_detected=crisis_detected,
             turn_id=turn.id,
             user_profile=user_profile,
+            tts_purpose=tts_purpose,
         )
+
+
+async def _record_card_asks(
+    plan: card_asks.TurnPlan, asked: set[str], turn_id, state: SessionState, db
+) -> None:
+    """The ask this reply made, and her answers, recorded against the
+    saved turn. Never costs the reply."""
+    try:
+        await card_asks.after_dialogue(
+            plan, asked, session_id=state.session_id, user_id=state.user_id, db=db
+        )
+        await card_asks.after_turn_saved(
+            plan, turn_id, session_id=state.session_id, user_id=state.user_id, db=db
+        )
+    except Exception:
+        logger.exception("Recording card asks failed for turn %s", turn_id)
+        await db.rollback()
 
 
 async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
@@ -1089,6 +1238,21 @@ async def _run_extraction_for_turn(
             session_domain=session_state.domain,
         )
 
+        if user_profile.cards is not None:
+            # "Keep this between us", and her sharing preference said in
+            # passing (CONVERSATION_CARDS.md §5). Its own try: a failure
+            # here must not cost the turn's atoms or the session close.
+            try:
+                await card_privacy.apply_share_signals(
+                    extraction_json,
+                    turn_id=turn_id,
+                    session_id=session_id,
+                    user_id=session_state.user_id,
+                    db=db,
+                )
+            except Exception:
+                logger.exception("Share signals failed for turn %s", turn_id)
+
         turn_result = await db.execute(select(Turn).where(Turn.id == turn_id))
         turn = turn_result.scalar_one_or_none()
         if turn is not None:
@@ -1110,6 +1274,17 @@ async def _run_extraction_for_turn(
     should_close = session_manager.should_end_session(
         new_state, goal_met_before_this_turn=session_state.goal_met
     )
+    if (
+        should_close
+        and user_profile.cards is not None
+        and await card_asks.has_pending_ask(session_id, db)
+    ):
+        # She owes an answer to an ask in Katha's last reply ("shall I read
+        # it to you?"). Closing now would turn her answer away as a second
+        # conversation for the day; the stale sweep closes it if she never
+        # replies.
+        logger.info("Session %s stays open: an ask is waiting for her", session_id)
+        should_close = False
     if new_state.goal_met and not session_state.goal_met and not should_close:
         logger.info(
             "Session %s just reached its domain goal — deferring close to "

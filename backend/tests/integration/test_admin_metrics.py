@@ -659,6 +659,8 @@ async def test_cost(world):
         "claude_dialogue": 1.72,
         "claude_extraction": 0.07,
         "claude_entities": 0.29,
+        # Conversation cards; none in this fixture.
+        "claude_cards": 0.0,
         "claude_other": 0.0,
         "sarvam_stt": 4.90,
         "sarvam_tts": 4.50,
@@ -666,6 +668,7 @@ async def test_cost(world):
         "google_tts": 0.0,
         "twilio": 1.43,
         "meta": 0.12,
+        "ses": 0.0,
     }
     assert seven["sarvam_stt"]["share"] == 0.377  # 4.90 / 13.013208
     assert cost["by_component"]["all_time"]["claude_other"]["inr"] == 0.29
@@ -730,6 +733,9 @@ async def test_families(world):
         "domains_covered": "6/8",
         "cards_delivered": 2,
         "cards_failed": 1,
+        "cards_sent_30d": 0,
+        "last_card_sent_at_ist": None,
+        "pending_card_status": None,
         # r1..r9 + r11 = 10.671927 over 8 conversations in 30 days
         "cost_30d_inr": 10.67,
         "cost_per_conversation_30d_inr": 1.33,
@@ -748,6 +754,9 @@ async def test_families(world):
         "domains_covered": "1/8",
         "cards_delivered": 0,
         "cards_failed": 0,
+        "cards_sent_30d": 0,
+        "last_card_sent_at_ist": None,
+        "pending_card_status": None,
         "cost_30d_inr": 1.14,  # r10; r13 is unpriced
         "cost_per_conversation_30d_inr": 0.57,
     }
@@ -765,6 +774,9 @@ async def test_families(world):
         "domains_covered": "1/8",
         "cards_delivered": 0,
         "cards_failed": 0,
+        "cards_sent_30d": 0,
+        "last_card_sent_at_ist": None,
+        "pending_card_status": None,
         "cost_30d_inr": 0.0,
         "cost_per_conversation_30d_inr": None,
     }

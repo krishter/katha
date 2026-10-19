@@ -164,3 +164,31 @@ async def test_status_reflects_a_decline():
     )
     state = await get_status(_USER_ID, _status_db([declined], times_asked=1))
     assert state.status is ConsentStatus.DECLINED
+
+
+# ── sharing answers are not recording consent (CONVERSATION_CARDS.md §5.1) ──
+
+
+async def test_a_never_share_answer_does_not_withdraw_recording_consent():
+    """She said yes to being recorded, then "don't send anything to my
+    son". That is a sharing answer; she is still recording."""
+    granted = SimpleNamespace(consent_version="parent-1.0", consented_at="2026-08-30")
+    never = SimpleNamespace(
+        consent_version="share-1.0-never", consented_at="2026-09-02"
+    )
+    state = await get_status(_USER_ID, _status_db([never, granted], times_asked=1))
+    assert state.status is ConsentStatus.GRANTED
+
+
+async def test_a_yes_share_answer_never_reads_as_recording_consent():
+    """A newer "yes, share them" must not mask an earlier decline, nor
+    stand in for consent never given."""
+    declined = SimpleNamespace(
+        consent_version="parent-1.0-declined", consented_at="2026-08-30"
+    )
+    share = SimpleNamespace(consent_version="share-1.0", consented_at="2026-09-02")
+    state = await get_status(_USER_ID, _status_db([share, declined], times_asked=1))
+    assert state.status is ConsentStatus.DECLINED
+
+    state = await get_status(_USER_ID, _status_db([share], times_asked=1))
+    assert state.status is ConsentStatus.AWAITING

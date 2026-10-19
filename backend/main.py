@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.admin import router as admin_router
+from api.routes.admin_cards import router as admin_cards_router
 from api.routes.admin_metrics import router as admin_metrics_router
 from api.routes.auth import router as auth_router
+from api.routes.card_page import router as card_page_router
 from api.routes.family import router as family_router
 from api.routes.health import router as health_router
 from api.routes.onboarding import router as onboarding_router
@@ -76,3 +78,5 @@ app.include_router(family_router)
 app.include_router(onboarding_router)
 app.include_router(admin_router)
 app.include_router(admin_metrics_router)
+app.include_router(admin_cards_router)
+app.include_router(card_page_router)
