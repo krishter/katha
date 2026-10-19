@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Katha · Your parent's stories, in their own voice</title>
-<meta name="description" content="Katha talks with your parent on WhatsApp, in their own language, and keeps the stories they tell. We're inviting a small number of families to try it with us.">
-<meta property="og:title" content="Katha · Your parent's stories, in their own voice">
+<title>Katha · Your parent's stories, in their own words</title>
+<meta name="description" content="Katha listens to your parent on WhatsApp, in their own language, and shares the stories they choose with you. We're inviting a small number of families to try it with us.">
+<meta property="og:title" content="Katha · Your parent's stories, in their own words">
 <meta property="og:description" content="We're inviting a small number of families to try Katha with us.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://katha.life">
@@ -295,10 +295,6 @@ fieldset { border: 0; min-width: 0; }
   .chat-body { padding-bottom: 32px; }
 }
 
-.motion .ripples circle { transform-box: fill-box; transform-origin: center; animation: ripple 2.6s ease-out infinite; }
-.motion .ripples circle:nth-child(2) { animation-delay: 0.35s; }
-.motion .ripples circle:nth-child(3) { animation-delay: 0.7s; }
-@keyframes ripple { 0% { transform: scale(0.85); } 60% { transform: scale(1.04); } 100% { transform: scale(0.85); } }
 
 .consent { padding-block: 18vh; text-align: center; }
 .consent-inner { display: flex; flex-direction: column; align-items: center; gap: 28px; }
@@ -314,23 +310,7 @@ fieldset { border: 0; min-width: 0; }
 .hear-icon { width: 0; height: 0; border-left: 9px solid currentColor; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
 .hear[aria-pressed="true"] .hear-icon { width: 10px; height: 10px; border: 0; background: currentColor; border-radius: 2px; }
 
-/* Act III: the quote card's flight */
-.flight { padding-block: 10vh 14vh; }
-.flight-pin { padding-block: 2vh; }
-.flight-title { font-size: clamp(1.8rem, 3.4vw, 2.8rem); max-width: 22ch; }
-.flight-art { margin-top: 32px; }
-.flight-tall { display: none; }
-@media (max-width: 768px) { .flight-wide { display: none; } .flight-tall { display: block; } }
-@media (min-width: 769px) { .anim .flight-pin { min-height: 100vh; display: flex; align-items: center; } .flight-pin > .wrap { width: 100%; } }
-.quote-card {
-  max-width: 520px; margin: 40px auto 0; background: var(--warm); border-radius: 18px; padding: 28px 28px 22px;
-  box-shadow: 0 6px 14px rgba(36, 29, 92, 0.18);
-  display: grid; gap: 18px;
-}
-.quote-card blockquote { font-family: var(--display); font-style: italic; font-size: clamp(1.35rem, 2.6vw, 1.8rem); line-height: 1.3; color: var(--ink); }
-.quote-card figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; font-size: 0.8rem; color: var(--ink-soft); border-top: 1px solid #E5DAC6; padding-top: 12px; }
-
-/* Act IV: a story takes shape */
+/* Act IV, beat 8: something worth sharing takes shape */
 .shape-pin { display: grid; gap: 40px; padding-block: 12vh; align-items: center; }
 .shape-pin .copy { display: flex; flex-direction: column; gap: 22px; }
 .shape-pin h2 { font-size: clamp(1.9rem, 3.6vw, 3rem); }
@@ -340,14 +320,16 @@ fieldset { border: 0; min-width: 0; }
   font-size: 0.86rem; color: var(--ink); background: var(--rose-soft); border-radius: 12px;
   padding: 6px 12px; box-shadow: 0 2px 6px rgba(36, 29, 92, 0.12);
 }
-.story-page {
-  background: var(--warm); border-radius: 6px; padding: clamp(24px, 4vw, 44px);
-  box-shadow: 0 6px 14px rgba(36, 29, 92, 0.18); display: grid; gap: 14px; max-width: 520px; margin-inline: auto;
+.conv-card {
+  background: var(--warm); border-radius: 16px; padding: clamp(24px, 4vw, 40px);
+  box-shadow: 0 6px 14px rgba(36, 29, 92, 0.18); display: grid; gap: 18px; max-width: 460px; margin-inline: auto; text-align: center;
 }
-.page-kicker { font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); }
-.story-page h3 { font-size: clamp(1.6rem, 2.8vw, 2.2rem); }
-.page-text { font-family: var(--display); font-size: clamp(1.05rem, 1.5vw, 1.2rem); line-height: 1.65; color: var(--ink); }
-.page-meta { font-size: 0.8rem; font-style: italic; color: var(--ink-soft); text-align: right; }
+.cc-hook { font-size: clamp(1.4rem, 2.4vw, 1.85rem); line-height: 1.25; font-weight: 700; color: var(--ink); }
+.cc-excerpt { font-family: var(--display); font-size: clamp(1.02rem, 1.5vw, 1.15rem); line-height: 1.5; color: var(--ink); }
+.cc-call { background: #F2E4CF; border-radius: 12px; padding: 14px 18px; text-align: left; display: grid; gap: 4px; }
+.cc-call-k { font-size: 0.8rem; font-weight: 600; color: var(--ink-soft); }
+.cc-call-q { font-family: var(--display); font-weight: 700; font-size: clamp(1.05rem, 1.6vw, 1.2rem); color: var(--ink); }
+.cc-foot { font-size: 0.78rem; color: var(--ink-soft); }
 @media (min-width: 769px) {
   .shape-pin { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 64px; }
   .anim .shape-pin { min-height: 100vh; padding-block: 0; }
@@ -359,8 +341,26 @@ fieldset { border: 0; min-width: 0; }
 .hers { min-height: 100vh; display: flex; align-items: center; padding-block: 14vh; }
 .hers-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 40px; }
 .hers .statement em { color: #9C4712; }
-.glasses { width: min(360px, 82%); }
+.glasses { width: min(460px, 92%); }
 .glasses-art { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Act IV, beat 10: the card reaches the child */
+.flight { padding-block: 10vh 14vh; }
+.flight-pin { padding-block: 2vh; }
+.flight-title { font-size: clamp(1.8rem, 3.4vw, 2.8rem); max-width: 22ch; }
+.flight-body { margin-top: 18px; max-width: 46ch; }
+.flight .form-note { margin-top: 8px; }
+.flight-art { margin-top: 28px; }
+.flight-tall { display: none; }
+@media (max-width: 768px) { .flight-wide { display: none; } .flight-tall { display: block; } }
+@media (min-width: 769px) { .anim .flight-pin { min-height: 100vh; display: flex; align-items: center; } .flight-pin > .wrap { width: 100%; } }
+
+/* Act IV, beat 11: you call, you ask. The scene sits first, so the thread reaches it before the text. */
+.call-inner { display: grid; gap: 28px; padding-block: 12vh; }
+.call-inner .copy { display: flex; flex-direction: column; gap: 22px; }
+.call h2 { font-size: clamp(1.9rem, 3.6vw, 3rem); }
+.call-art { width: min(560px, 100%); }
+@media (min-width: 769px) { .call-inner { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 64px; align-items: center; } }
 
 /* ================= ACT V (indigo, abstract) ================= */
 .archive-pin { display: grid; gap: 32px; padding-block: 12vh; align-items: center; }
@@ -381,11 +381,6 @@ fieldset { border: 0; min-width: 0; }
 .anim .silence { height: 40vh; }
 .keep { font-size: clamp(2rem, 5vw, 4rem); max-width: 18ch; }
 .keep em { color: var(--gold); }
-.play-wave rect { transform-box: fill-box; transform-origin: center; }
-.playing .play-wave rect { animation: voice 1.1s ease-in-out infinite; }
-.playing .play-wave rect:nth-child(2n) { animation-delay: 0.15s; }
-.playing .play-wave rect:nth-child(3n) { animation-delay: 0.3s; }
-@keyframes voice { 0%, 100% { transform: scaleY(0.6); } 50% { transform: scaleY(1.15); } }
 
 /* ================= ACT VI (parchment, type-led) ================= */
 .invite { padding-block: 14vh 8vh; outline: none; }
@@ -426,9 +421,8 @@ fieldset { border: 0; min-width: 0; }
 .form-status.err { color: var(--err); }
 
 .trust { padding-block: 6vh 12vh; }
-.trust-list { list-style: none; display: grid; gap: 18px; border-top: 1px solid #DCCFB7; padding-top: 36px; }
-@media (min-width: 640px) { .trust-list { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1000px) { .trust-list { grid-template-columns: repeat(4, 1fr); } }
+.trust-list { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid #DCCFB7; padding-top: 36px; }
+@media (min-width: 1000px) { .trust-list { grid-template-columns: repeat(3, 1fr); } }
 .trust-list li { display: flex; gap: 12px; align-items: flex-start; color: var(--ink); font-size: 0.98rem; }
 .trust-list svg { flex: none; width: 24px; height: 24px; fill: none; stroke: var(--indigo-mid); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -515,7 +509,26 @@ fieldset { border: 0; min-width: 0; }
     <circle cx="186" cy="174" r="9" fill="#8F5A40"/>
   </symbol>
 
-  <!-- The grandchild: about nine, headphones on, phone held in both hands. Appears only in the bookend. -->
+  <!-- The child on a call: same figure as child-back, the right arm raised so the phone is at the ear.
+       The phone sits at (142, 66) in this symbol's space. -->
+  <symbol id="child-call" viewBox="0 0 210 330" overflow="visible">
+    <circle cx="146" cy="70" r="36" fill="#F2C14E" opacity="0.3"/>
+    <path d="M50 140 C 36 186, 34 238, 40 286" stroke="#2F2A73" stroke-width="24" fill="none" stroke-linecap="round"/>
+    <g filter="url(#pc-shadow)">
+      <path d="M44 146 C 46 116, 72 104, 100 104 C 128 104, 152 116, 156 146 L 164 330 H 36 Z" fill="#3A3488"/>
+    </g>
+    <path d="M100 104 V 330" stroke="#342E7C" stroke-width="2"/>
+    <rect x="88" y="84" width="24" height="26" rx="6" fill="#8F5A40"/>
+    <circle cx="100" cy="58" r="34" fill="#2A2233"/>
+    <path d="M150 138 C 176 120, 172 94, 150 82" stroke="#3A3488" stroke-width="22" fill="none" stroke-linecap="round"/>
+    <g transform="rotate(-18 142 66)">
+      <rect x="133" y="46" width="18" height="38" rx="4" fill="#241D5C"/>
+    </g>
+    <circle cx="148" cy="80" r="9" fill="#8F5A40"/>
+  </symbol>
+
+  <!-- The grandchild: about nine, headphones round the neck (not on: there is no voice to play), reading a
+       card on a phone held in both hands. Appears only in the bookend. -->
   <symbol id="grandchild" viewBox="0 0 200 260" overflow="visible">
     <g filter="url(#pc-shadow)">
       <rect x="34" y="218" width="132" height="34" rx="17" fill="#3A3488"/>
@@ -524,17 +537,19 @@ fieldset { border: 0; min-width: 0; }
     <rect x="90" y="100" width="20" height="18" rx="5" fill="#8F5A40"/>
     <circle cx="100" cy="80" r="30" fill="#A86A48"/>
     <path d="M70 80 C 70 50, 130 46, 131 78 C 118 66, 86 62, 70 80Z" fill="#2A2233"/>
-    <path d="M66 82 C 64 40, 136 40, 134 82" stroke="#241D5C" stroke-width="7" fill="none" stroke-linecap="round"/>
-    <rect x="58" y="72" width="16" height="24" rx="7" fill="#F2C14E"/>
-    <rect x="126" y="72" width="16" height="24" rx="7" fill="#F2C14E"/>
+    <path d="M74 120 C 78 142, 122 142, 126 120" stroke="#241D5C" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <rect x="64" y="112" width="16" height="22" rx="7" fill="#F2C14E"/>
+    <rect x="120" y="112" width="16" height="22" rx="7" fill="#F2C14E"/>
     <path d="M68 146 C 58 178, 74 196, 96 196" stroke="#A86A48" stroke-width="14" fill="none" stroke-linecap="round"/>
     <path d="M132 146 C 142 178, 126 196, 104 196" stroke="#A86A48" stroke-width="14" fill="none" stroke-linecap="round"/>
     <rect x="84" y="170" width="32" height="44" rx="5" fill="#241D5C"/>
     <rect x="88" y="175" width="24" height="34" rx="3" fill="#FFF3DE"/>
-    <path d="M97 186 L 106 192 L 97 198 Z" fill="#2FA36B"/>
+    <rect x="91" y="180" width="18" height="3" rx="1.5" fill="#241D5C"/>
+    <rect x="92" y="186" width="16" height="2" rx="1" fill="#3A3488" opacity="0.5"/>
+    <rect x="90" y="193" width="20" height="8" rx="2" fill="#F2E4CF"/>
   </symbol>
 
-  <!-- Vignettes linked by the quote card's flight (Act III). Same 640x600 space as the full scenes. -->
+  <!-- Vignettes linked by the card's flight (Act IV, beat 10). Same 640x600 space as the full scenes. -->
   <clipPath id="vh-cut"><path d="M60 120 C 120 20, 420 10, 560 90 C 640 140, 630 420, 560 500 C 470 590, 140 600, 70 500 C 10 420, 10 200, 60 120Z"/></clipPath>
   <clipPath id="vc-cut"><path d="M40 140 C 110 40, 430 20, 570 100 C 650 150, 640 420, 570 500 C 480 590, 130 600, 60 500 C 0 420, 0 220, 40 140Z"/></clipPath>
 
@@ -582,14 +597,24 @@ fieldset { border: 0; min-width: 0; }
     </g>
   </symbol>
 
-  <!-- The quote card in flight: lines stand in for the quote, which is shown full size beside the scene. -->
-  <symbol id="mini-card" viewBox="0 0 120 90" overflow="visible">
-    <g filter="url(#pc-shadow)"><rect width="120" height="90" rx="9" fill="#FBF4E6"/></g>
-    <use href="#ka" x="10" y="9" width="20" height="20"/>
-    <rect x="12" y="36" width="96" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
-    <rect x="12" y="48" width="84" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
-    <rect x="12" y="60" width="58" height="6" rx="3" fill="#3A3488" opacity="0.75"/>
-    <rect x="12" y="74" width="34" height="4" rx="2" fill="#D9A21B"/>
+  <!-- The "Did you know?" card in flight (Act IV): bars stand in for the hook, her words and the call box,
+       which are shown full size in beat 8. Portrait, like the real 1080x1350 card. -->
+  <symbol id="mini-card" viewBox="0 0 96 120" overflow="visible">
+    <g filter="url(#pc-shadow)"><rect width="96" height="120" rx="8" fill="#FBF4E6"/></g>
+    <rect x="12" y="16" width="72" height="7" rx="3.5" fill="#241D5C"/>
+    <rect x="18" y="28" width="60" height="7" rx="3.5" fill="#241D5C"/>
+    <rect x="16" y="46" width="64" height="4" rx="2" fill="#3A3488" opacity="0.55"/>
+    <rect x="22" y="55" width="52" height="4" rx="2" fill="#3A3488" opacity="0.55"/>
+    <rect x="10" y="70" width="76" height="26" rx="5" fill="#F2E4CF"/>
+    <rect x="16" y="76" width="30" height="3" rx="1.5" fill="#3A3488" opacity="0.6"/>
+    <rect x="16" y="84" width="56" height="5" rx="2.5" fill="#241D5C"/>
+    <rect x="30" y="106" width="36" height="3" rx="1.5" fill="#D9A21B"/>
+  </symbol>
+
+  <!-- The same card by email: a small envelope that lands beside the child's phone. -->
+  <symbol id="mini-envelope" viewBox="0 0 64 44" overflow="visible">
+    <g filter="url(#pc-shadow)"><rect width="64" height="44" rx="5" fill="#FBF4E6"/></g>
+    <path d="M3 5 L 32 26 L 61 5" fill="none" stroke="#3A3488" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   </symbol>
 </svg>
 <!-- /art:characters -->
@@ -660,7 +685,7 @@ fieldset { border: 0; min-width: 0; }
         <!-- COPY: draft -->
         <h1 id="hero-title" class="display">Amma has told the Bombay Diwali story a dozen times. <em>Nobody has written it down.</em></h1>
         <!-- COPY: draft -->
-        <p class="lede">Katha keeps your parent's stories, in their own voice.</p>
+        <p class="lede">Katha keeps your parent's stories, in their own words.</p>
       </div>
     </div>
     <a class="scroll-cue" href="#distance"><span>Scroll</span><i aria-hidden="true"></i></a>
@@ -857,7 +882,7 @@ fieldset { border: 0; min-width: 0; }
         <!-- COPY: draft -->
         <h2 class="display intro-title">Katha asks.</h2>
         <!-- COPY: draft -->
-        <p class="lede intro-lede">A warm voice on WhatsApp that talks with your parent most days, in their language — and keeps every story they tell.</p>
+        <p class="lede intro-lede">A warm voice on WhatsApp that listens whenever your parent feels like talking, in their language — and keeps every story they tell.</p>
         <!-- COPY: draft -->
         <a class="how" href="#setup">Here's how it works</a>
       </div>
@@ -886,7 +911,7 @@ fieldset { border: 0; min-width: 0; }
         <!-- COPY: draft -->
         <h2 id="setup-title" class="display">You set it up in about five minutes.</h2>
         <!-- COPY: draft -->
-        <p class="body">Her name, the time she likes to talk, her language, and a few hints to start from, like <q>Amma grew up in Madurai</q>.</p>
+        <p class="body">Her name, her language, when you usually call her, and a few hints to start from, like <q>Amma grew up in Madurai</q>.</p>
         <figure class="art" data-thread data-tx=".3" data-ty=".55">
           <!-- art:act2-setup -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An adult, seen from behind, stands at the window of a city flat in the evening with a phone in hand">
@@ -933,18 +958,18 @@ fieldset { border: 0; min-width: 0; }
         </figure>
       </div>
       <div class="dock">
-        <div class="phone phone-setup" role="img" aria-label="Illustrative: the Katha setup screen on the child's phone, with her name, a 10:30 am time, Tamil as her language, and two hints">
+        <div class="phone phone-setup" role="img" aria-label="Illustrative: the Katha setup screen on the child's phone, with her name, Tamil as her language, Sundays at 11 am as when you usually call her, and two hints">
           <div class="screen" aria-hidden="true">
             <div class="setup-bar"><svg class="mark" aria-hidden="true" focusable="false"><use href="#ka"/></svg>Set up Katha for your parent</div>
             <div class="setup-body">
               <div class="field"><span class="k">Her name</span><span class="v">Amma</span></div>
-              <div class="field"><span class="k">Best time to talk</span><span class="v">10:30 am, daily</span></div>
               <div class="field"><span class="k">Her language</span><span class="v">Tamil</span></div>
+              <div class="field"><span class="k">You usually call her</span><span class="v">Sundays, 11 am</span></div>
               <div class="field"><span class="k">A few hints</span>
                 <span class="hint">Amma grew up in Madurai</span>
                 <span class="hint">Lived in Bombay in the 70s</span>
               </div>
-              <div class="field"><span class="btn">Ask her if she'd like to try</span></div>
+              <div class="field"><span class="btn">Send her the link</span></div>
             </div>
           </div>
         </div>
@@ -960,7 +985,7 @@ fieldset { border: 0; min-width: 0; }
       <h2 id="consent-title" class="kicker">She decides.</h2>
       <!-- COPY: draft -->
       <p class="statement">
-        <span class="reveal">Katha asks her separately, in her language.</span>
+        <span class="reveal">You send her a link. When she taps it, Katha introduces itself — honestly, as an AI — and asks if she'd like to talk, in her language.</span>
         <span class="reveal">She says yes in her own words.</span>
         <span class="reveal">If she doesn't, Katha stays silent.</span>
       </p>
@@ -978,10 +1003,10 @@ fieldset { border: 0; min-width: 0; }
     <div class="wrap split lift">
       <div class="copy">
         <!-- COPY: draft -->
-        <h2 id="morning-title" class="display">10:30 the next morning, her phone buzzes.</h2>
+        <h2 id="morning-title" class="display">The next morning, she presses the mic and starts talking.</h2>
         <figure class="art" data-thread data-tx=".655" data-ty=".587">
           <!-- art:act2-morning -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An elderly woman in a saffron saree sits in an armchair by a sunlit arched window; the phone propped on the table beside her is buzzing">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An elderly woman in a saffron saree sits in an armchair by a sunlit arched window; she leans towards the phone on the table beside her and starts talking">
   <defs><clipPath id="s5-cut"><path d="M60 120 C 120 20, 420 10, 560 90 C 640 140, 630 420, 560 500 C 470 590, 140 600, 70 500 C 10 420, 10 200, 60 120Z"/></clipPath></defs>
   <g clip-path="url(#s5-cut)">
   <rect width="640" height="600" fill="#F6DCD8"/>
@@ -1014,18 +1039,22 @@ fieldset { border: 0; min-width: 0; }
   <ellipse cx="474" cy="340" rx="16" ry="4" fill="#ECEEF3"/>
   <rect x="465" y="346" width="5" height="40" fill="#FFFFFF" opacity="0.7"/>
 
-  <!-- the phone buzzing -->
-  <g class="ripples" fill="none" stroke="#E8822F" stroke-width="3">
-    <circle cx="418" cy="352" r="52" opacity="0.5"/>
-    <circle cx="418" cy="352" r="78" opacity="0.28"/>
-    <circle cx="418" cy="352" r="104" opacity="0.12"/>
+  <!-- her voice, towards the phone: she starts the conversation -->
+  <g fill="none" stroke="#E8822F" stroke-width="3" stroke-linecap="round">
+    <path d="M272 226 Q 282 240 272 254" opacity="0.8"/>
+    <path d="M284 216 Q 300 240 284 264" opacity="0.5"/>
+    <path d="M296 206 Q 318 240 296 274" opacity="0.25"/>
   </g>
   <g filter="url(#pc-shadow)"><rect x="398" y="314" width="42" height="76" rx="8" fill="#241D5C"/></g>
   <rect x="402" y="320" width="34" height="64" rx="5" fill="#FFF3DE"/>
-  <circle cx="411" cy="352" r="5" fill="#2FA36B"/>
+  <!-- the mic, held -->
+  <circle cx="419" cy="368" r="10" fill="#2FA36B"/>
+  <rect x="416" y="361" width="6" height="10" rx="3" fill="#FFFFFF"/>
+  <path d="M413.5 368 a5.5 5.5 0 0 0 11 0 M419 373.5 V376" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
   <g fill="#241D5C">
-    <rect x="419" y="349" width="2" height="6" rx="1"/><rect x="423" y="346" width="2" height="12" rx="1"/>
-    <rect x="427" y="348" width="2" height="8" rx="1"/><rect x="431" y="350" width="2" height="4" rx="1"/>
+    <rect x="410" y="334" width="2" height="6" rx="1"/><rect x="414" y="331" width="2" height="12" rx="1"/>
+    <rect x="418" y="329" width="2" height="16" rx="1"/><rect x="422" y="332" width="2" height="10" rx="1"/>
+    <rect x="426" y="334" width="2" height="6" rx="1"/>
   </g>
 
   <rect width="640" height="600" filter="url(#pc-grain)"/>
@@ -1034,21 +1063,21 @@ fieldset { border: 0; min-width: 0; }
 <!-- /art:act2-morning -->
         </figure>
         <!-- COPY: draft -->
-        <p class="body big">It's a voice, not an app.</p>
+        <p class="body big">It's a voice, not an app. She talks when she feels like it, and Katha always answers.</p>
         <button type="button" class="hear" data-hear="audio/katha-sample.mp3" aria-pressed="false" hidden>
           <span class="hear-icon" aria-hidden="true"></span>Hear Katha
         </button>
       </div>
       <div class="dock">
-        <div class="phone phone-chat phone-morning" role="img" aria-label="Illustrative WhatsApp chat: Katha sends a voice note, she replies with a voice note, and Katha is listening">
+        <div class="phone phone-chat phone-morning" role="img" aria-label="Illustrative WhatsApp chat: she sends a voice note, Katha replies with a voice note, and Katha is listening">
           <div class="screen chat" aria-hidden="true">
             <div class="chat-head">
               <span class="avatar"><svg class="mark" aria-hidden="true" focusable="false"><use href="#ka"/></svg></span>
               <span class="who"><span class="name">Katha</span><span class="chat-status">listening…</span></span>
             </div>
             <div class="chat-body">
-              <div class="msg in"><span class="play"></span><span class="vwave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="meta">0:24 · 10:30</span></div>
-              <div class="msg out"><span class="play"></span><span class="vwave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="meta">2:41 · 10:33</span></div>
+              <div class="msg out"><span class="play"></span><span class="vwave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="meta">2:41 · 10:30</span></div>
+              <div class="msg in"><span class="play"></span><span class="vwave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="meta">0:24 · 10:33</span></div>
               <div class="msg in listening"><span class="dots"><i></i><i></i><i></i></span>listening…</div>
             </div>
           </div>
@@ -1069,6 +1098,8 @@ fieldset { border: 0; min-width: 0; }
         <h2 id="remembers-title" class="display">She talks. Katha remembers.</h2>
         <!-- COPY: draft -->
         <p class="body">A week later, Katha picks up a thread she left. Not a quiz, just the next question a good listener would ask.</p>
+        <!-- COPY: draft -->
+        <p class="body">And before she goes, Katha tells her what it has kept safe.</p>
         <figure class="art" data-thread data-tx=".3" data-ty=".25">
           <!-- art:act3-talk -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="She talks to the phone on her table; above her, a remembered house by a river, and an old transistor radio on the shelf">
@@ -1152,45 +1183,6 @@ fieldset { border: 0; min-width: 0; }
     </div>
   </section>
 
-  <section class="act-iii flight" aria-labelledby="flight-title">
-    <i class="thread-mark" data-thread data-tx="gutter" data-ty="0"></i>
-    <div class="flight-pin lift">
-      <div class="wrap">
-        <!-- COPY: draft -->
-        <h2 id="flight-title" class="display flight-title">A quote card reaches your WhatsApp a few minutes after she finishes.</h2>
-        <figure class="art flight-art flight-wide">
-          <!-- art:act3-flight-wide -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 600" class="scene" role="img" aria-label="A quote card lifts out of her phone, follows a line across, and lands in her child's phone at an airport gate">
-  <use href="#vignette-her" x="0" y="0" width="640" height="600"/>
-  <use href="#vignette-child" x="640" y="0" width="640" height="600"/>
-  <path id="fw-path" d="M419 312 C 520 30, 830 30, 917 330" fill="none" stroke="#E8822F" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 11"/>
-  <g id="fw-card" transform="translate(857 285)"><use href="#mini-card" width="120" height="90"/></g>
-</svg>
-<!-- /art:act3-flight-wide -->
-        </figure>
-        <figure class="art flight-art flight-tall">
-          <!-- art:act3-flight-tall -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 1260" class="scene" role="img" aria-label="A quote card lifts out of her phone, follows a line down, and lands in her child's phone at an airport gate">
-  <use href="#vignette-her" x="0" y="0" width="640" height="600"/>
-  <use href="#vignette-child" x="0" y="660" width="640" height="600"/>
-  <path id="ft-path" d="M419 312 C 600 600, 150 720, 277 990" fill="none" stroke="#E8822F" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 13"/>
-  <g id="ft-card" transform="translate(217 945)"><use href="#mini-card" width="120" height="90"/></g>
-</svg>
-<!-- /art:act3-flight-tall -->
-        </figure>
-      </div>
-    </div>
-    <div class="wrap lift">
-      <figure class="quote-card" aria-label="Illustrative quote card">
-        <svg class="mark" aria-hidden="true" focusable="false"><use href="#ka"/></svg>
-        <blockquote>“Before we went inside, Amma made us wash our feet in the river.”</blockquote>
-        <figcaption><span>Amma · Childhood &amp; Home</span><span>Tuesday morning</span></figcaption>
-      </figure>
-      <p class="illustrative">Illustrative</p>
-    </div>
-    <i class="thread-mark" data-thread data-tx="gutter" data-ty="1"></i>
-  </section>
-
   <!-- ================= ACT IV · Her story, her say (Paper-cut) ================= -->
   <section class="act-iv shape" aria-labelledby="shape-title">
     <div class="wrap shape-pin lift">
@@ -1198,9 +1190,9 @@ fieldset { border: 0; min-width: 0; }
         <!-- COPY: draft -->
         <p class="eyebrow">Her story, her say</p>
         <!-- COPY: draft -->
-        <h2 id="shape-title" class="display">A story takes shape.</h2>
+        <h2 id="shape-title" class="display">Something worth sharing takes shape.</h2>
         <!-- COPY: draft -->
-        <p class="body">From what she says across a few mornings, Katha writes a short story in English, in the first person, in her words.</p>
+        <p class="body">From what she's told Katha, it picks one thing you might not know, in her words, translated into English.</p>
       </div>
       <div class="shape-stage">
         <ul class="fragments" aria-label="Illustrative fragments from her conversations">
@@ -1211,17 +1203,21 @@ fieldset { border: 0; min-width: 0; }
           <li style="--l:2%;--t:84%;--r:-2deg">“the mango tree by the gate”</li>
           <li style="--l:60%;--t:90%;--r:4deg">“Appa's cycle bell”</li>
         </ul>
-        <article class="story-page" aria-labelledby="page-title">
-          <p class="page-kicker">Childhood &amp; Home</p>
-          <h3 id="page-title" class="display">The river house</h3>
-          <p class="page-text">
-            <span class="pl">When I was nine, we lived near the river, in a house by the old bridge.</span>
-            <span class="pl">There were seven of us children.</span>
-            <span class="pl">Before we went inside, Amma made us wash our feet in the river.</span>
-            <span class="pl">From the mango tree by the gate, you could hear Appa's cycle bell long before you saw him.</span>
-          </p>
-          <p class="page-meta">As told to Katha</p>
-        </article>
+        <!-- Drawn like the real card (memory_cards/generator.py, render_conversation_card): the hook is the header. -->
+        <figure class="conv-card" aria-labelledby="cc-hook">
+          <!-- COPY: draft -->
+          <p id="cc-hook" class="cc-hook display">Did you know Amma could hear Appa's cycle bell long before she saw him?</p>
+          <!-- COPY: draft -->
+          <blockquote class="cc-excerpt">“From the mango tree by the gate, you could hear Appa's cycle bell long before you saw him.”</blockquote>
+          <div class="cc-call">
+            <!-- COPY: draft -->
+            <p class="cc-call-k">On your next call</p>
+            <!-- COPY: draft -->
+            <p class="cc-call-q">Where was Appa cycling home from?</p>
+          </div>
+          <!-- COPY: draft -->
+          <figcaption class="cc-foot">Shared with Amma's permission · translated from Tamil</figcaption>
+        </figure>
         <p class="illustrative">Illustrative</p>
       </div>
     </div>
@@ -1232,26 +1228,31 @@ fieldset { border: 0; min-width: 0; }
     <div class="wrap hers-inner lift">
       <!-- COPY: draft -->
       <p class="statement">
-        <span class="reveal">She reads it first.</span>
-        <span class="reveal">Nothing reaches the family until she says yes.</span>
-        <span class="reveal">And no one edits it.</span>
+        <span class="reveal">Katha reads it to her first, in her language.</span>
+        <span class="reveal">No card is sent to you until she says yes.</span>
+        <span class="reveal">Your family can't change a word.</span>
         <span class="reveal"><em>It's her story. It stays hers.</em></span>
       </p>
       <div class="glasses">
         <!-- art:act4-glasses -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 230" class="glasses-art" aria-hidden="true" focusable="false">
-  <defs><clipPath id="g9-page"><rect x="40" y="30" width="340" height="180" rx="6"/></clipPath></defs>
-  <g transform="rotate(-3 210 120)">
-    <g filter="url(#pc-shadow)"><rect x="40" y="30" width="340" height="180" rx="6" fill="#FBF4E6"/></g>
-    <g fill="#D8CDB8">
-      <rect x="70" y="58" width="150" height="8" rx="4" fill="#3A3488" opacity="0.55"/>
-      <rect x="70" y="84" width="280" height="5" rx="2.5"/><rect x="70" y="100" width="262" height="5" rx="2.5"/>
-      <rect x="70" y="116" width="280" height="5" rx="2.5"/><rect x="70" y="132" width="210" height="5" rx="2.5"/>
-      <rect x="70" y="160" width="270" height="5" rx="2.5"/><rect x="70" y="176" width="190" height="5" rx="2.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 250" class="glasses-art" aria-hidden="true" focusable="false">
+  <defs><clipPath id="g9-card"><rect x="40" y="26" width="250" height="200" rx="10"/></clipPath></defs>
+  <!-- the card, as it will be read to her -->
+  <g transform="rotate(-3 165 126)">
+    <g filter="url(#pc-shadow)"><rect x="40" y="26" width="250" height="200" rx="10" fill="#FBF4E6"/></g>
+    <rect x="70" y="50" width="190" height="9" rx="4.5" fill="#241D5C"/>
+    <rect x="86" y="66" width="158" height="9" rx="4.5" fill="#241D5C"/>
+    <g fill="#3A3488" opacity="0.5">
+      <rect x="76" y="90" width="178" height="5" rx="2.5"/><rect x="92" y="102" width="146" height="5" rx="2.5"/>
     </g>
-    <g clip-path="url(#g9-page)"><rect x="40" y="30" width="340" height="180" filter="url(#pc-grain)"/></g>
+    <rect x="62" y="122" width="206" height="44" rx="8" fill="#F2E4CF"/>
+    <rect x="76" y="132" width="70" height="4" rx="2" fill="#3A3488" opacity="0.6"/>
+    <rect x="76" y="145" width="150" height="7" rx="3.5" fill="#241D5C"/>
+    <rect x="120" y="190" width="90" height="4" rx="2" fill="#D9A21B"/>
+    <g clip-path="url(#g9-card)"><rect x="40" y="26" width="250" height="200" filter="url(#pc-grain)"/></g>
   </g>
-  <g filter="url(#pc-shadow)" transform="rotate(-8 220 150)">
+  <!-- her glasses, set down on it -->
+  <g filter="url(#pc-shadow)" transform="translate(-55 -6) rotate(-8 220 150)">
     <g fill="#F3EDE1" fill-opacity="0.55" stroke="#241D5C" stroke-width="5">
       <circle cx="186" cy="150" r="27"/><circle cx="254" cy="150" r="27"/>
     </g>
@@ -1259,8 +1260,116 @@ fieldset { border: 0; min-width: 0; }
     <path d="M160 144 L 132 166 L 116 162" fill="none" stroke="#241D5C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M280 144 L 300 168 L 318 160" fill="none" stroke="#241D5C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
+  <!-- Katha's voice note, reading it to her -->
+  <g filter="url(#pc-shadow)"><path d="M330 86 H 504 A 18 18 0 0 1 522 104 V 130 A 18 18 0 0 1 504 148 H 342 A 18 18 0 0 1 324 130 V 92 L 316 84 Z" fill="#FFFFFF"/></g>
+  <circle cx="352" cy="117" r="15" fill="#2FA36B"/>
+  <path d="M347 109 L 359 117 L 347 125 Z" fill="#FFFFFF"/>
+  <g fill="#2FA36B" opacity="0.75">
+    <rect x="378" y="111" width="4" height="12" rx="2"/><rect x="388" y="104" width="4" height="26" rx="2"/>
+    <rect x="398" y="109" width="4" height="16" rx="2"/><rect x="408" y="100" width="4" height="34" rx="2"/>
+    <rect x="418" y="107" width="4" height="20" rx="2"/><rect x="428" y="103" width="4" height="28" rx="2"/>
+    <rect x="438" y="110" width="4" height="14" rx="2"/><rect x="448" y="105" width="4" height="24" rx="2"/>
+    <rect x="458" y="111" width="4" height="12" rx="2"/><rect x="468" y="108" width="4" height="18" rx="2"/>
+  </g>
+  <text x="500" y="140" font-family="DM Sans, system-ui, sans-serif" font-size="11" fill="#6E6890" text-anchor="end">0:38</text>
 </svg>
 <!-- /art:act4-glasses -->
+      </div>
+    </div>
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty="1"></i>
+  </section>
+
+  <section class="act-iv flight" aria-labelledby="flight-title">
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty="0"></i>
+    <div class="flight-pin lift">
+      <div class="wrap">
+        <!-- COPY: draft -->
+        <h2 id="flight-title" class="display flight-title">Then it reaches you.</h2>
+        <!-- COPY: draft -->
+        <p class="body flight-body">By email and on WhatsApp, a few hours before you usually call. Up to twice a week.</p>
+        <!-- COPY: draft -->
+        <p class="form-note">For US numbers, by email only for now.</p>
+        <figure class="art flight-art flight-wide">
+          <!-- art:act4-flight-wide -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 600" class="scene" role="img" aria-label="The card she approved lifts out of her phone, follows a line across, and lands in her child's phone at an airport gate; an envelope lands beside it">
+  <use href="#vignette-her" x="0" y="0" width="640" height="600"/>
+  <use href="#vignette-child" x="640" y="0" width="640" height="600"/>
+  <path id="fw-path" d="M419 312 C 520 30, 830 30, 917 330" fill="none" stroke="#E8822F" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 11"/>
+  <g id="fw-env" transform="translate(968 386)"><use href="#mini-envelope" width="64" height="44"/></g>
+  <g id="fw-card" transform="translate(877 280)"><use href="#mini-card" width="80" height="100"/></g>
+</svg>
+<!-- /art:act4-flight-wide -->
+        </figure>
+        <figure class="art flight-art flight-tall">
+          <!-- art:act4-flight-tall -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 1260" class="scene" role="img" aria-label="The card she approved lifts out of her phone, follows a line down, and lands in her child's phone at an airport gate; an envelope lands beside it">
+  <use href="#vignette-her" x="0" y="0" width="640" height="600"/>
+  <use href="#vignette-child" x="0" y="660" width="640" height="600"/>
+  <path id="ft-path" d="M419 312 C 600 600, 150 720, 277 990" fill="none" stroke="#E8822F" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 13"/>
+  <g id="ft-env" transform="translate(328 1046)"><use href="#mini-envelope" width="64" height="44"/></g>
+  <g id="ft-card" transform="translate(237 940)"><use href="#mini-card" width="80" height="100"/></g>
+</svg>
+<!-- /art:act4-flight-tall -->
+        </figure>
+        <p class="illustrative">Illustrative</p>
+      </div>
+    </div>
+    <i class="thread-mark" data-thread data-tx="gutter" data-ty="1"></i>
+  </section>
+
+  <section class="act-iv call" aria-labelledby="call-title">
+    <div class="wrap call-inner lift">
+      <figure class="art call-art" data-thread data-tx=".33" data-ty=".43">
+        <!-- art:act4-call -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="Evening in the city flat: the child stands at the window with the phone at their ear, calling her">
+  <defs>
+    <clipPath id="s11-cut"><path d="M40 140 C 110 40, 430 20, 570 100 C 650 150, 640 420, 570 500 C 480 590, 130 600, 60 500 C 0 420, 0 220, 40 140Z"/></clipPath>
+    <clipPath id="s11-sky"><rect x="324" y="82" width="244" height="326"/></clipPath>
+  </defs>
+  <g clip-path="url(#s11-cut)">
+  <rect width="640" height="600" fill="#F6DCD8"/>
+
+  <!-- the same city-flat window, later: night -->
+  <g filter="url(#pc-shadow)"><rect x="312" y="70" width="268" height="350" rx="6" fill="#FBF4E6"/></g>
+  <g clip-path="url(#s11-sky)">
+    <rect x="324" y="82" width="244" height="326" fill="#3A3488"/>
+    <circle cx="512" cy="146" r="16" fill="#F6E7C8"/>
+    <g fill="#241D5C">
+      <rect x="324" y="300" width="40" height="108"/>
+      <rect x="364" y="262" width="34" height="146"/>
+      <rect x="398" y="318" width="48" height="90"/>
+      <rect x="446" y="240" width="38" height="168"/>
+      <rect x="484" y="290" width="44" height="118"/>
+      <rect x="528" y="270" width="40" height="138"/>
+    </g>
+    <g fill="#F2C14E">
+      <rect x="372" y="278" width="6" height="8"/><rect x="384" y="300" width="6" height="8"/><rect x="372" y="330" width="6" height="8"/>
+      <rect x="456" y="258" width="6" height="8"/><rect x="468" y="284" width="6" height="8"/><rect x="456" y="330" width="6" height="8"/><rect x="468" y="360" width="6" height="8"/>
+      <rect x="538" y="290" width="6" height="8"/><rect x="494" y="312" width="6" height="8"/><rect x="550" y="340" width="6" height="8"/>
+      <rect x="410" y="334" width="6" height="8"/><rect x="424" y="356" width="6" height="8"/>
+    </g>
+  </g>
+  <path d="M446 82 V408 M324 246 H568" stroke="#FBF4E6" stroke-width="10"/>
+  <g filter="url(#pc-shadow)"><rect x="300" y="414" width="292" height="16" rx="4" fill="#E9D9BC"/></g>
+
+  <!-- floor -->
+  <g filter="url(#pc-shadow)"><path d="M0 500 C 160 486, 420 490, 640 504 V600 H0Z" fill="#E9D9BC"/></g>
+
+  <!-- the child, on the call -->
+  <use href="#child-call" x="70" y="190" width="210" height="330"/>
+
+  <rect width="640" height="600" filter="url(#pc-grain)"/>
+  </g>
+</svg>
+<!-- /art:act4-call -->
+      </figure>
+      <div class="copy">
+        <!-- COPY: draft -->
+        <h2 id="call-title" class="display">You call. You ask.</h2>
+        <!-- COPY: draft -->
+        <p class="body">Or reply with a question of your own. Katha will ask her in a coming conversation, and tell her it came from you.</p>
+        <!-- COPY: draft -->
+        <p class="form-note">If she'd like to share her answer, it comes back to you the same way — once she's said yes.</p>
       </div>
     </div>
     <i class="thread-mark" data-thread data-tx="gutter" data-ty="1"></i>
@@ -1365,7 +1474,7 @@ fieldset { border: 0; min-width: 0; }
       <p class="eyebrow">Years later</p>
       <figure class="art">
         <!-- art:act5-bookend -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" class="scene" role="img" aria-label="Years later, a grandchild in headphones sits on a cushion and presses play; her voice rises from the phone">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" class="scene" role="img" aria-label="Years later, a grandchild, headphones round their neck, sits on a cushion reading one of her cards on a phone">
   <g fill="#F2C14E">
     <circle cx="300" cy="300" r="210" opacity="0.05"/>
     <circle cx="300" cy="300" r="150" opacity="0.08"/>
@@ -1373,25 +1482,12 @@ fieldset { border: 0; min-width: 0; }
   </g>
   <ellipse cx="300" cy="470" rx="130" ry="22" fill="#3A3488"/>
   <use href="#grandchild" x="200" y="210" width="200" height="260"/>
-  <g class="play-wave" fill="#F6E7C8">
-    <rect x="352" y="300" width="7" height="22" rx="3.5" opacity="0.95"/>
-    <rect x="368" y="286" width="7" height="50" rx="3.5" opacity="0.9"/>
-    <rect x="384" y="296" width="7" height="30" rx="3.5" opacity="0.85"/>
-    <rect x="400" y="278" width="7" height="66" rx="3.5" opacity="0.8"/>
-    <rect x="416" y="292" width="7" height="38" rx="3.5" opacity="0.72"/>
-    <rect x="432" y="282" width="7" height="58" rx="3.5" opacity="0.64"/>
-    <rect x="448" y="298" width="7" height="26" rx="3.5" opacity="0.56"/>
-    <rect x="464" y="288" width="7" height="46" rx="3.5" opacity="0.46"/>
-    <rect x="480" y="300" width="7" height="22" rx="3.5" opacity="0.36"/>
-    <rect x="496" y="294" width="7" height="34" rx="3.5" opacity="0.26"/>
-    <rect x="512" y="304" width="7" height="14" rx="3.5" opacity="0.18"/>
-  </g>
 </svg>
 <!-- /art:act5-bookend -->
       </figure>
       <div class="silence" aria-hidden="true"></div>
       <!-- COPY: draft -->
-      <p id="bookend-title" class="display keep">Their voice. Their words. <em>Yours to keep.</em></p>
+      <p id="bookend-title" class="display keep">Her words. Her stories. <em>Yours to keep.</em></p>
     </div>
   </section>
 
@@ -1445,6 +1541,11 @@ fieldset { border: 0; min-width: 0; }
           </div>
         </fieldset>
         <div class="f">
+          <!-- COPY: draft -->
+          <label for="f-call">When do you usually call your parent? <span class="opt">(optional)</span></label>
+          <input id="f-call" name="call_time" type="text" autocomplete="off" placeholder="e.g. Sundays around 11">
+        </div>
+        <div class="f">
           <label for="f-notes">Anything you'd like us to know <span class="opt">(optional)</span></label>
           <textarea id="f-notes" name="notes" rows="4"></textarea>
         </div>
@@ -1474,6 +1575,16 @@ fieldset { border: 0; min-width: 0; }
         <li>
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
           We never use her stories to train AI.
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9h3l4-4v14l-4-4H4z"/><path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></svg>
+          <!-- COPY: draft -->
+          She hears every card before you do.
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <!-- COPY: draft -->
+          She can keep anything just between her and Katha.
         </li>
       </ul>
     </div>

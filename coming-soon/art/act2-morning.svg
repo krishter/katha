@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An elderly woman in a saffron saree sits in an armchair by a sunlit arched window; the phone propped on the table beside her is buzzing">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 600" class="scene" role="img" aria-label="An elderly woman in a saffron saree sits in an armchair by a sunlit arched window; she leans towards the phone on the table beside her and starts talking">
   <defs><clipPath id="s5-cut"><path d="M60 120 C 120 20, 420 10, 560 90 C 640 140, 630 420, 560 500 C 470 590, 140 600, 70 500 C 10 420, 10 200, 60 120Z"/></clipPath></defs>
   <g clip-path="url(#s5-cut)">
   <rect width="640" height="600" fill="#F6DCD8"/>
@@ -31,18 +31,22 @@
   <ellipse cx="474" cy="340" rx="16" ry="4" fill="#ECEEF3"/>
   <rect x="465" y="346" width="5" height="40" fill="#FFFFFF" opacity="0.7"/>
 
-  <!-- the phone buzzing -->
-  <g class="ripples" fill="none" stroke="#E8822F" stroke-width="3">
-    <circle cx="418" cy="352" r="52" opacity="0.5"/>
-    <circle cx="418" cy="352" r="78" opacity="0.28"/>
-    <circle cx="418" cy="352" r="104" opacity="0.12"/>
+  <!-- her voice, towards the phone: she starts the conversation -->
+  <g fill="none" stroke="#E8822F" stroke-width="3" stroke-linecap="round">
+    <path d="M272 226 Q 282 240 272 254" opacity="0.8"/>
+    <path d="M284 216 Q 300 240 284 264" opacity="0.5"/>
+    <path d="M296 206 Q 318 240 296 274" opacity="0.25"/>
   </g>
   <g filter="url(#pc-shadow)"><rect x="398" y="314" width="42" height="76" rx="8" fill="#241D5C"/></g>
   <rect x="402" y="320" width="34" height="64" rx="5" fill="#FFF3DE"/>
-  <circle cx="411" cy="352" r="5" fill="#2FA36B"/>
+  <!-- the mic, held -->
+  <circle cx="419" cy="368" r="10" fill="#2FA36B"/>
+  <rect x="416" y="361" width="6" height="10" rx="3" fill="#FFFFFF"/>
+  <path d="M413.5 368 a5.5 5.5 0 0 0 11 0 M419 373.5 V376" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
   <g fill="#241D5C">
-    <rect x="419" y="349" width="2" height="6" rx="1"/><rect x="423" y="346" width="2" height="12" rx="1"/>
-    <rect x="427" y="348" width="2" height="8" rx="1"/><rect x="431" y="350" width="2" height="4" rx="1"/>
+    <rect x="410" y="334" width="2" height="6" rx="1"/><rect x="414" y="331" width="2" height="12" rx="1"/>
+    <rect x="418" y="329" width="2" height="16" rx="1"/><rect x="422" y="332" width="2" height="10" rx="1"/>
+    <rect x="426" y="334" width="2" height="6" rx="1"/>
   </g>
 
   <rect width="640" height="600" filter="url(#pc-grain)"/>

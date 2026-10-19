@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 600" class="scene" role="img" aria-label="The card she approved lifts out of her phone, follows a line across, and lands in her child's phone at an airport gate; an envelope lands beside it">
+  <use href="#vignette-her" x="0" y="0" width="640" height="600"/>
+  <use href="#vignette-child" x="640" y="0" width="640" height="600"/>
+  <path id="fw-path" d="M419 312 C 520 30, 830 30, 917 330" fill="none" stroke="#E8822F" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 11"/>
+  <g id="fw-env" transform="translate(968 386)"><use href="#mini-envelope" width="64" height="44"/></g>
+  <g id="fw-card" transform="translate(877 280)"><use href="#mini-card" width="80" height="100"/></g>
+</svg>
