@@ -312,7 +312,7 @@ fieldset { border: 0; min-width: 0; }
 .hers { min-height: 100vh; display: flex; align-items: center; padding-block: 14vh; }
 .hers-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 40px; }
 .hers .statement em { color: #9C4712; }
-.glasses { width: min(360px, 82%); }
+.glasses { width: min(460px, 92%); }
 .glasses-art { display: block; width: 100%; height: auto; overflow: visible; }
 
 /* Act IV, beat 10: the card reaches the child */
@@ -352,11 +352,6 @@ fieldset { border: 0; min-width: 0; }
 .anim .silence { height: 40vh; }
 .keep { font-size: clamp(2rem, 5vw, 4rem); max-width: 18ch; }
 .keep em { color: var(--gold); }
-.play-wave rect { transform-box: fill-box; transform-origin: center; }
-.playing .play-wave rect { animation: voice 1.1s ease-in-out infinite; }
-.playing .play-wave rect:nth-child(2n) { animation-delay: 0.15s; }
-.playing .play-wave rect:nth-child(3n) { animation-delay: 0.3s; }
-@keyframes voice { 0%, 100% { transform: scaleY(0.6); } 50% { transform: scaleY(1.15); } }
 
 /* ================= ACT VI (parchment, type-led) ================= */
 .invite { padding-block: 14vh 8vh; outline: none; }

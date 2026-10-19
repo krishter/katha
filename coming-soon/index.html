@@ -341,7 +341,7 @@ fieldset { border: 0; min-width: 0; }
 .hers { min-height: 100vh; display: flex; align-items: center; padding-block: 14vh; }
 .hers-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 40px; }
 .hers .statement em { color: #9C4712; }
-.glasses { width: min(360px, 82%); }
+.glasses { width: min(460px, 92%); }
 .glasses-art { display: block; width: 100%; height: auto; overflow: visible; }
 
 /* Act IV, beat 10: the card reaches the child */
@@ -381,11 +381,6 @@ fieldset { border: 0; min-width: 0; }
 .anim .silence { height: 40vh; }
 .keep { font-size: clamp(2rem, 5vw, 4rem); max-width: 18ch; }
 .keep em { color: var(--gold); }
-.play-wave rect { transform-box: fill-box; transform-origin: center; }
-.playing .play-wave rect { animation: voice 1.1s ease-in-out infinite; }
-.playing .play-wave rect:nth-child(2n) { animation-delay: 0.15s; }
-.playing .play-wave rect:nth-child(3n) { animation-delay: 0.3s; }
-@keyframes voice { 0%, 100% { transform: scaleY(0.6); } 50% { transform: scaleY(1.15); } }
 
 /* ================= ACT VI (parchment, type-led) ================= */
 .invite { padding-block: 14vh 8vh; outline: none; }
@@ -533,7 +528,8 @@ fieldset { border: 0; min-width: 0; }
     <circle cx="148" cy="80" r="9" fill="#8F5A40"/>
   </symbol>
 
-  <!-- The grandchild: about nine, headphones on, phone held in both hands. Appears only in the bookend. -->
+  <!-- The grandchild: about nine, headphones round the neck (not on: there is no voice to play), reading a
+       card on a phone held in both hands. Appears only in the bookend. -->
   <symbol id="grandchild" viewBox="0 0 200 260" overflow="visible">
     <g filter="url(#pc-shadow)">
       <rect x="34" y="218" width="132" height="34" rx="17" fill="#3A3488"/>
@@ -542,14 +538,16 @@ fieldset { border: 0; min-width: 0; }
     <rect x="90" y="100" width="20" height="18" rx="5" fill="#8F5A40"/>
     <circle cx="100" cy="80" r="30" fill="#A86A48"/>
     <path d="M70 80 C 70 50, 130 46, 131 78 C 118 66, 86 62, 70 80Z" fill="#2A2233"/>
-    <path d="M66 82 C 64 40, 136 40, 134 82" stroke="#241D5C" stroke-width="7" fill="none" stroke-linecap="round"/>
-    <rect x="58" y="72" width="16" height="24" rx="7" fill="#F2C14E"/>
-    <rect x="126" y="72" width="16" height="24" rx="7" fill="#F2C14E"/>
+    <path d="M74 120 C 78 142, 122 142, 126 120" stroke="#241D5C" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <rect x="64" y="112" width="16" height="22" rx="7" fill="#F2C14E"/>
+    <rect x="120" y="112" width="16" height="22" rx="7" fill="#F2C14E"/>
     <path d="M68 146 C 58 178, 74 196, 96 196" stroke="#A86A48" stroke-width="14" fill="none" stroke-linecap="round"/>
     <path d="M132 146 C 142 178, 126 196, 104 196" stroke="#A86A48" stroke-width="14" fill="none" stroke-linecap="round"/>
     <rect x="84" y="170" width="32" height="44" rx="5" fill="#241D5C"/>
     <rect x="88" y="175" width="24" height="34" rx="3" fill="#FFF3DE"/>
-    <path d="M97 186 L 106 192 L 97 198 Z" fill="#2FA36B"/>
+    <rect x="91" y="180" width="18" height="3" rx="1.5" fill="#241D5C"/>
+    <rect x="92" y="186" width="16" height="2" rx="1" fill="#3A3488" opacity="0.5"/>
+    <rect x="90" y="193" width="20" height="8" rx="2" fill="#F2E4CF"/>
   </symbol>
 
   <!-- Vignettes linked by the card's flight (Act IV, beat 10). Same 640x600 space as the full scenes. -->
@@ -1238,19 +1236,24 @@ fieldset { border: 0; min-width: 0; }
       </p>
       <div class="glasses">
         <!-- art:act4-glasses -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 230" class="glasses-art" aria-hidden="true" focusable="false">
-  <defs><clipPath id="g9-page"><rect x="40" y="30" width="340" height="180" rx="6"/></clipPath></defs>
-  <g transform="rotate(-3 210 120)">
-    <g filter="url(#pc-shadow)"><rect x="40" y="30" width="340" height="180" rx="6" fill="#FBF4E6"/></g>
-    <g fill="#D8CDB8">
-      <rect x="70" y="58" width="150" height="8" rx="4" fill="#3A3488" opacity="0.55"/>
-      <rect x="70" y="84" width="280" height="5" rx="2.5"/><rect x="70" y="100" width="262" height="5" rx="2.5"/>
-      <rect x="70" y="116" width="280" height="5" rx="2.5"/><rect x="70" y="132" width="210" height="5" rx="2.5"/>
-      <rect x="70" y="160" width="270" height="5" rx="2.5"/><rect x="70" y="176" width="190" height="5" rx="2.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 250" class="glasses-art" aria-hidden="true" focusable="false">
+  <defs><clipPath id="g9-card"><rect x="40" y="26" width="250" height="200" rx="10"/></clipPath></defs>
+  <!-- the card, as it will be read to her -->
+  <g transform="rotate(-3 165 126)">
+    <g filter="url(#pc-shadow)"><rect x="40" y="26" width="250" height="200" rx="10" fill="#FBF4E6"/></g>
+    <rect x="70" y="50" width="190" height="9" rx="4.5" fill="#241D5C"/>
+    <rect x="86" y="66" width="158" height="9" rx="4.5" fill="#241D5C"/>
+    <g fill="#3A3488" opacity="0.5">
+      <rect x="76" y="90" width="178" height="5" rx="2.5"/><rect x="92" y="102" width="146" height="5" rx="2.5"/>
     </g>
-    <g clip-path="url(#g9-page)"><rect x="40" y="30" width="340" height="180" filter="url(#pc-grain)"/></g>
+    <rect x="62" y="122" width="206" height="44" rx="8" fill="#F2E4CF"/>
+    <rect x="76" y="132" width="70" height="4" rx="2" fill="#3A3488" opacity="0.6"/>
+    <rect x="76" y="145" width="150" height="7" rx="3.5" fill="#241D5C"/>
+    <rect x="120" y="190" width="90" height="4" rx="2" fill="#D9A21B"/>
+    <g clip-path="url(#g9-card)"><rect x="40" y="26" width="250" height="200" filter="url(#pc-grain)"/></g>
   </g>
-  <g filter="url(#pc-shadow)" transform="rotate(-8 220 150)">
+  <!-- her glasses, set down on it -->
+  <g filter="url(#pc-shadow)" transform="translate(-55 -6) rotate(-8 220 150)">
     <g fill="#F3EDE1" fill-opacity="0.55" stroke="#241D5C" stroke-width="5">
       <circle cx="186" cy="150" r="27"/><circle cx="254" cy="150" r="27"/>
     </g>
@@ -1258,6 +1261,18 @@ fieldset { border: 0; min-width: 0; }
     <path d="M160 144 L 132 166 L 116 162" fill="none" stroke="#241D5C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M280 144 L 300 168 L 318 160" fill="none" stroke="#241D5C" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
+  <!-- Katha's voice note, reading it to her -->
+  <g filter="url(#pc-shadow)"><path d="M330 86 H 504 A 18 18 0 0 1 522 104 V 130 A 18 18 0 0 1 504 148 H 342 A 18 18 0 0 1 324 130 V 92 L 316 84 Z" fill="#FFFFFF"/></g>
+  <circle cx="352" cy="117" r="15" fill="#2FA36B"/>
+  <path d="M347 109 L 359 117 L 347 125 Z" fill="#FFFFFF"/>
+  <g fill="#2FA36B" opacity="0.75">
+    <rect x="378" y="111" width="4" height="12" rx="2"/><rect x="388" y="104" width="4" height="26" rx="2"/>
+    <rect x="398" y="109" width="4" height="16" rx="2"/><rect x="408" y="100" width="4" height="34" rx="2"/>
+    <rect x="418" y="107" width="4" height="20" rx="2"/><rect x="428" y="103" width="4" height="28" rx="2"/>
+    <rect x="438" y="110" width="4" height="14" rx="2"/><rect x="448" y="105" width="4" height="24" rx="2"/>
+    <rect x="458" y="111" width="4" height="12" rx="2"/><rect x="468" y="108" width="4" height="18" rx="2"/>
+  </g>
+  <text x="500" y="140" font-family="DM Sans, system-ui, sans-serif" font-size="11" fill="#6E6890" text-anchor="end">0:38</text>
 </svg>
 <!-- /art:act4-glasses -->
       </div>
@@ -1460,7 +1475,7 @@ fieldset { border: 0; min-width: 0; }
       <p class="eyebrow">Years later</p>
       <figure class="art">
         <!-- art:act5-bookend -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" class="scene" role="img" aria-label="Years later, a grandchild in headphones sits on a cushion and presses play; her voice rises from the phone">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" class="scene" role="img" aria-label="Years later, a grandchild, headphones round their neck, sits on a cushion reading one of her cards on a phone">
   <g fill="#F2C14E">
     <circle cx="300" cy="300" r="210" opacity="0.05"/>
     <circle cx="300" cy="300" r="150" opacity="0.08"/>
@@ -1468,25 +1483,12 @@ fieldset { border: 0; min-width: 0; }
   </g>
   <ellipse cx="300" cy="470" rx="130" ry="22" fill="#3A3488"/>
   <use href="#grandchild" x="200" y="210" width="200" height="260"/>
-  <g class="play-wave" fill="#F6E7C8">
-    <rect x="352" y="300" width="7" height="22" rx="3.5" opacity="0.95"/>
-    <rect x="368" y="286" width="7" height="50" rx="3.5" opacity="0.9"/>
-    <rect x="384" y="296" width="7" height="30" rx="3.5" opacity="0.85"/>
-    <rect x="400" y="278" width="7" height="66" rx="3.5" opacity="0.8"/>
-    <rect x="416" y="292" width="7" height="38" rx="3.5" opacity="0.72"/>
-    <rect x="432" y="282" width="7" height="58" rx="3.5" opacity="0.64"/>
-    <rect x="448" y="298" width="7" height="26" rx="3.5" opacity="0.56"/>
-    <rect x="464" y="288" width="7" height="46" rx="3.5" opacity="0.46"/>
-    <rect x="480" y="300" width="7" height="22" rx="3.5" opacity="0.36"/>
-    <rect x="496" y="294" width="7" height="34" rx="3.5" opacity="0.26"/>
-    <rect x="512" y="304" width="7" height="14" rx="3.5" opacity="0.18"/>
-  </g>
 </svg>
 <!-- /art:act5-bookend -->
       </figure>
       <div class="silence" aria-hidden="true"></div>
       <!-- COPY: draft -->
-      <p id="bookend-title" class="display keep">Their voice. Their words. <em>Yours to keep.</em></p>
+      <p id="bookend-title" class="display keep">Her words. Her stories. <em>Yours to keep.</em></p>
     </div>
   </section>
 

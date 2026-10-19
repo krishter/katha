@@ -401,15 +401,7 @@
         });
         at.to({}, { duration: 0.5 });
 
-        // Bookend: her voice plays, then silence, then one line.
-        ScrollTrigger.create({
-          trigger: '.bookend .art', start: 'top 75%', endTrigger: '.silence', end: 'top 55%',
-          toggleClass: { targets: '.bookend .art', className: 'playing' },
-        });
-        gsap.fromTo('.play-wave rect', { scaleY: 1, opacity: 1 }, {
-          scaleY: 0.12, opacity: 0.35, transformOrigin: '50% 50%', ease: 'none', stagger: 0.03,
-          scrollTrigger: { trigger: '.silence', start: 'top 55%', end: 'bottom 55%', scrub: true },
-        });
+        // Bookend: a card read years later, then silence, then one line.
         gsap.fromTo('.keep', { opacity: 0, y: 20 }, {
           opacity: 1, y: 0, ease: 'none',
           scrollTrigger: { trigger: '.keep', start: 'top 85%', end: 'top 55%', scrub: true },
