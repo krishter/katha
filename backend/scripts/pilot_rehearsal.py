@@ -42,7 +42,12 @@ touching a live number.
 S3 is NOT stubbed. Real objects are written to the real bucket and the
 deletion sweep is verified against it, because the stranded objects gate
 5.5 found were invisible from the database side. Pass --skip-s3 to run
-without AWS credentials; the run is then explicitly incomplete and says so.
+without AWS: an in-memory bucket stands in, nothing reaches AWS, and the
+run is explicitly incomplete and says so.
+
+Exit codes: 0 pass, 1 failed or crashed, 2 incomplete (every check that
+ran held, but some were skipped). CI runs --skip-s3 and requires 2, so a
+rehearsal that rots fails the build instead of going unnoticed for days.
 """
 
 from __future__ import annotations
@@ -54,7 +59,7 @@ import pathlib
 import sys
 import traceback
 import uuid
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -78,7 +83,6 @@ from models.story_atom import StoryAtom  # noqa: E402
 from models.turn import Turn  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
 from prompts.system_prompt import UserProfile  # noqa: E402
-from scheduler import session_initiator  # noqa: E402
 
 # A single run's identity. Unique per run so a rehearsal never collides
 # with a previous one's leftovers, and so a failed run can be inspected
@@ -96,7 +100,6 @@ _TA_DISCLOSURE = "நான் ஒரு மனிதர் இல்லை"
 _TA_ASK = "சம்மதமா"
 
 _FAKE_WAV = b"RIFF" + b"\x00" * 40
-_IST = timezone(timedelta(hours=5, minutes=30))
 
 
 class Aborted(Exception):
@@ -150,7 +153,11 @@ def _atom(title: str, threads: list[str]) -> dict:
         "domain": "childhood",
         "title": title,
         "narrative": f"Subramaniam described {title}.",
-        "who": ["father", "Kamala"],
+        # Not Kamala. She is flagged as significant in turn 1 and must still
+        # be unexplored at session 2, which is what Layer 3 resurfaces. An
+        # atom about her reaching completeness 3 resolves her (TC-11), so
+        # naming her in every atom retired her on turn 2.
+        "who": ["father", "the neighbours"],
         "what": title,
         "when_approx": "circa 1958",
         "where_approx": "Madurai",
@@ -230,6 +237,11 @@ class _LlmScript:
     apart the same way the code tells them apart: the dialogue call passes
     a system prompt, and the two extraction calls do not. Entity extraction
     is identified by its own prompt text.
+
+    Every reply carries the fields the code reads off a real one. The
+    orchestrator started reading stop_reason in October; this stub did not
+    have it, and every turn fell through to the webhook's last-resort
+    apology. Nobody saw, because step 8 aborted before any turn ran.
     """
 
     def __init__(self) -> None:
@@ -243,12 +255,16 @@ class _LlmScript:
                 content="<response>Tell me more about that.</response>",
                 input_tokens=100,
                 output_tokens=50,
+                stop_reason="end_turn",
             )
 
         content = messages[0].content if messages else ""
         if content.startswith("You are a precise entity extractor"):
             return SimpleNamespace(
-                content=_ENTITY_REPLY, input_tokens=40, output_tokens=40
+                content=_ENTITY_REPLY,
+                input_tokens=40,
+                output_tokens=40,
+                stop_reason="end_turn",
             )
 
         self.turn += 1
@@ -256,8 +272,47 @@ class _LlmScript:
             self.turn, {"story_atoms": [], "significant_people": []}
         )
         return SimpleNamespace(
-            content=_extraction_envelope(payload), input_tokens=50, output_tokens=100
+            content=_extraction_envelope(payload),
+            input_tokens=50,
+            output_tokens=100,
+            stop_reason="end_turn",
         )
+
+
+class _MemoryBucket:
+    """
+    Stands in for the bucket under --skip-s3. The flag used to skip only
+    the rehearsal's own bucket checks while the code under test went on
+    uploading to the real bucket with backend/.env's keys, and the cleanup,
+    also skipping S3, left those objects behind. Without keys (CI) the card
+    upload failed instead and no card was made.
+
+    Presigning stays real: it is local signing, needs no keys, and the
+    region-in-host check in step 10 is about exactly that URL.
+    """
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.objects
+
+    def patches(self):
+        async def upload(data, key, content_type="audio/ogg"):
+            self.objects[key] = data
+            return key
+
+        async def download(key):
+            return self.objects.get(key)
+
+        async def delete(key):
+            self.objects.pop(key, None)
+
+        return [
+            patch("media.storage.upload_media", new=upload),
+            patch("media.storage.download_media", new=download),
+            patch("media.storage.delete_media", new=delete),
+        ]
 
 
 def _stub_paid_apis(llm_script: _LlmScript, spoken: list[tuple[str, str]]):
@@ -387,6 +442,11 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
     llm_script = _LlmScript()
     spoken: list[tuple[str, str]] = []
     patches = _stub_paid_apis(llm_script, spoken)
+    memory_bucket = _MemoryBucket()
+    if not use_s3:
+        patches += memory_bucket.patches()
+    # Where step 11 seeds objects and step 12 looks for survivors.
+    exists = _object_exists if use_s3 else memory_bucket.__contains__
     for p in patches:
         p.start()
 
@@ -611,24 +671,24 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 onboarding_context="Grew up in Madurai.",
             )
 
-            # The real path, not a shortcut through the orchestrator: the
-            # scheduler opens the session and the parent answers through the
-            # webhook. Calling process_voice_turn directly would skip
-            # set_turn_audio_key and the scheduler's session_open_audio_s3_key
-            # write — the two keys whose objects were stranded in gate 5.5,
-            # and therefore the entire point of step 13's bucket check.
-            async def _open_session_due_now() -> None:
-                now_ist = datetime.now(timezone.utc).astimezone(_IST)
-                await db.execute(
-                    update(UserProfileModel)
-                    .where(UserProfileModel.user_id == user_id)
-                    .values(scheduled_time=time(now_ist.hour, now_ist.minute))
-                )
-                await db.commit()
-                await session_initiator.initiate_sessions(AsyncSessionLocal)
-                db.expire_all()
-
-            await _open_session_due_now()
+            # The real path, not a shortcut through the orchestrator. The
+            # parent starts every conversation (decided 2026-10-16,
+            # SCHEDULED_OPENER_ENABLED=false): there is no daily opener, and
+            # her first voice note opens the session on demand and is its
+            # first turn. This step drove the scheduler's opener until it was
+            # switched off, and failed on every run from then on. Calling
+            # process_voice_turn directly would also skip set_turn_audio_key,
+            # whose objects step 12's bucket check exists for.
+            report.check(
+                not settings.SCHEDULED_OPENER_ENABLED,
+                "the scheduled opener is off: she starts every conversation",
+                "SCHEDULED_OPENER_ENABLED is true; production runs with it off",
+            )
+            status = await _post_inbound(client, with_audio=True)
+            report.check(
+                status == 200, "session 1 turn 1 accepted by the webhook", str(status)
+            )
+            db.expire_all()
             session1_row = (
                 (
                     await db.execute(
@@ -643,7 +703,7 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
             )
             report.require(
                 session1_row is not None,
-                "the scheduler opened session 1",
+                "her first voice note opened session 1",
                 "no non-consent session exists",
             )
             report.check(
@@ -652,13 +712,8 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 session1_row.domain,
             )
             report.check(
-                bool(session1_row.session_open_message_id),
-                "the opening voice note was sent and its message id recorded",
-            )
-            report.check(
-                bool(session1_row.session_open_audio_s3_key),
-                "the opening voice note's S3 key is recorded on the session",
-                "an untracked key here is the object gate 5.5 found stranded",
+                session1_row.session_open_message_id is None,
+                "Katha sent no opener: the session began with her message",
             )
             # Plain values, not the instance: expire_all() below would make
             # any later attribute access re-query lazily, on a connection the
@@ -666,7 +721,7 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
             session1_pk = session1_row.id
             session1_domain = session1_row.domain
 
-            for turn_number in range(1, 6):
+            for turn_number in range(2, 6):
                 status = await _post_inbound(client, with_audio=True)
                 report.check(
                     status == 200,
@@ -818,6 +873,37 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 f"got {len(cards)}",
             )
             card = cards[0]
+            report.require(
+                bool(card.twilio_message_sid),
+                "the card was handed to WhatsApp and its message id recorded",
+            )
+            report.check(
+                card.delivered_at is None,
+                "accepted is not delivered: no delivery stamp before Twilio says so",
+                "delivered_at is set only by the status callback",
+            )
+            # Plain values before expire_all(), as in step 8.
+            card_id, card_sid = card.id, card.twilio_message_sid
+            # The stub sends nothing, so nothing calls back. Post the
+            # callback Twilio would send once the child's phone has the card,
+            # through the real endpoint, and check that it is what marks the
+            # card delivered.
+            callback = await client.post(
+                "/webhook/twilio/status",
+                data={
+                    "MessageSid": card_sid,
+                    "MessageStatus": "delivered",
+                },
+            )
+            report.check(
+                callback.status_code == 200,
+                "the status callback is accepted",
+                str(callback.status_code),
+            )
+            db.expire_all()
+            card = (
+                await db.execute(select(MemoryCard).where(MemoryCard.id == card_id))
+            ).scalar_one()
             report.check(
                 card.delivered_at is not None,
                 "the card was delivered, not merely generated",
@@ -837,6 +923,11 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                     card.image_s3_key,
                 )
             else:
+                report.check(
+                    card.image_s3_key in memory_bucket,
+                    "the card image was uploaded (in-memory bucket)",
+                    card.image_s3_key,
+                )
                 report.skip("card image exists in the bucket", "--skip-s3")
 
             # ── 10. Visible through the family API ───────────────────────
@@ -930,17 +1021,16 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
             ]
             tracked_keys = sorted(set(tracked_keys))
 
-            if use_s3:
-                for key in tracked_keys:
-                    if not _object_exists(key):
-                        await storage.upload_media(b"rehearsal-audio", key, "audio/ogg")
-                present = [key for key in tracked_keys if _object_exists(key)]
-                report.require(
-                    len(present) == len(tracked_keys),
-                    f"all {len(tracked_keys)} tracked objects exist before deletion",
-                    f"{len(present)}/{len(tracked_keys)} present",
-                )
-                report.note(f"tracked keys: {tracked_keys}")
+            for key in tracked_keys:
+                if not exists(key):
+                    await storage.upload_media(b"rehearsal-audio", key, "audio/ogg")
+            present = [key for key in tracked_keys if exists(key)]
+            report.require(
+                len(present) == len(tracked_keys),
+                f"all {len(tracked_keys)} tracked objects exist before deletion",
+                f"{len(present)}/{len(tracked_keys)} present",
+            )
+            report.note(f"tracked keys: {tracked_keys}")
 
             before = await _row_counts(db, user_id)
             report.require(
@@ -1018,14 +1108,20 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 "retained consent records have ip_address and user_agent cleared",
             )
 
+            survivors = [key for key in tracked_keys if exists(key)]
             if use_s3:
-                survivors = [key for key in tracked_keys if _object_exists(key)]
                 report.check(
                     not survivors,
                     f"all {len(tracked_keys)} objects swept from the bucket",
                     f"STRANDED: {survivors}",
                 )
             else:
+                report.check(
+                    not survivors,
+                    f"deletion asked storage to remove all {len(tracked_keys)} "
+                    "objects (in-memory bucket)",
+                    f"STRANDED: {survivors}",
+                )
                 report.skip(
                     "objects swept from the bucket",
                     "--skip-s3 — the deletion claim is UNVERIFIED on the "
@@ -1141,6 +1237,11 @@ async def _preflight(report: Report, use_s3: bool) -> None:
         report.note(f"bucket: {settings.AWS_S3_BUCKET} ({settings.AWS_S3_REGION})")
 
 
+# Distinct from 1 so CI can accept a --skip-s3 run that held everywhere it
+# looked, and still fail one that broke.
+EXIT_INCOMPLETE = 2
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(
         description="Pilot rehearsal — drive one family end to end and assert it."
@@ -1203,7 +1304,7 @@ async def main() -> int:
         for skipped in report.skipped:
             print(f"  - {skipped}")
         print("\nThis is not a pilot sign-off. Re-run without --skip-s3.")
-        return 1
+        return EXIT_INCOMPLETE
     print("PASS — every step asserted, on a real database and a real bucket.")
     print("This family could be onboarded.")
     return 0
