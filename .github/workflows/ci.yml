@@ -96,6 +96,25 @@ jobs:
       - name: Test
         run: pytest tests/ -v
 
+      # The rehearsal is the gate before every pilot family
+      # (docs/PILOT_RUNBOOK.md), and it went red on main for four days in
+      # October without anyone seeing, because nothing ran it. --skip-s3
+      # because CI has no AWS keys and must never touch the bucket; an
+      # in-memory bucket stands in. That run can only end incomplete, so
+      # exit 2 is the pass here: every check that ran held, and only the
+      # real-bucket checks were skipped. 1 is a failure or a crash.
+      - name: Pilot rehearsal (no S3)
+        env:
+          WHATSAPP_ADAPTER: stub
+        run: |
+          set +e
+          python scripts/pilot_rehearsal.py --skip-s3
+          status=$?
+          if [ "$status" -ne 2 ]; then
+            echo "::error::pilot rehearsal exited $status; expected 2 (incomplete: only the S3 checks skipped)"
+            exit 1
+          fi
+
   frontend-lint:
     name: Frontend lint + build
     runs-on: ubuntu-latest

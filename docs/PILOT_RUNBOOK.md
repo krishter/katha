@@ -25,7 +25,8 @@ The parent never touches a browser. Everything she sees arrives on WhatsApp.
 2. **Confirm the language.** Which language will she actually speak, including code-mixing.
    This sets `profile.preferred_language` and every message she gets.
 3. **Run the rehearsal.** `python backend/scripts/pilot_rehearsal.py` against a clean
-   database — 13 steps, 75 assertions, exit 0. Re-run it before *every* family, not once.
+   database and the real bucket — 13 steps, exit 0. Exit 2 means a `--skip-s3` run (what CI
+   runs): everything else held, but it is not a sign-off. Re-run it before *every* family.
    It is the only thing standing between you and a repeat of the webhook `ImportError`.
 4. **Check sender health.** `python backend/scripts/verify_whatsapp_sender.py` — real send,
    real number. Template approvals expire and quality ratings drop silently.
