@@ -744,7 +744,9 @@ async def _fallback_turn_result(
     never a live TTS call, since TTS may be down too. Degrades to text if
     even the pre-synthesized clip is unavailable.
     """
-    text = get_fallback_text(stage)
+    text = get_fallback_text(
+        stage, user_profile.preferred_language, user_profile.katha_gender
+    )
     audio = get_fallback_audio(
         stage,
         user_profile.preferred_language,
@@ -835,7 +837,12 @@ async def process_voice_turn(
     )
 
     # 3. Pre-turn crisis check
-    pre_check = conversation_policy.check_pre_turn(stt_result.transcript, state)
+    pre_check = conversation_policy.check_pre_turn(
+        stt_result.transcript,
+        state,
+        language=user_profile.preferred_language,
+        gender=user_profile.katha_gender,
+    )
     if not pre_check.allowed:
         logger.warning(
             "Pre-turn policy blocked: crisis_detected=%s", pre_check.crisis_detected
@@ -952,7 +959,11 @@ async def process_voice_turn(
         asked, raw_reply = card_asks.split_asked_tag(raw_reply)
     truncated = llm_response.stop_reason == "max_tokens"
     post_check = conversation_policy.check_post_turn(
-        raw_reply, state, truncated=truncated
+        raw_reply,
+        state,
+        truncated=truncated,
+        language=user_profile.preferred_language,
+        gender=user_profile.katha_gender,
     )
     if post_check.salvaged_untagged:
         logger.warning(
@@ -991,7 +1002,11 @@ async def process_voice_turn(
 
     # 8. Crisis check on Katha's own generated reply — a safety net
     # independent of what the user said.
-    response_crisis = conversation_policy.check_response_for_crisis(response_text)
+    response_crisis = conversation_policy.check_response_for_crisis(
+        response_text,
+        language=user_profile.preferred_language,
+        gender=user_profile.katha_gender,
+    )
     crisis_detected = response_crisis.crisis_detected
     if crisis_detected:
         logger.warning("Katha's own response matched a crisis pattern — overriding")

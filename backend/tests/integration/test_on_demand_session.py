@@ -32,10 +32,13 @@ from models.consent_record import ConsentRecord
 from models.db import AsyncSessionLocal, get_db
 from models.session import Session
 from models.user_profile import UserProfileModel
+from speech import catalogue
 
 pytestmark = pytest.mark.integration
 
 _NUMBER = "+919000000555"
+# everything_said() lowercases; Tamil has no case, so this is unchanged.
+_ALREADY_TALKED_TA = catalogue.text("already_talked", "ta-IN").lower()
 
 
 async def _seed_consented_parent(db) -> str:
@@ -229,7 +232,7 @@ async def test_an_abandoned_session_does_not_block_a_new_one(real_db):
         await h.inbound()
         said = h.everything_said()
 
-    assert "already had our conversation" not in said
+    assert _ALREADY_TALKED_TA not in said
     active = [s for s in await _sessions(real_db, user_id) if s.status == "active"]
     assert len(active) == 1, "an abandoned session wrongly blocked a new one"
 
@@ -258,7 +261,9 @@ async def test_a_completed_session_today_is_not_repeated(real_db):
         await h.inbound()
         said = h.everything_said()
 
-    assert "already had our conversation" in said, f"got: {said[:160]!r}"
+    # In Tamil, her language — not the English it used to be (M-14).
+    assert _ALREADY_TALKED_TA in said, f"got: {said[:160]!r}"
+    assert "already had our conversation" not in said
     assert "isn't scheduled" not in said, "the cold brush-off survived"
 
     active = [s for s in await _sessions(real_db, user_id) if s.status == "active"]

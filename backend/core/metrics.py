@@ -49,6 +49,7 @@ from models.session import Session
 from models.story_atom import StoryAtom
 from models.user_profile import UserProfileModel
 from prompts.domains import get_domain_sequence
+from speech import catalogue
 
 # India has no daylight saving, so a fixed offset is exact and needs no tz
 # database in the container.
@@ -149,6 +150,7 @@ async def _load(db: AsyncSession, excluded: frozenset[str]) -> _World:
                 UserProfileModel.user_id,
                 UserProfileModel.created_at,
                 UserProfileModel.parent_consent_asks,
+                UserProfileModel.preferred_language,
             )
         )
     )
@@ -987,6 +989,31 @@ def _safety(world: _World, w: _Windows) -> dict:
     }
 
 
+def _languages(world: _World) -> list[dict]:
+    """
+    Each language a family uses, with where its fixed messages came from
+    (speech/catalogue.py). Decision D1 put machine translations live
+    before anyone read them; this keeps that a known quantity.
+    """
+    counts = Counter(
+        p.preferred_language or catalogue.SOURCE_LANGUAGE
+        for p in world.storytellers.values()
+    )
+    rows = []
+    for language, families in sorted(counts.items()):
+        review = catalogue.review(language)
+        rows.append(
+            {
+                "language": language,
+                "families": families,
+                "source": review.get("source"),
+                "reviewer": review.get("reviewer"),
+                "date": review.get("date"),
+            }
+        )
+    return rows
+
+
 def _plans(world: _World) -> dict:
     plan_of = {f.user_id: f.plan for f in world.families}
     per_user = Counter(s.user_id for s in _conversations(world))
@@ -1135,6 +1162,7 @@ async def compute_metrics(
         "cost": _cost(world, w, conversations["conversations"]),
         "safety": _safety(world, w),
         "plans": _plans(world),
+        "languages": _languages(world),
         "families": _families(world, w),
     }
 
