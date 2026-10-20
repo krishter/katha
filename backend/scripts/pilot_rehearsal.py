@@ -95,6 +95,9 @@ _PARENT_NUMBER = f"+9199{uuid.uuid4().int % 10**8:08d}"
 _FAMILY_NUMBER = "+919000000112"
 _PARENT_NAME = "Subramaniam"
 _LANGUAGE = "ta-IN"
+# Where the Tamil welcome says "I am not a person" and where it asks.
+_TA_DISCLOSURE = "நான் ஒரு மனிதர் இல்லை"
+_TA_ASK = "சம்மதமா"
 
 _FAKE_WAV = b"RIFF" + b"\x00" * 40
 
@@ -563,28 +566,29 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
             report.step("Assert the welcome discloses the AI and is in her language")
             report.require(spoken, "Katha said something back")
             welcome_text, welcome_language = spoken[0]
-            lowered = welcome_text.lower()
+            # The words, not just the language code. The code was always
+            # ta-IN while the words were English (M-14), and checking the
+            # code alone is how that passed this rehearsal.
+            expected = parent_consent.build_welcome_text(
+                _PARENT_NAME, language=_LANGUAGE
+            )
             report.check(
-                "i am not a person" in lowered,
-                "the welcome states plainly that Katha is not a person",
+                welcome_text == expected,
+                "the welcome is the Tamil text from the catalogue, word for word",
                 welcome_text[:160],
             )
             report.check(
-                "ai" in lowered or "computer program" in lowered,
-                "the welcome names what Katha actually is",
+                "not a person" not in welcome_text.lower(),
+                "no English welcome read in a Tamil voice",
             )
-            disclosure_at = lowered.find("not a person")
-            ask_at = lowered.find("would you be happy")
+            disclosure_at = welcome_text.find(_TA_DISCLOSURE)
+            ask_at = welcome_text.find(_TA_ASK)
             report.check(
                 0 <= disclosure_at < ask_at,
-                "the disclosure comes BEFORE the ask, not after it",
+                'the disclosure ("I am not a person") comes BEFORE the ask',
                 "consent from someone who thinks they are talking to a person "
                 f"is not informed consent (disclosure at {disclosure_at}, "
                 f"ask at {ask_at}; -1 means absent)",
-            )
-            report.check(
-                "would you be happy" in lowered,
-                "the welcome actually asks for consent",
             )
             report.check(
                 welcome_language == _LANGUAGE,

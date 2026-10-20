@@ -39,3 +39,11 @@ deploy.env
 # transcripts and composed first-person stories, i.e. the most
 # identifying material Katha holds. Never committed.
 consolidation_reports/
+
+# Backups of production env files must never sit in the tree
+# (PRE_PILOT_REVIEW.md M-09).
+deploy_bkp*
+*.bkp
+
+# Local exports and media, not project files
+Claude outputs/

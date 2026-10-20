@@ -153,9 +153,14 @@ async def test_first_message_gets_the_welcome_not_a_domain_session(real_db):
     async with _Harness() as h:
         await _post_inbound(h.client, body="Namaste")
 
-    said = h.everything_said().lower()
-    assert "not a person" in said, "the AI disclosure must be in the welcome"
-    assert "would you be happy" in said, "the welcome must actually ask"
+    said = h.everything_said()
+    # Her profile says Tamil, so the welcome is the Tamil text: disclosure,
+    # then the ask. It used to be English read in a Tamil voice (M-14), and
+    # this test asserted the English.
+    assert parent_consent.build_welcome_text("Lakshmi", language="ta-IN") in said
+    assert "நான் ஒரு மனிதர் இல்லை" in said, "the AI disclosure must be in it"
+    assert "சம்மதமா" in said, "the welcome must actually ask"
+    assert "not a person" not in said.lower(), "English read in a Tamil voice"
 
     # Nothing may advance into a conversation.
     real_db.expire_all()
@@ -225,7 +230,8 @@ async def test_a_refusal_is_recorded_and_stops_everything(real_db):
         .first()
     )
     assert record.consent_version.endswith("-declined")
-    assert "not record anything" in h2.everything_said().lower()
+    # In Tamil, her language (M-14).
+    assert parent_consent.declined_text("ta-IN") in h2.everything_said()
 
 
 async def test_ambiguity_reasks_once_then_halts(real_db):

@@ -7,6 +7,7 @@ from enum import Enum
 from config import settings
 from media import system_speech, tts, voices
 from prompts.system_prompt import SUPPORTED_LANGUAGES
+from speech import catalogue
 
 logger = logging.getLogger(__name__)
 
@@ -17,16 +18,12 @@ class FailureStage(str, Enum):
     OTHER = "other"
 
 
-_MESSAGES: dict[FailureStage, str] = {
-    FailureStage.STT: (
-        "I'm sorry, I couldn't quite hear that. Could you try sending it again?"
-    ),
-    FailureStage.LLM: (
-        "I'm having a little trouble right now. Give me a moment and try again?"
-    ),
-    FailureStage.OTHER: (
-        "Something went wrong on my side. I'll be here tomorrow at our usual time."
-    ),
+# Each stage's apology, by message id in speech/catalogue.py: the words
+# are in her language, not English read in her voice (M-14).
+_MESSAGE_IDS: dict[FailureStage, str] = {
+    FailureStage.STT: "fallback_stt",
+    FailureStage.LLM: "fallback_llm",
+    FailureStage.OTHER: "fallback_other",
 }
 
 _DEFAULT_LANGUAGE = "en-IN"
@@ -42,8 +39,13 @@ _cache: dict[tuple[FailureStage, str, str], bytes] = {}
 _PRELOAD_CONCURRENCY = 6
 
 
-def get_fallback_text(stage: FailureStage) -> str:
-    return _MESSAGES[stage]
+def get_fallback_text(
+    stage: FailureStage,
+    language_code: str = _DEFAULT_LANGUAGE,
+    gender: str | None = None,
+) -> str:
+    """The apology for `stage` in her language, as the persona says it."""
+    return catalogue.text(_MESSAGE_IDS[stage], language_code, gender=gender)
 
 
 def _english_like(voice: voices.Voice, gender: str) -> voices.Voice:
@@ -94,7 +96,8 @@ async def preload_fallback_audio() -> None:
     """
     limit = asyncio.Semaphore(_PRELOAD_CONCURRENCY)
 
-    async def preload(stage, text, language_code, gender, voice) -> None:
+    async def preload(stage, language_code, gender, voice) -> None:
+        text = get_fallback_text(stage, language_code, gender)
         async with limit:
             try:
                 # Through the system-speech cache: synthesised once and kept
@@ -120,8 +123,8 @@ async def preload_fallback_audio() -> None:
 
     await asyncio.gather(
         *(
-            preload(stage, text, language_code, gender, voice)
-            for stage, text in _MESSAGES.items()
+            preload(stage, language_code, gender, voice)
+            for stage in _MESSAGE_IDS
             for language_code in SUPPORTED_LANGUAGES
             for gender in voices.GENDERS
             for voice in _preload_voices(language_code, gender)

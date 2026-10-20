@@ -21,24 +21,33 @@ from cards import family_inbox
 from config import settings
 from core import orchestrator, parent_consent, session_manager, usage
 from core.delivery import record_card_delivery
-from core.fallback_audio import FailureStage, get_fallback_text
 from models.db import get_db
 from models.user_profile import UserProfileModel
 from prompts.system_prompt import UserProfile
+from speech import catalogue
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_ICARE_NUMBER = "9152987821"
-_CRISIS_TEXT = (
-    f"I'm worried about you. Please reach out to iCall India: {_ICARE_NUMBER}. "
-    "They are available and ready to help."
-)
-_TEXT_ONLY_REPLY = (
-    "Please send me a voice message — I'd love to hear your voice! \U0001f399"
-)
+# The one fixed message that stays English: it goes to a number with no
+# profile, so there is no language to speak it in. Every other fixed
+# message is in the parent's language (speech/catalogue.py, M-14).
 _NOT_SCHEDULED_TEXT = "Hi! Your session isn't scheduled yet."
+
+
+def _say(message_id: str, profile: UserProfileModel | None, **fields: str) -> str:
+    """A fixed message in her language, as Katha's persona says it. English
+    only when there is no profile to take a language from."""
+    if profile is None:
+        return catalogue.text(message_id, catalogue.SOURCE_LANGUAGE, **fields)
+    return catalogue.text(
+        message_id,
+        profile.preferred_language or catalogue.SOURCE_LANGUAGE,
+        gender=profile.katha_gender,
+        **fields,
+    )
+
 
 # Twilio POSTs here and interprets whatever comes back. Returning
 # Response(content="OK") sent no Content-Type header at all, and Twilio
@@ -91,7 +100,11 @@ async def _handle_parent_consent(
         await _speak(
             whatsapp,
             profile,
-            parent_consent.build_welcome_text(profile.name),
+            parent_consent.build_welcome_text(
+                profile.name,
+                language=profile.preferred_language,
+                gender=profile.katha_gender,
+            ),
             stage="parent_welcome",
         )
         await parent_consent.note_asked(profile.user_id, db)
@@ -111,7 +124,9 @@ async def _handle_parent_consent(
         await _speak(
             whatsapp,
             profile,
-            parent_consent.GRANTED_TEXT,
+            parent_consent.granted_text(
+                profile.preferred_language, profile.katha_gender
+            ),
             stage="parent_granted",
             fixed=True,
         )
@@ -122,7 +137,9 @@ async def _handle_parent_consent(
         await _speak(
             whatsapp,
             profile,
-            parent_consent.DECLINE_TEXT,
+            parent_consent.declined_text(
+                profile.preferred_language, profile.katha_gender
+            ),
             stage="parent_declined",
             fixed=True,
         )
@@ -132,7 +149,11 @@ async def _handle_parent_consent(
     await _speak(
         whatsapp,
         profile,
-        parent_consent.build_reask_text(profile.name),
+        parent_consent.build_reask_text(
+            profile.name,
+            language=profile.preferred_language,
+            gender=profile.katha_gender,
+        ),
         stage="parent_reask",
     )
     await parent_consent.note_asked(profile.user_id, db)
@@ -219,13 +240,6 @@ async def _speak(
         await _safe_send_text(whatsapp, profile.whatsapp_number, text, stage=stage)
 
 
-_ALREADY_TALKED_TEXT = (
-    "We already had our conversation today — thank you for that. "
-    "I'll be here again tomorrow, and I'm looking forward to it. "
-    "If there's something you want to add, just send it and I'll keep it safe."
-)
-
-
 async def _open_session_on_demand(
     whatsapp,
     profile: UserProfileModel | None,
@@ -263,7 +277,11 @@ async def _open_session_on_demand(
             profile.user_id,
         )
         await _speak(
-            whatsapp, profile, _ALREADY_TALKED_TEXT, stage="already_talked", fixed=True
+            whatsapp,
+            profile,
+            _say("already_talked", profile),
+            stage="already_talked",
+            fixed=True,
         )
         return None
 
@@ -284,7 +302,7 @@ async def _open_session_on_demand(
         await _safe_send_text(
             whatsapp,
             from_number,
-            get_fallback_text(FailureStage.OTHER),
+            _say("fallback_other", profile),
             stage="on_demand_open",
         )
         return None
@@ -535,6 +553,9 @@ async def _whatsapp_incoming(
     DB errors, etc.) — and it, too, always tries to reply.
     """
     from_number = None
+    # Known once the number is looked up; the last-resort apology below
+    # uses it to speak her language.
+    profile = None
     try:
         # 1. Parse form payload
         form = await request.form()
@@ -684,7 +705,7 @@ async def _whatsapp_incoming(
 
             if result.crisis_detected:
                 await _safe_send_text(
-                    whatsapp, from_number, _CRISIS_TEXT, stage="crisis"
+                    whatsapp, from_number, _say("crisis_text", profile), stage="crisis"
                 )
 
             # Session close is triggered from run_extraction_for_turn, once
@@ -693,7 +714,7 @@ async def _whatsapp_incoming(
         else:
             # 7. Text message — prompt for voice note
             await _safe_send_text(
-                whatsapp, from_number, _TEXT_ONLY_REPLY, stage="text_only"
+                whatsapp, from_number, _say("text_only", profile), stage="text_only"
             )
 
     except Exception:
@@ -702,7 +723,7 @@ async def _whatsapp_incoming(
             await _safe_send_text(
                 whatsapp,
                 from_number,
-                get_fallback_text(FailureStage.OTHER),
+                _say("fallback_other", profile),
                 stage="other",
             )
 

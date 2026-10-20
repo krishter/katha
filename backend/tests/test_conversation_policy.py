@@ -8,6 +8,7 @@ from core.conversation_policy import (
     find_crisis_keyword,
     salvage_untagged_response,
 )
+from speech import catalogue
 
 _SESSION = SimpleNamespace(
     session_id="s1",
@@ -285,3 +286,26 @@ def test_well_formed_response_text_is_returned_for_the_caller():
     result = check_post_turn("<response>Good morning!</response>", _SESSION)
     assert result.response_text == "Good morning!"
     assert result.salvaged_truncated is False
+
+
+# ── her language (M-14) ──────────────────────────────────────────────────────
+
+
+def test_crisis_override_is_in_her_language_and_keeps_icall():
+    result = check_pre_turn("எனக்கு தற்கொலை எண்ணம் வருகிறது", _SESSION, language="ta-IN")
+    assert result.crisis_detected
+    assert result.override_response == catalogue.text("crisis", "ta-IN")
+    assert "9152987821" in result.override_response
+
+
+def test_crisis_override_defaults_to_english_without_a_parent():
+    result = check_response_for_crisis("I want to end my life")
+    assert result.override_response == catalogue.text("crisis", "en-IN")
+
+
+def test_malformed_reply_apology_is_in_her_language_and_persona():
+    result = check_post_turn("", _SESSION, language="hi-IN", gender="male")
+    assert not result.allowed
+    assert result.override_response == catalogue.text(
+        "malformed", "hi-IN", gender="male"
+    )

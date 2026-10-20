@@ -5,18 +5,15 @@ import re
 from dataclasses import dataclass
 
 from core.session_manager import SessionState
+from speech import catalogue
 
-_CRISIS_RESPONSE = (
-    "I can hear that things feel very difficult right now, and I'm glad you felt "
-    "safe enough to share that with me. Please reach out to iCall India: 9152987821 "
-    "— they are available to talk and to help. Your wellbeing matters more than "
-    "any story we could share today. Please take care of yourself."
-)
+# The crisis reply and the "lost my train of thought" reply are fixed
+# messages, in her language from speech/catalogue.py ("crisis",
+# "malformed"). Every check below takes the parent's language and Katha's
+# persona for that reason; the default is English, for callers with no
+# parent (the eval harness, the listening kit).
+SOURCE_LANGUAGE = catalogue.SOURCE_LANGUAGE
 
-_MALFORMED_RESPONSE = (
-    "I'm so sorry, I lost my train of thought just now! Could you tell me that "
-    "again? I want to make sure I give you my full attention."
-)
 
 CRISIS_KEYWORDS: list[str] = [
     "end my life",
@@ -93,7 +90,13 @@ class PolicyResult:
     response_text: str | None = None
 
 
-def check_pre_turn(transcript: str, session_state: SessionState) -> PolicyResult:
+def check_pre_turn(
+    transcript: str,
+    session_state: SessionState,
+    *,
+    language: str = SOURCE_LANGUAGE,
+    gender: str | None = None,
+) -> PolicyResult:
     """
     Checks before sending to LLM:
     1. Crisis detection — scan transcript for crisis keywords.
@@ -103,14 +106,19 @@ def check_pre_turn(transcript: str, session_state: SessionState) -> PolicyResult
     if matched is not None:
         return PolicyResult(
             allowed=False,
-            override_response=_CRISIS_RESPONSE,
+            override_response=catalogue.text("crisis", language, gender=gender),
             crisis_detected=True,
             matched_pattern=matched,
         )
     return PolicyResult(allowed=True, override_response=None, crisis_detected=False)
 
 
-def check_response_for_crisis(response_text: str) -> PolicyResult:
+def check_response_for_crisis(
+    response_text: str,
+    *,
+    language: str = SOURCE_LANGUAGE,
+    gender: str | None = None,
+) -> PolicyResult:
     """
     Scan Katha's own generated reply for crisis-adjacent language. This is a
     safety net, not a duplicate of check_pre_turn: if the LLM's response
@@ -121,7 +129,7 @@ def check_response_for_crisis(response_text: str) -> PolicyResult:
     if matched is not None:
         return PolicyResult(
             allowed=False,
-            override_response=_CRISIS_RESPONSE,
+            override_response=catalogue.text("crisis", language, gender=gender),
             crisis_detected=True,
             matched_pattern=matched,
         )
@@ -185,7 +193,7 @@ def salvage_untagged_response(
     drops the wrapper. Measured on a two-word "not much to say" turn, that
     happens on roughly half of calls — and the replies themselves are fine.
     Discarding them costs a good answer and hands the user
-    _MALFORMED_RESPONSE ("could you tell me that again?"), which is the worst
+    the "malformed" message ("could you tell me that again?"), which is the worst
     possible reply to someone who is already disengaging.
 
     `truncated` says max_tokens cut generation off — the caller gets that
@@ -229,14 +237,20 @@ def salvage_untagged_response(
 
 
 def check_post_turn(
-    llm_response: str, session_state: SessionState, *, truncated: bool = False
+    llm_response: str,
+    session_state: SessionState,
+    *,
+    truncated: bool = False,
+    language: str = SOURCE_LANGUAGE,
+    gender: str | None = None,
 ) -> PolicyResult:
     """
     Checks after the dialogue LLM call responds:
     1. Accept a well-formed <response> block.
     2. Otherwise try to salvage — a bare untagged reply, or a truncated one
        trimmed back to its last complete sentence.
-    3. Only fall back to _MALFORMED_RESPONSE when nothing usable came back.
+    3. Only fall back to the "malformed" message when nothing usable came
+       back.
 
     The dialogue call returns <response> only — extraction is a separate
     call (see check_extraction_response) with its own guard.
@@ -278,7 +292,7 @@ def check_post_turn(
 
     return PolicyResult(
         allowed=False,
-        override_response=_MALFORMED_RESPONSE,
+        override_response=catalogue.text("malformed", language, gender=gender),
         crisis_detected=False,
     )
 

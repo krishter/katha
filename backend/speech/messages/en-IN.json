@@ -1,0 +1,21 @@
+{
+  "_review": {
+    "source": "original",
+    "reviewer": "Katha team",
+    "date": "2026-10-20",
+    "note": "The source text. Every other language is translated from this file."
+  },
+  "consent_welcome": "Namaste {name} ji. My name is Katha, and {child} set this up for you. Before anything else, I should be honest with you: I am not a person. I am a computer program — an AI — made to listen. What I would love to do is call you now and then and hear about your life, the way you remember it. Your childhood, your family, the work you did, the things you have seen. I would record our conversations and keep them safely for your family, so your stories stay in their words — your words — long after. You can stop at any time, just by telling me to, and I will not trouble you again. So may I ask — would you be happy for us to talk this way? Please say yes or no, whichever feels right. There is no wrong answer.",
+  "consent_welcome_no_child": "Namaste {name} ji. My name is Katha, and your family set this up for you. Before anything else, I should be honest with you: I am not a person. I am a computer program — an AI — made to listen. What I would love to do is call you now and then and hear about your life, the way you remember it. Your childhood, your family, the work you did, the things you have seen. I would record our conversations and keep them safely for your family, so your stories stay in their words — your words — long after. You can stop at any time, just by telling me to, and I will not trouble you again. So may I ask — would you be happy for us to talk this way? Please say yes or no, whichever feels right. There is no wrong answer.",
+  "consent_reask": "I am sorry {name} ji, I did not quite follow — that is my fault, not yours. Only if you are comfortable: may I record our conversations about your life and keep them for your family? A simple yes or no is all I need.",
+  "consent_granted": "Thank you. That means a great deal. I will not take much of your time — we can talk whenever suits you, and you can stop whenever you like. I am looking forward to hearing about your life.",
+  "consent_declined": "Of course. Thank you for telling me — I will not record anything, and I will not message you again. If you ever change your mind, your family can set this up once more. Take good care of yourself.",
+  "fallback_stt": "I'm sorry, I couldn't quite hear that. Could you try sending it again?",
+  "fallback_llm": "I'm having a little trouble right now. Give me a moment and try again?",
+  "fallback_other": "Something went wrong on my side. I'll be here tomorrow at our usual time.",
+  "malformed": "I'm so sorry, I lost my train of thought just now! Could you tell me that again? I want to make sure I give you my full attention.",
+  "already_talked": "We already had our conversation today — thank you for that. I'll be here again tomorrow, and I'm looking forward to it. If there's something you want to add, just send it and I'll keep it safe.",
+  "text_only": "Please send me a voice message — I'd love to hear your voice! 🎙",
+  "crisis": "I can hear that things feel very difficult right now, and I'm glad you felt safe enough to share that with me. Please reach out to iCall India: 9152987821 — they are available to talk and to help. Your wellbeing matters more than any story we could share today. Please take care of yourself.",
+  "crisis_text": "I'm worried about you. Please reach out to iCall India: 9152987821. They are available and ready to help."
+}

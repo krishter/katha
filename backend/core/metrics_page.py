@@ -378,6 +378,25 @@ def _safety_and_plans(s: dict, p: dict) -> str:
     )
 
 
+def _languages(rows: list[dict]) -> str:
+    if not rows:
+        return "<p class=note>No families yet.</p>"
+    body = "".join(
+        f"<tr><td>{_e(r['language'])}</td><td>{_e(r['families'])}</td>"
+        f"<td>{'<b>machine</b>' if r['source'] == 'machine' else _e(r['source'])}"
+        f"</td><td>{_e(r['reviewer'] or '')}</td><td>{_e(r['date'] or '')}</td></tr>"
+        for r in rows
+    )
+    return (
+        "<div class=scroll><table><tr><th>Language</th><th>Families</th>"
+        "<th>Fixed messages</th><th>Reviewed by</th><th>Date</th></tr>"
+        f"{body}</table></div>"
+        "<p class=note>Where the consent, apology and crisis messages for each "
+        "language came from. <b>machine</b> means no native speaker has read "
+        "them yet (backend/speech/messages/).</p>"
+    )
+
+
 def _families(rows: list[dict]) -> str:
     cols = [
         ("user_id", "Storyteller", False),
@@ -468,5 +487,6 @@ account(s) excluded · day boundaries in IST</p>
 <h2>Stories</h2><p class=note>{_e(m["stories"]["reason"])}</p>
 <h2>Cost to serve</h2>{_cost(cost)}
 <h2>Safety and plans</h2>{_safety_and_plans(m["safety"], m["plans"])}
+<h2>Languages</h2>{_languages(m.get("languages", []))}
 <h2>Families</h2>{_families(m["families"])}
 </main></body></html>"""

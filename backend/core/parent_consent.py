@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.consent_record import ConsentRecord
 from models.user_profile import UserProfileModel
+from speech import catalogue
 
 logger = logging.getLogger(__name__)
 
@@ -208,58 +209,55 @@ def interpret_answer(transcript: str) -> Answer:
     return Answer.UNCLEAR
 
 
-def build_welcome_text(parent_name: str, child_name: Optional[str] = None) -> str:
+def build_welcome_text(
+    parent_name: str,
+    child_name: Optional[str] = None,
+    *,
+    language: str = catalogue.SOURCE_LANGUAGE,
+    gender: Optional[str] = None,
+) -> str:
     """
-    The first thing the parent ever hears from Katha, spoken in her own
-    language via TTS.
+    The first thing the parent ever hears from Katha, in her own language
+    (speech/catalogue.py; it used to be English for everyone, M-14).
 
     The AI disclosure is not decorative. Consent to being recorded, given
     by someone who believes they are talking to a person, is not informed
     consent — and informed consent is the whole purpose of this workstream.
-    It therefore comes before the ask, not after it.
+    It therefore comes before the ask, not after it, in every language.
     """
-    arranged_by = (
-        f"{child_name} set this up for you"
-        if child_name
-        else ("your family set this up for you")
-    )
-    return (
-        f"Namaste {parent_name} ji. My name is Katha, and {arranged_by}. "
-        "Before anything else, I should be honest with you: I am not a person. "
-        "I am a computer program — an AI — made to listen. "
-        "What I would love to do is call you now and then and hear about your "
-        "life, the way you remember it. Your childhood, your family, the work "
-        "you did, the things you have seen. "
-        "I would record our conversations and keep them safely for your family, "
-        "so your stories stay in their words — your words — long after. "
-        "You can stop at any time, just by telling me to, and I will not "
-        "trouble you again. "
-        "So may I ask — would you be happy for us to talk this way? "
-        "Please say yes or no, whichever feels right. There is no wrong answer."
+    if child_name:
+        return catalogue.text(
+            "consent_welcome",
+            language,
+            gender=gender,
+            name=parent_name,
+            child=child_name,
+        )
+    return catalogue.text(
+        "consent_welcome_no_child", language, gender=gender, name=parent_name
     )
 
 
-def build_reask_text(parent_name: str) -> str:
+def build_reask_text(
+    parent_name: str,
+    *,
+    language: str = catalogue.SOURCE_LANGUAGE,
+    gender: Optional[str] = None,
+) -> str:
     """One clarification, no more. Then a human looks at it."""
-    return (
-        f"I am sorry {parent_name} ji, I did not quite follow — that is my "
-        "fault, not yours. Only if you are comfortable: may I record our "
-        "conversations about your life and keep them for your family? "
-        "A simple yes or no is all I need."
-    )
+    return catalogue.text("consent_reask", language, gender=gender, name=parent_name)
 
 
-DECLINE_TEXT = (
-    "Of course. Thank you for telling me — I will not record anything, and I "
-    "will not message you again. If you ever change your mind, your family can "
-    "set this up once more. Take good care of yourself."
-)
+def declined_text(
+    language: str = catalogue.SOURCE_LANGUAGE, gender: Optional[str] = None
+) -> str:
+    return catalogue.text("consent_declined", language, gender=gender)
 
-GRANTED_TEXT = (
-    "Thank you. That means a great deal. I will not take much of your time — "
-    "we can talk whenever suits you, and you can stop whenever you like. "
-    "I am looking forward to hearing about your life."
-)
+
+def granted_text(
+    language: str = catalogue.SOURCE_LANGUAGE, gender: Optional[str] = None
+) -> str:
+    return catalogue.text("consent_granted", language, gender=gender)
 
 
 @dataclass

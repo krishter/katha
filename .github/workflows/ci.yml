@@ -5,6 +5,16 @@ on:
   pull_request:
 
 jobs:
+  # The repository is public: a credential committed here is published.
+  # See scripts/secret_scan.sh for what it looks for.
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on credential-shaped strings in tracked files
+        run: ./scripts/secret_scan.sh
+
   backend-test:
     name: Backend lint + test
     runs-on: ubuntu-latest

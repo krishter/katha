@@ -63,9 +63,9 @@ class Settings(BaseSettings):
     # the virtual addressing media/storage.py pins deliberately. For the
     # current production bucket that is
     # katha-media-500923064555-ap-south-1-an.s3.ap-south-1.amazonaws.com
-    # — note the bucket is NOT plain "katha-media"; deploy_bkp.txt says it
-    # is and is wrong, which is exactly the mistake this setting exists to
-    # turn into a loud failure instead of a silent one.
+    # — note the bucket is NOT plain "katha-media", a mistake easy to make
+    # from memory, and exactly the one this setting exists to turn into a
+    # loud failure instead of a silent one.
     TWILIO_TEMPLATE_MEDIA_HOST: str = ""
     TWILIO_TEMPLATE_PARENT_WELCOME: str = ""
     TWILIO_TEMPLATE_PARENT_WELCOME_FOLLOWUP: str = ""

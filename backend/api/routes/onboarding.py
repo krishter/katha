@@ -18,6 +18,7 @@ from models.consent_record import ConsentRecord
 from models.db import get_db
 from models.family_account import FamilyAccount
 from models.user_profile import UserProfileModel
+from prompts.system_prompt import SUPPORTED_LANGUAGES
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,14 @@ async def onboarding_profile(
     if katha_gender not in voices.GENDERS:
         raise HTTPException(
             status_code=422, detail="katha_gender must be 'female' or 'male'"
+        )
+    # Every fixed thing Katha says comes from a message file per language
+    # (speech/catalogue.py). A language without one would hear English.
+    if preferred_language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(
+            status_code=422,
+            detail="preferred_language must be one of "
+            + ", ".join(SUPPORTED_LANGUAGES),
         )
     _validate_e164(whatsapp_number, "whatsapp_number")
     _validate_e164(family_whatsapp_number, "family_whatsapp_number")

@@ -10,6 +10,7 @@ from core.fallback_audio import (
     get_fallback_text,
     preload_fallback_audio,
 )
+from speech import catalogue
 
 
 @contextmanager
@@ -36,6 +37,39 @@ def test_get_fallback_text_returns_message_per_stage():
     assert "couldn't quite hear" in get_fallback_text(FailureStage.STT)
     assert "little trouble" in get_fallback_text(FailureStage.LLM)
     assert "tomorrow" in get_fallback_text(FailureStage.OTHER)
+
+
+def test_get_fallback_text_speaks_her_language_and_persona():
+    """M-14: the apology used to be English for everyone."""
+    tamil = get_fallback_text(FailureStage.STT, "ta-IN")
+    assert tamil == catalogue.text("fallback_stt", "ta-IN")
+    assert "couldn't" not in tamil
+    female = get_fallback_text(FailureStage.OTHER, "hi-IN", "female")
+    male = get_fallback_text(FailureStage.OTHER, "hi-IN", "male")
+    assert female != male and "मिलूँगी" in female and "मिलूँगा" in male
+
+
+async def test_preload_synthesises_each_language_in_its_own_words():
+    """What reaches TTS for a Tamil clip is the Tamil apology, not English
+    in a Tamil voice."""
+    said: dict[str, set[str]] = {}
+
+    async def _capture(text, language_code, **_kwargs):
+        said.setdefault(language_code, set()).add(text)
+        return b"fake-wav"
+
+    with (
+        _vendors(_capture),
+        patch(
+            "media.system_speech.audio_convert.convert_wav_to_ogg",
+            new=AsyncMock(return_value=b"fake-ogg"),
+        ),
+    ):
+        await preload_fallback_audio()
+
+    assert catalogue.text("fallback_stt", "ta-IN") in said["ta-IN"]
+    assert get_fallback_text(FailureStage.STT, "en-IN") not in said["ta-IN"]
+    assert catalogue.text("fallback_llm", "hi-IN", gender="male") in said["hi-IN"]
 
 
 async def test_preload_populates_cache_for_every_language():

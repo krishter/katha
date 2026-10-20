@@ -1,14 +1,17 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from core import parent_consent
 from core.parent_consent import (
     Answer,
     ConsentStatus,
+    build_reask_text,
     build_welcome_text,
     get_status,
     interpret_answer,
     record_answer,
 )
+from speech import catalogue
 
 _USER_ID = "user-parent-1"
 
@@ -70,6 +73,27 @@ def test_welcome_covers_the_required_ground():
     assert "record" in text  # that it is recorded
     assert "family" in text  # who it is kept for
     assert "stop at any time" in text  # how to leave
+
+
+def test_welcome_is_in_her_language_with_the_disclosure_before_the_ask():
+    """M-14: the welcome was English for every parent. In Tamil, the
+    disclosure ("I am not a person") still comes before the question."""
+    text = build_welcome_text("Lakshmi", child_name="Priya", language="ta-IN")
+    assert "Lakshmi" in text and "Priya" in text
+    assert "not a person" not in text
+    disclosure = text.index("நான் ஒரு மனிதர் இல்லை")
+    ask = text.index("சம்மதமா")
+    assert disclosure < ask
+
+
+def test_outcome_texts_follow_her_language_and_persona():
+    assert parent_consent.granted_text("ta-IN") == catalogue.text(
+        "consent_granted", "ta-IN"
+    )
+    assert parent_consent.declined_text("hi-IN", "male") != (
+        parent_consent.declined_text("hi-IN", "female")
+    )
+    assert "Lakshmi" in build_reask_text("Lakshmi", language="te-IN")
 
 
 def test_welcome_works_without_a_child_name():
