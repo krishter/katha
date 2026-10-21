@@ -2013,6 +2013,8 @@ async def consent(db):
     def question(case):
         if case["question"] == "confirm":
             return parent_consent.confirm_text(case["language"])
+        if case["question"] == "update":
+            return parent_consent.update_text(name, language=case["language"])
         return parent_consent.build_welcome_text(name, child, language=case["language"])
 
     recorded: dict[str, str] = {}

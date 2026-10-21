@@ -644,3 +644,36 @@ async def test_a_1_0_parent_still_unclear_after_the_re_ask_is_halted(real_db):
         ConsentStatus.HALTED
     )
     assert h3.everything_said().strip() == ""
+
+
+async def test_yes_i_m_ok_to_the_update_is_a_yes(real_db):
+    """The self-trial, 2026-10-21: "yes I'm ok" to the update read as
+    unclear twice and halted the parent."""
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _agreed_to_1_0(real_db, user_id)
+    async with _Harness(transcript="Namaste") as h:
+        await _post_inbound(h.client, with_audio=True)
+    async with _Harness(transcript="yes I'm ok") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.GRANTED
+    )
+
+
+async def test_a_halt_tells_the_operator(real_db, monkeypatch):
+    subjects: list[str] = []
+
+    async def _email(to, subject, body_text, body_html):
+        subjects.append(subject)
+
+    monkeypatch.setattr("core.email.send_email_ses", _email)
+    monkeypatch.setattr("config.settings.OPERATOR_EMAIL", "ops@example.test")
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _agreed_to_1_0(real_db, user_id)
+    for said in ("Namaste", "Hmm.", "Hmm."):
+        async with _Harness(transcript=said) as h:
+            await _post_inbound(h.client, with_audio=True)
+
+    assert any("consent is halted" in s for s in subjects), subjects

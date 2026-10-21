@@ -32,7 +32,8 @@ LABELS = ("ok", "sensitive", "correction", "reaction", "other")
 FALLBACK = "sensitive"
 
 _PURPOSE = "question_screen"
-_MAX_TOKENS = 200
+# Headroom over the short JSON answer (see LLM_CLASSIFIER_EFFORT).
+_MAX_TOKENS = 1024
 
 # A bare opt-out, in the words people actually send. Checked before any
 # model call so "stop" always works, even when the model is down.
@@ -89,6 +90,7 @@ async def screen(text: str, parent_title: str = "your parent") -> Screening:
             [Message(role="user", content=build_prompt(text, parent_title))],
             max_tokens=_MAX_TOKENS,
             model=settings.LLM_CLASSIFIER_MODEL,
+            effort=settings.LLM_CLASSIFIER_EFFORT,
             purpose=_PURPOSE,
         )
     except Exception:

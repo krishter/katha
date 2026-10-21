@@ -57,7 +57,9 @@ SAFE: dict[str, str] = {
 # Labels that move something forward. Each must quote her.
 POSITIVE = frozenset({"yes", "approve", "withdraw"})
 
-_MAX_TOKENS = 300
+# Headroom over the ~20-token JSON answer, in case the model thinks at all
+# (see LLM_CLASSIFIER_EFFORT). An empty reply is read as the safe label.
+_MAX_TOKENS = 1024
 _PURPOSE = "parent_answer_classify"
 
 _GUIDE: dict[str, str] = {
@@ -94,8 +96,11 @@ her consent to being recorded.
 - "unclear": anything else. A question back ("who are you?", "kaun ho
   aap?", "what is this about?", "where do we start?") is "unclear", even
   if it contains "ok", "fine" or "theek hai". So is a greeting, small
-  talk ("I am fine"), a story, "hmm", or "ok" said while asking something
-  else.""",
+  talk ("I am fine" on its own), a story, "hmm", or "ok" said while
+  asking something else.
+A clear yes stays a yes when she adds that she is fine with it: "yes,
+I'm ok", "yes, that's fine", "haan, mujhe theek hai" are "yes". The reply
+may be in English even when Katha asked in another language.""",
     WITHDRAW: """She is talking with Katha, an AI that records her life stories for
 her family. Decide whether she is asking Katha to stop for good.
 - "withdraw": she clearly wants Katha to stop recording her or contacting
@@ -161,6 +166,7 @@ async def classify(kind: str, question: str, transcript: str) -> Classification:
             [Message(role="user", content=build_prompt(kind, question, transcript))],
             max_tokens=_MAX_TOKENS,
             model=settings.LLM_CLASSIFIER_MODEL,
+            effort=settings.LLM_CLASSIFIER_EFFORT,
             purpose=_PURPOSE,
         )
     except Exception:

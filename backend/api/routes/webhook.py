@@ -236,6 +236,7 @@ async def _handle_parent_consent(
             "Parent consent for %s still unclear after the re-ask — halted",
             profile.user_id,
         )
+        await _alert_halted(profile, "her first consent")
         return
     if confirming:
         await parent_consent.set_state(profile.user_id, parent_consent.STATE_ASKING, db)
@@ -326,6 +327,20 @@ async def _handle_notice_update(
     await parent_consent.set_state(profile.user_id, parent_consent.STATE_HALTED, db)
     logger.info(
         "Notice update for %s still unclear after the re-ask — halted", profile.user_id
+    )
+    await _alert_halted(profile, "the 1.1 notice update")
+
+
+async def _alert_halted(profile: UserProfileModel, what: str) -> None:
+    """Halted means Katha says nothing more to her until a person steps in.
+    Without this, that person was whoever happened to open the dashboard
+    (found in the self-trial, 2026-10-21)."""
+    await alerts.send(
+        "A parent's consent is halted",
+        f"{profile.user_id}: still unclear after the re-ask, on {what}. Katha "
+        "has stopped asking and will not reply to her. Phone the family. To "
+        "ask her again, set user_profiles.parent_consent_state back to "
+        "'asking' for this user_id.",
     )
 
 

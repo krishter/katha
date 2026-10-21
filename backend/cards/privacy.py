@@ -45,7 +45,8 @@ RESTRICTIONS = ("none", "this_turn", "topic")
 PREFERENCE_CHANGES = {"share": sharing.SHARE, "never": sharing.NEVER}
 
 _TOPIC_PURPOSE = "private_topic_match"
-_TOPIC_MAX_TOKENS = 400
+# Headroom over the index list (see LLM_CLASSIFIER_EFFORT).
+_TOPIC_MAX_TOKENS = 1024
 _TOPIC_BATCH = 50
 _MAX_TOPIC_LABEL = 120
 
@@ -78,6 +79,7 @@ Respond with ONLY this JSON object: {{"indexes": [numbers]}}"""
             [Message(role="user", content=prompt)],
             max_tokens=_TOPIC_MAX_TOKENS,
             model=settings.LLM_CLASSIFIER_MODEL,
+            effort=settings.LLM_CLASSIFIER_EFFORT,
             purpose=_TOPIC_PURPOSE,
         )
         indexes = parse_json_object(response.content).get("indexes")
