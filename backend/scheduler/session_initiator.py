@@ -279,6 +279,23 @@ async def send_conversation_cards(db_session_factory) -> None:
         logger.exception("Scheduler: sending conversation cards failed")
 
 
+async def erase_withdrawn(db_session_factory) -> None:
+    """
+    Erase families whose withdrawal hold has passed (core/withdrawal.py,
+    P4, D4). Every quarter hour: the promise to her is "within a week", and
+    nothing about it is urgent to the minute.
+    """
+    from core import withdrawal
+
+    try:
+        async with db_session_factory() as db:
+            erased = await withdrawal.erase_due(db)
+        if erased:
+            logger.info("Scheduler: erased %d family(ies) after withdrawal", erased)
+    except Exception:
+        logger.exception("Scheduler: erasing withdrawn families failed")
+
+
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
@@ -290,6 +307,15 @@ def create_scheduler(db_session_factory) -> AsyncIOScheduler:
         id="send_conversation_cards",
         replace_existing=True,
         misfire_grace_time=30,
+    )
+    scheduler.add_job(
+        erase_withdrawn,
+        trigger="cron",
+        minute="*/15",
+        kwargs={"db_session_factory": db_session_factory},
+        id="erase_withdrawn",
+        replace_existing=True,
+        misfire_grace_time=600,
     )
     scheduler.add_job(
         initiate_sessions,

@@ -1941,6 +1941,86 @@ async def consent(db):
     await cleanup(db, "eval-consent")
 
 
+async def withdraw(db):
+    """
+    Withdrawal (docs/PRE_PILOT_FIX_PLAN.md P4, M-02), on the decision path
+    the webhook uses: core/withdrawal.is_withdrawal. Pass: every withdrawal
+    caught and no story read as one.
+
+    With EVAL_RECORD_WITHDRAW=1 the classifier's raw replies are saved to
+    tests/fixtures/withdraw_classifier_replay.json for the integration
+    tests to replay.
+    """
+    from adapters import llm as llm_adapter
+    from core import parent_answers, withdrawal
+
+    root = pathlib.Path(__file__).resolve().parent
+    fixture = json.loads((root / "fixtures/withdraw_messages.json").read_text())
+
+    recorded: dict[str, str] = {}
+    real_chat = llm_adapter.chat
+
+    async def recording_chat(messages, **kwargs):
+        response = await real_chat(messages, **kwargs)
+        if kwargs.get("purpose") == parent_answers._PURPOSE:
+            reply = messages[0].content.split("HER REPLY\n", 1)[1]
+            recorded[reply.split("\n\nRespond with", 1)[0]] = response.content
+        return response
+
+    rows, missed, false_alarm = [], [], []
+    llm_adapter.chat = recording_chat
+    try:
+        with usage.usage_scope(user_id="eval-withdraw"):
+            for case in fixture["cases"]:
+                got = await withdrawal.is_withdrawal(case["transcript"])
+                if case["expected"] and not got:
+                    missed.append(case["transcript"])
+                if got and not case["expected"]:
+                    false_alarm.append(case["transcript"])
+                how = (
+                    "phrase"
+                    if withdrawal.said_stop(case["transcript"])
+                    else "classifier"
+                    if withdrawal.might_be_stop(case["transcript"])
+                    else "no prefilter hit"
+                )
+                rows.append(
+                    f"  {'ok ' if got == case['expected'] else 'BAD'} "
+                    f"[{case['language']}] expected={case['expected']} got={got} "
+                    f"({how}) :: {case['transcript']!r}"
+                )
+    finally:
+        llm_adapter.chat = real_chat
+
+    if os.environ.get("EVAL_RECORD_WITHDRAW") == "1":
+        out = root.parent / "tests/fixtures/withdraw_classifier_replay.json"
+        out.write_text(
+            json.dumps(
+                {
+                    "_about": "Raw classifier replies to evals/fixtures/"
+                    "withdraw_messages.json, recorded by `run_eval.py withdraw` "
+                    "with EVAL_RECORD_WITHDRAW=1. Replayed by the integration "
+                    "tests. Re-record after changing the withdraw guide.",
+                    "model": settings.LLM_CLASSIFIER_MODEL,
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "replies": recorded,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
+        )
+        print(f"recorded {len(recorded)} classifier replies to {out}")
+
+    record(
+        "WITHDRAW",
+        "objective",
+        not missed and not false_alarm,
+        f"missed={missed} false_alarm={false_alarm}\n" + "\n".join(rows),
+    )
+    await cleanup(db, "eval-withdraw")
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -1971,7 +2051,7 @@ async def main():
     selected = sys.argv[1:] or list(ALL_CASES.keys())
     if selected == ["cards"]:
         selected = list(CARD_CASES.keys())
-    cases = {**ALL_CASES, **CARD_CASES, "consent": consent}
+    cases = {**ALL_CASES, **CARD_CASES, "consent": consent, "withdraw": withdraw}
     async with AsyncSessionLocal() as db:
         for name in selected:
             fn = cases[name]

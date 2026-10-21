@@ -3,26 +3,11 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core import auth
+from core import auth, erasure
 from core.auth import get_current_user
-from media import storage
-from models.api_usage import ApiUsage
-from models.consent_record import ConsentRecord
-from models.conversation_card import ConversationCard
 from models.db import get_db
-from models.fact import Fact
-from models.family_account import FamilyAccount
-from models.family_question import FamilyQuestion
-from models.magic_link_token import MagicLinkToken
-from models.memory_card import MemoryCard
-from models.session import Session
-from models.story_atom import StoryAtom
-from models.turn import Turn
-from models.user_profile import UserProfileModel
-from models.voice_change import VoiceChange
 
 logger = logging.getLogger(__name__)
 
@@ -39,176 +24,21 @@ async def delete_user(
     """
     DPDP Act data deletion endpoint. A family account can only delete the
     elderly user linked to its own JWT — never someone else's.
-
-    Best-effort: each step is isolated so one failure (e.g. an S3 delete)
-    doesn't leave the rest of a user's data stranded. Every failure is
-    logged for audit; nothing here should ever raise past this function.
     """
     if current_user["user_id"] != user_id:
         raise HTTPException(
             status_code=403, detail="You may only delete your own data."
         )
 
-    logger.info("Data deletion requested for user %s", user_id)
+    # The same sweep an operator or the withdrawal hold runs
+    # (core/erasure.py), so the three can never drift apart.
+    await erasure.erase_user(user_id, db, actor=erasure.ACTOR_FAMILY)
 
-    # 1-2. Memory card images on S3
-    try:
-        result = await db.execute(
-            select(MemoryCard.image_s3_key).where(MemoryCard.user_id == user_id)
-        )
-        s3_keys = result.scalars().all()
-        for s3_key in s3_keys:
-            try:
-                await storage.delete_media(s3_key)
-            except Exception:
-                logger.exception(
-                    "Failed to delete S3 object %s for user %s", s3_key, user_id
-                )
-    except Exception:
-        logger.exception("Failed to look up memory cards for user %s", user_id)
-
-    # 1b. Voice note audio on S3 — the upload happens inside send_voice_note,
-    # after the turn row is already committed, so the key is a separate
-    # follow-up write (see orchestrator.set_turn_audio_key) and must be
-    # swept explicitly here too.
-    try:
-        result = await db.execute(
-            select(Turn.response_audio_s3_key)
-            .where(Turn.user_id == user_id)
-            .where(Turn.response_audio_s3_key.is_not(None))
-        )
-        audio_keys = result.scalars().all()
-        for s3_key in audio_keys:
-            try:
-                await storage.delete_media(s3_key)
-            except Exception:
-                logger.exception(
-                    "Failed to delete S3 object %s for user %s", s3_key, user_id
-                )
-    except Exception:
-        logger.exception("Failed to look up turn audio keys for user %s", user_id)
-
-    # 1c. The session-opening voice note. It has no Turn row of its own, so
-    # its key lives on the session (S2.4a) and needs its own sweep — this
-    # was the object the S1.2 consent audit found stranded.
-    try:
-        result = await db.execute(
-            select(Session.session_open_audio_s3_key)
-            .where(Session.user_id == user_id)
-            .where(Session.session_open_audio_s3_key.is_not(None))
-        )
-        for s3_key in result.scalars().all():
-            try:
-                await storage.delete_media(s3_key)
-            except Exception:
-                logger.exception(
-                    "Failed to delete S3 object %s for user %s", s3_key, user_id
-                )
-    except Exception:
-        logger.exception(
-            "Failed to look up session-open audio keys for user %s", user_id
-        )
-
-    # 1d. Conversation card images (CONVERSATION_CARDS.md §11).
-    try:
-        result = await db.execute(
-            select(ConversationCard.image_s3_key)
-            .where(ConversationCard.user_id == user_id)
-            .where(ConversationCard.image_s3_key.is_not(None))
-        )
-        for s3_key in result.scalars().all():
-            try:
-                await storage.delete_media(s3_key)
-            except Exception:
-                logger.exception(
-                    "Failed to delete S3 object %s for user %s", s3_key, user_id
-                )
-    except Exception:
-        logger.exception("Failed to look up card images for user %s", user_id)
-
-    # 3-7. Delete rows that belong directly to this user_id
-    for label, stmt in [
-        ("memory_cards", delete(MemoryCard).where(MemoryCard.user_id == user_id)),
-        ("story_atoms", delete(StoryAtom).where(StoryAtom.user_id == user_id)),
-        ("turns", delete(Turn).where(Turn.user_id == user_id)),
-        ("facts", delete(Fact).where(Fact.user_id == user_id)),
-        ("sessions", delete(Session).where(Session.user_id == user_id)),
-        (
-            "user_profiles",
-            delete(UserProfileModel).where(UserProfileModel.user_id == user_id),
-        ),
-        # The usage ledger holds counts, not content, but it is keyed to
-        # her and outlives nothing (COST_TO_SERVE.md §3.6).
-        ("api_usage", delete(ApiUsage).where(ApiUsage.user_id == user_id)),
-        # Which voice she was moved between, and by whom (GEMINI_TTS.md §4.2).
-        ("voice_changes", delete(VoiceChange).where(VoiceChange.user_id == user_id)),
-        # Conversation cards, kept-private ones included, and the child's
-        # questions and reactions.
-        (
-            "conversation_cards",
-            delete(ConversationCard).where(ConversationCard.user_id == user_id),
-        ),
-        (
-            "family_questions",
-            delete(FamilyQuestion).where(FamilyQuestion.user_id == user_id),
-        ),
-    ]:
-        try:
-            await db.execute(stmt)
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception("Failed to delete %s for user %s", label, user_id)
-
-    # 8. Magic link tokens (keyed by email, not user_id)
-    try:
-        account_result = await db.execute(
-            select(FamilyAccount.email).where(FamilyAccount.user_id == user_id)
-        )
-        email = account_result.scalar_one_or_none()
-        if email is not None:
-            await db.execute(
-                delete(MagicLinkToken).where(MagicLinkToken.email == email)
-            )
-            await db.commit()
-    except Exception:
-        await db.rollback()
-        logger.exception("Failed to delete magic_link_tokens for user %s", user_id)
-
-    # 9. Anonymize consent records — retained for audit per DPDP Act, never
-    # hard-deleted. email_hash stays; everything else that could identify
-    # the person is cleared, including the number a parent record was
-    # given from (P3).
-    try:
-        await db.execute(
-            update(ConsentRecord)
-            .where(ConsentRecord.user_id == user_id)
-            .values(
-                user_id="DELETED",
-                ip_address=None,
-                user_agent=None,
-                whatsapp_number=None,
-            )
-        )
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        logger.exception("Failed to anonymize consent_records for user %s", user_id)
-
-    # 10. Family account itself
-    try:
-        await db.execute(delete(FamilyAccount).where(FamilyAccount.user_id == user_id))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        logger.exception("Failed to delete family_account for user %s", user_id)
-
-    # 11. Clear the session cookie. Via the shared helper so the domain
+    # Clear the session cookie. Via the shared helper so the domain
     # matches the one it was set with — a mismatch leaves the family logged
     # in with a live cookie immediately after they asked to be erased.
     auth.clear_session_cookie(response)
 
-    logger.info("Data deletion completed for user %s", user_id)
     return {
         "status": "deleted",
         "message": "All data has been permanently removed.",

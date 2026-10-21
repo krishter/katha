@@ -16,11 +16,13 @@ export function ParentConsentBanner({
   parentName,
   whatsappLink,
   consentedAt,
+  eraseAfter = null,
 }: {
   status: ParentConsentStatus;
   parentName: string;
   whatsappLink: string;
   consentedAt: string | null;
+  eraseAfter?: string | null;
 }) {
   // Consent given and conversations running — nothing to say.
   if (status === "granted") return null;
@@ -43,14 +45,37 @@ export function ParentConsentBanner({
           make, and we&apos;ll respect it.
         </p>
         <p className="mt-3 text-sm text-ink-mid">
-          If they change their mind, talk to them first and then set this up
-          again. There&apos;s nothing to fix here.
+          If they change their mind, talk to them first, then email us and
+          we&apos;ll clear this so you can set it up again. There&apos;s
+          nothing to fix here.
         </p>
         {consentedAt && (
           <p className="mt-3 text-meta text-ink-muted">
             Asked on {new Date(consentedAt).toLocaleDateString()}
           </p>
         )}
+      </section>
+    );
+  }
+
+  if (status === "withdrawn") {
+    return (
+      <section className="rounded-xl border border-border bg-surface p-6">
+        <h2 className="font-display text-lg font-semibold text-ink">
+          {parentName} asked Katha to stop
+        </h2>
+        <p className="mt-2 text-sm text-ink-mid">
+          Katha has stopped. It won&apos;t record anything more or message{" "}
+          {parentName} again.
+        </p>
+        <p className="mt-3 text-sm text-ink-mid">
+          Everything kept from their conversations will be deleted
+          {eraseAfter
+            ? ` on ${new Date(eraseAfter).toLocaleDateString()}`
+            : " shortly"}
+          . If {parentName} didn&apos;t mean to stop, reply to the email we
+          sent you before then.
+        </p>
       </section>
     );
   }

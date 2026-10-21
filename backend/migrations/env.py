@@ -32,6 +32,7 @@ import models.api_usage  # noqa: E402, F401
 import models.consent_record  # noqa: E402, F401
 import models.conversation_card  # noqa: E402, F401
 import models.crisis_event  # noqa: E402, F401
+import models.erasure_log  # noqa: E402, F401
 import models.fact  # noqa: E402, F401
 import models.family_account  # noqa: E402, F401
 import models.family_question  # noqa: E402, F401

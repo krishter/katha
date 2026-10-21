@@ -270,14 +270,30 @@ For families with cards on (`scripts/cards.py --show` lists them):
 
 ## Stop conditions — end a family's run early
 
-- Parent declines or withdraws consent → delete via `DELETE /admin/user/{id}`, then verify
-  by table and bucket inspection, **not** by the endpoint's return value.
+- **She asks Katha to stop.** Katha hears it in any message ("band karo", "stop recording",
+  "don't call me again", in her language) and acts without you. It ends the session,
+  records the withdrawal, tells her once in her language, emails you `[Katha] <name>
+  withdrew consent` and the family, and erases everything 7 days later. After that it does
+  not answer her more than once a month.
+  - On the alert: phone the child the same day. Do nothing to the data.
+  - **Only if she tells you herself that she did not mean it**, clear the hold before the
+    7 days are up: `python -m scripts.erase_user --user-id … --by <you> --cancel-hold`.
+    Her consent stays withdrawn; she starts again from a fresh setup.
+  - When the hold passes, the scheduler erases and emails you `Erased a family after
+    withdrawal`. A subject ending `WITH FAILURES` means something was left behind: read it.
+- **She declines at the start.** Katha says so once and then stays quiet. If the family
+  later wants to try again, erase the declined profile so her number is free:
+  `python -m scripts.erase_user --user-id … --by <you>` (dry run), then add `--apply`.
+- **Anyone asks for erasure** (her, the family, or you for cause): the same script. The
+  family can also use "Delete all data" in settings. Both run the same sweep
+  (`core/erasure.py`) and write an `erasure_log` row. Verify by table and bucket inspection,
+  **not** by the script's or the endpoint's own report.
 - Crisis event indicating real distress → human contact first, product second.
 - Repeated failed sessions with no fix in sight → pause, apologise, keep the relationship.
 - Child asks to stop → stop that day. Then ask why, once, gently.
 
-🔧 There is no per-family kill switch until T1.4; stopping a family today is a database
-edit. Know the query before you need it.
+🔧 There is still no per-family pause short of erasure until T1.4; pausing a family without
+erasing it is a database edit. Know the query before you need it.
 
 ---
 

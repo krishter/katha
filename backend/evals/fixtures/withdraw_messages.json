@@ -1,0 +1,25 @@
+{
+  "_about": "Withdrawal (docs/PRE_PILOT_FIX_PLAN.md P4): things a parent who has agreed might say mid-conversation, labelled by hand. Scored on the decision path, core/withdrawal.is_withdrawal: the fixed phrases, then the prefilter, then the classifier. Pass: every withdrawal caught (recall 100%: missing one keeps recording someone who asked to stop), no story read as a withdrawal (precision 100%: the 7-day hold makes a false one recoverable, but it still stops her service). Synthetic; no real parent's words. The non-English lines are machine-written and need a native speaker's check.",
+  "cases": [
+    {"language": "hi-IN", "transcript": "Bas, band karo, mujhe nahi chahiye", "expected": true},
+    {"language": "en-IN", "transcript": "Please stop recording me, I don't want this anymore.", "expected": true},
+    {"language": "en-IN", "transcript": "I've thought about it and I don't want to do this. Please delete what you have.", "expected": true},
+    {"language": "ta-IN", "transcript": "இனிமே எனக்கு இது வேண்டாம், நிறுத்திடுங்க.", "expected": true},
+    {"language": "hi-IN", "transcript": "Ab mujhe yeh sab nahi karna, aap mujhe phone mat karna.", "expected": true},
+    {"language": "hi-IN", "transcript": "मुझसे अब बात मत करना, सब मिटा दो।", "expected": true},
+    {"language": "gu-IN", "transcript": "હવે મારે આ નથી જોઈતું, બંધ કરો.", "expected": true},
+    {"language": "te-IN", "transcript": "ఇక వద్దు, దయచేసి ఆపండి.", "expected": true},
+    {"language": "en-IN", "transcript": "My daughter set this up but honestly I don't want it. Don't call me again.", "expected": true},
+
+    {"language": "en-IN", "transcript": "My father told us to stop playing and come home", "expected": false},
+    {"language": "en-IN", "transcript": "We had to stop the car in the middle of the flood and wait for hours.", "expected": false},
+    {"language": "en-IN", "transcript": "I did not want to marry him at first, but my mother insisted.", "expected": false},
+    {"language": "en-IN", "transcript": "Let's stop for today, I am a bit tired.", "expected": false},
+    {"language": "hi-IN", "transcript": "Aaj ke liye bas, thak gayi hoon, kal baat karte hain.", "expected": false},
+    {"language": "en-IN", "transcript": "My son deleted all the old photos by mistake and I was so upset.", "expected": false},
+    {"language": "hi-IN", "transcript": "Mat ro beta, my grandmother would always say that to me.", "expected": false},
+    {"language": "hi-IN", "transcript": "When the rain came my mother would shout khidki band karo and we all ran to close them.", "expected": false},
+    {"language": "ta-IN", "transcript": "அப்பா கடையை எட்டு மணிக்கு நிறுத்திவிட்டு வீட்டுக்கு வருவார்.", "expected": false},
+    {"language": "en-IN", "transcript": "The mill would stop at noon and everyone ate together under the tree.", "expected": false}
+  ]
+}

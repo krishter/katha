@@ -73,12 +73,19 @@ import httpx  # noqa: E402
 from sqlalchemy import delete, select, text, update  # noqa: E402
 
 from config import settings  # noqa: E402
-from core import auth, orchestrator, parent_consent, session_manager  # noqa: E402
+from core import (  # noqa: E402
+    auth,
+    erasure,
+    orchestrator,
+    parent_consent,
+    session_manager,
+)
 from core.auth import get_current_user  # noqa: E402
 from main import app  # noqa: E402
 from media import storage  # noqa: E402
 from models.consent_record import ConsentRecord  # noqa: E402
 from models.db import AsyncSessionLocal, get_db  # noqa: E402
+from models.erasure_log import ErasureLog  # noqa: E402
 from models.fact import Fact  # noqa: E402
 from models.family_account import FamilyAccount  # noqa: E402
 from models.memory_card import MemoryCard  # noqa: E402
@@ -1184,6 +1191,24 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 all(c.whatsapp_number is None for c in retained),
                 "retained consent records no longer carry her number",
             )
+            logged = (
+                (
+                    await db.execute(
+                        select(ErasureLog).where(
+                            ErasureLog.user_id_hash == erasure.hash_user_id(user_id)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            report.check(
+                len(logged) == 1
+                and logged[0].actor == erasure.ACTOR_FAMILY
+                and not logged[0].failures,
+                "one erasure_log row records it, by the family, with no failures",
+                str([(row.actor, row.failures) for row in logged]),
+            )
 
             survivors = [key for key in tracked_keys if exists(key)]
             if use_s3:
@@ -1268,6 +1293,12 @@ async def _cleanup(user_id: str, use_s3: bool) -> None:
                 ConsentRecord.email_hash == auth.hash_email(_EMAIL)
             )
         )
+        if user_id:
+            await db.execute(
+                delete(ErasureLog).where(
+                    ErasureLog.user_id_hash == erasure.hash_user_id(user_id)
+                )
+            )
         await db.commit()
 
     if use_s3 and keys:

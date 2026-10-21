@@ -33,12 +33,16 @@ OFFER = "offer"
 READBACK = "readback"
 SHARE = "share"
 CONSENT = "consent"
+# Not an answer to a question: whether something she said mid-conversation
+# asks Katha to stop for good (core/withdrawal.py, P4).
+WITHDRAW = "withdraw"
 
 LABELS: dict[str, tuple[str, ...]] = {
     OFFER: ("yes", "not_now", "other"),
     READBACK: ("approve", "correction", "keep_private", "not_now", "unclear"),
     SHARE: ("yes", "no", "unclear"),
     CONSENT: ("yes", "no", "unclear"),
+    WITHDRAW: ("withdraw", "pause", "none"),
 }
 
 # What each kind falls back to: the label that sends and changes nothing.
@@ -47,10 +51,11 @@ SAFE: dict[str, str] = {
     READBACK: "unclear",
     SHARE: "unclear",
     CONSENT: "unclear",
+    WITHDRAW: "none",
 }
 
 # Labels that move something forward. Each must quote her.
-POSITIVE = frozenset({"yes", "approve"})
+POSITIVE = frozenset({"yes", "approve", "withdraw"})
 
 _MAX_TOKENS = 300
 _PURPOSE = "parent_answer_classify"
@@ -91,6 +96,17 @@ her consent to being recorded.
   if it contains "ok", "fine" or "theek hai". So is a greeting, small
   talk ("I am fine"), a story, "hmm", or "ok" said while asking something
   else.""",
+    WITHDRAW: """She is talking with Katha, an AI that records her life stories for
+her family. Decide whether she is asking Katha to stop for good.
+- "withdraw": she clearly wants Katha to stop recording her or contacting
+  her altogether, or to delete what it has ("stop recording me", "don't
+  call me again", "delete everything", "bas, band karo, mujhe nahi
+  chahiye", "இனிமே வேண்டாம், நிறுத்துங்க").
+- "pause": she wants to stop for now, not for good ("let's stop for
+  today", "I'm tired, talk later", "aaj ke liye bas").
+- "none": anything else. "Stop", "delete" or "don't want" inside a story,
+  or said about someone else, is "none" ("my father told us to stop
+  playing and come home", "I did not want to marry him").""",
 }
 
 

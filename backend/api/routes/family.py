@@ -225,6 +225,12 @@ async def get_stats(
         # is theirs (core/family_number.py); the dashboard asks until then.
         "family_whatsapp_number": profile.family_whatsapp_number if profile else None,
         "family_number_confirmed": family_number.is_confirmed(profile),
+        # She asked Katha to stop: when everything will be erased (P4).
+        "erase_after": (
+            profile.erase_after.isoformat()
+            if profile is not None and profile.erase_after
+            else None
+        ),
         "pronouns": profile.pronouns if profile else "",
         "total_sessions": total_sessions,
         "total_story_atoms": total_story_atoms,

@@ -50,6 +50,7 @@ export default function FamilyDashboard() {
           parentName={stats.user_name}
           whatsappLink={stats.parent_whatsapp_link}
           consentedAt={stats.parent_consented_at}
+          eraseAfter={stats.erase_after}
         />
       </div>
 

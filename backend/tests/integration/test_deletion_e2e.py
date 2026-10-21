@@ -38,7 +38,9 @@ from models.voice_change import VoiceChange
 pytestmark = pytest.mark.integration
 
 
-async def _seed_full_user(db, user_id: str) -> uuid.UUID:
+async def _seed_full_user(
+    db, user_id: str, number: str = "+919000000111", email_hash: str = "e2e-hash"
+) -> uuid.UUID:
     """A user with something in every table deletion is meant to reach."""
     session_id = uuid.uuid4()
 
@@ -46,7 +48,7 @@ async def _seed_full_user(db, user_id: str) -> uuid.UUID:
         UserProfileModel(
             user_id=user_id,
             name="Subramaniam",
-            whatsapp_number="+919000000111",
+            whatsapp_number=number,
             preferred_language="en-IN",
             onboarding_context="Grew up in Madurai.",
             family_whatsapp_number="+919000000112",
@@ -138,7 +140,7 @@ async def _seed_full_user(db, user_id: str) -> uuid.UUID:
     db.add(
         ConsentRecord(
             user_id=user_id,
-            email_hash="e2e-hash",
+            email_hash=email_hash,
             consent_version="1.1",
             consented_at=datetime.now(timezone.utc),
             ip_address="203.0.113.9",
@@ -180,7 +182,7 @@ async def test_export_then_delete_removes_every_row(real_db, monkeypatch):
     async def _fake_delete_media(key: str) -> None:
         return None
 
-    monkeypatch.setattr("api.routes.admin.storage.delete_media", _fake_delete_media)
+    monkeypatch.setattr("core.erasure.storage.delete_media", _fake_delete_media)
     monkeypatch.setattr(
         "api.routes.family.storage.generate_presigned_url",
         lambda key, **kw: _noop_url(),
@@ -315,3 +317,99 @@ async def test_delete_rejects_another_users_id(real_db, monkeypatch):
 
 def _noop_url():
     return "https://signed.example/x.png"
+
+
+async def test_the_operator_script_and_the_endpoint_leave_the_same_state(
+    real_db, monkeypatch
+):
+    """P4: one sweep, three callers. The family's delete button and the
+    operator's script must leave identical post-states, checked by table
+    inspection, and each must leave an erasure_log row naming no one."""
+    from core import erasure
+    from models.erasure_log import ErasureLog
+    from scripts import erase_user
+
+    monkeypatch.setattr("core.erasure.storage.delete_media", _fake_delete)
+    by_family = f"e2e-{uuid.uuid4().hex[:8]}"
+    by_operator = f"e2e-{uuid.uuid4().hex[:8]}"
+    await _seed_full_user(real_db, by_family, "+919000000121", "e2e-hash-family")
+    await _seed_full_user(real_db, by_operator, "+919000000122", "e2e-hash-operator")
+
+    async def _override_get_db():
+        async with AsyncSessionLocal() as request_session:
+            yield request_session
+
+    prev_db = app.dependency_overrides.get(get_db)
+    prev_user = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "e2e@katha.life",
+        "user_id": by_family,
+    }
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            deleted = await client.request("DELETE", f"/user/{by_family}")
+        assert deleted.status_code == 200
+
+        async with AsyncSessionLocal() as operator_db:
+            dry = await erase_user.run(by_operator, "test", operator_db)
+            assert dry.startswith("DRY RUN")
+            outcome = await erase_user.run(by_operator, "test", operator_db, apply=True)
+        assert outcome.startswith("ERASED"), outcome
+
+        real_db.expire_all()
+        family_after = await _count_rows(real_db, by_family)
+        operator_after = await _count_rows(real_db, by_operator)
+        assert family_after == operator_after
+        assert all(count == 0 for count in family_after.values()), family_after
+
+        for email_hash in ("e2e-hash-family", "e2e-hash-operator"):
+            consent = (
+                await real_db.execute(
+                    select(ConsentRecord).where(ConsentRecord.email_hash == email_hash)
+                )
+            ).scalar_one()
+            assert consent.user_id == "DELETED"
+            assert consent.ip_address is None and consent.user_agent is None
+            assert consent.whatsapp_number is None
+
+        logs = {
+            row.actor: row
+            for row in (
+                await real_db.execute(
+                    select(ErasureLog).where(
+                        ErasureLog.user_id_hash.in_(
+                            [
+                                erasure.hash_user_id(by_family),
+                                erasure.hash_user_id(by_operator),
+                            ]
+                        )
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        assert set(logs) == {"family", "operator:test"}
+        assert logs["family"].counts == logs["operator:test"].counts
+        assert logs["family"].failures == [] == logs["operator:test"].failures
+        # The log names no one.
+        assert by_family not in str(logs["family"].counts)
+    finally:
+        for key, prev in ((get_db, prev_db), (get_current_user, prev_user)):
+            if prev is not None:
+                app.dependency_overrides[key] = prev
+            else:
+                app.dependency_overrides.pop(key, None)
+        await real_db.execute(
+            ConsentRecord.__table__.delete().where(
+                ConsentRecord.email_hash.in_(["e2e-hash-family", "e2e-hash-operator"])
+            )
+        )
+        await real_db.commit()
+
+
+async def _fake_delete(key: str) -> None:
+    return None
