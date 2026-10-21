@@ -92,6 +92,7 @@ from models.memory_card import MemoryCard  # noqa: E402
 from models.session import Session  # noqa: E402
 from models.story_atom import StoryAtom  # noqa: E402
 from models.turn import Turn  # noqa: E402
+from models.twilio_deletion import TwilioDeletion  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
 from prompts.system_prompt import UserProfile  # noqa: E402
 
@@ -394,12 +395,19 @@ def _override_db():
     return _dep
 
 
+# Every inbound SID this run posted, by sender: step 12 checks Twilio was
+# told to delete each of the parent's (P6).
+_INBOUND_SIDS: dict[str, list[str]] = {}
+
+
 async def _post_inbound(
     client, body: str = "", with_audio: bool = False, number: str = _PARENT_NUMBER
 ) -> int:
+    sid = f"SM{uuid.uuid4().hex[:12]}"
+    _INBOUND_SIDS.setdefault(number, []).append(sid)
     data = {
         "From": f"whatsapp:{number}",
-        "MessageSid": f"SM{uuid.uuid4().hex[:12]}",
+        "MessageSid": sid,
         "Body": body,
     }
     if with_audio:
@@ -1210,6 +1218,32 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 str([(row.actor, row.failures) for row in logged]),
             )
 
+            # Twilio's copies (P6, D8). Voice notes go when heard, the rest
+            # when she is erased; either way none of hers is left.
+            from adapters.whatsapp_stub import DELETED as twilio_deleted
+
+            hers = _INBOUND_SIDS.get(_PARENT_NUMBER, [])
+            left = [sid for sid in hers if sid not in twilio_deleted]
+            report.check(
+                bool(hers) and not left,
+                f"Twilio was told to delete all {len(hers)} of her messages",
+                f"not deleted: {left}",
+            )
+            queued = (
+                (
+                    await db.execute(
+                        select(TwilioDeletion).where(TwilioDeletion.user_id == user_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            report.check(
+                not queued,
+                "no Twilio deletion is still queued under her id",
+                str([row.message_sid for row in queued]),
+            )
+
             survivors = [key for key in tracked_keys if exists(key)]
             if use_s3:
                 report.check(
@@ -1299,6 +1333,16 @@ async def _cleanup(user_id: str, use_s3: bool) -> None:
                     ErasureLog.user_id_hash == erasure.hash_user_id(user_id)
                 )
             )
+        # Queued Twilio deletions this run left: the stub's own sends and
+        # the child's CONFIRM, which no erasure of hers reaches.
+        posted = [sid for sids in _INBOUND_SIDS.values() for sid in sids]
+        await db.execute(
+            delete(TwilioDeletion).where(
+                TwilioDeletion.message_sid.in_(posted)
+                | TwilioDeletion.message_sid.like("STUB_MSG_%")
+                | (TwilioDeletion.user_id == (user_id or "-"))
+            )
+        )
         await db.commit()
 
     if use_s3 and keys:

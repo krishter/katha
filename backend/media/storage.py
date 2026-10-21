@@ -58,7 +58,37 @@ async def upload_media(
         ContentType=content_type,
     )
     logger.info("Uploaded %s (%d bytes)", key, len(data))
+    await _track(key)
     return key
+
+
+# Shared by every parent, never personal: the system-speech cache holds the
+# same fixed sentence for everyone who hears it in that voice.
+_UNTRACKED_PREFIXES = ("system/",)
+
+
+async def _track(key: str) -> None:
+    """
+    Record the object against the user the current usage-ledger scope names
+    (P6, M-08), so erasure finds it even where no typed column does. No
+    user in scope (a shared cache, an admin task): nothing to record.
+    Never raises: the upload has happened, and losing this row is the
+    failure M-08 describes, not a reason to fail the send. Patched in tests.
+    """
+    from core import usage
+
+    user_id = usage.current_scope().get("user_id")
+    if not user_id or key.startswith(_UNTRACKED_PREFIXES):
+        return
+    try:
+        from models.db import AsyncSessionLocal
+        from models.media_object import MediaObject
+
+        async with AsyncSessionLocal() as db:
+            db.add(MediaObject(user_id=user_id, s3_key=key, kind=key.split("/", 1)[0]))
+            await db.commit()
+    except Exception:
+        logger.exception("Could not record s3 object %s for %s", key, user_id)
 
 
 async def generate_presigned_url(key: str, expires_in: int = 900) -> str:

@@ -11,7 +11,7 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client as TwilioClient
 
 from config import settings
-from core import usage
+from core import twilio_cleanup, usage
 from media import storage
 
 if TYPE_CHECKING:
@@ -125,6 +125,10 @@ class WhatsAppAdapter(Protocol):
         """Download media from a Twilio media URL. Returns raw audio bytes."""
         ...
 
+    async def delete_message(self, message_sid: str) -> None:
+        """Delete a message and its media from Twilio. Raises on failure."""
+        ...
+
     def validate_signature(
         self, request_url: str, params: dict, signature: str
     ) -> bool:
@@ -190,6 +194,7 @@ class TwilioWhatsAppAdapter:
         )
         logger.info("Sent voice note to %s: %s", to_number, msg.sid)
         await usage.record_outbound("outbound_voice", msg.sid)
+        await twilio_cleanup.queue(msg.sid, direction=twilio_cleanup.OUTBOUND)
         return msg.sid, s3_key
 
     async def send_image(
@@ -231,6 +236,7 @@ class TwilioWhatsAppAdapter:
             template_sid or "none — free-form, needs an open 24h window",
         )
         await usage.record_outbound(operation, msg.sid, template_sid)
+        await twilio_cleanup.queue(msg.sid, direction=twilio_cleanup.OUTBOUND)
         return msg.sid
 
     async def send_text(
@@ -263,7 +269,25 @@ class TwilioWhatsAppAdapter:
             msg.sid,
             template_sid,
         )
+        await twilio_cleanup.queue(msg.sid, direction=twilio_cleanup.OUTBOUND)
         return msg.sid
+
+    async def delete_message(self, message_sid: str) -> None:
+        """
+        Delete a message and its media from Twilio (P6, D8). Media first:
+        each item is its own resource, and deleting it is what removes the
+        stored voice note. Raises on failure; core/twilio_cleanup.py
+        queues the retry.
+        """
+
+        def _delete() -> None:
+            message = self._client.messages(message_sid)
+            for media in message.media.list():
+                message.media(media.sid).delete()
+            message.delete()
+
+        await asyncio.to_thread(_delete)
+        logger.info("Deleted %s and its media from Twilio", message_sid)
 
     async def download_voice_note(self, media_url: str) -> bytes:
         async with httpx.AsyncClient() as client:

@@ -296,6 +296,22 @@ async def erase_withdrawn(db_session_factory) -> None:
         logger.exception("Scheduler: erasing withdrawn families failed")
 
 
+async def delete_twilio_messages() -> None:
+    """
+    Delete from Twilio every message that is due (core/twilio_cleanup.py,
+    P6, D8): voice notes nobody transcribed, sends whose final status never
+    arrived, and earlier failures.
+    """
+    from core import twilio_cleanup
+
+    try:
+        gone = await twilio_cleanup.run_due()
+        if gone:
+            logger.info("Scheduler: deleted %d message(s) from Twilio", gone)
+    except Exception:
+        logger.exception("Scheduler: deleting Twilio messages failed")
+
+
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
@@ -307,6 +323,14 @@ def create_scheduler(db_session_factory) -> AsyncIOScheduler:
         id="send_conversation_cards",
         replace_existing=True,
         misfire_grace_time=30,
+    )
+    scheduler.add_job(
+        delete_twilio_messages,
+        trigger="cron",
+        minute="*/5",
+        id="delete_twilio_messages",
+        replace_existing=True,
+        misfire_grace_time=240,
     )
     scheduler.add_job(
         erase_withdrawn,

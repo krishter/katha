@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import twilio_cleanup
 from media import storage
 from models.api_usage import ApiUsage
 from models.consent_record import ConsentRecord
@@ -33,6 +34,7 @@ from models.fact import Fact
 from models.family_account import FamilyAccount
 from models.family_question import FamilyQuestion
 from models.magic_link_token import MagicLinkToken
+from models.media_object import MediaObject
 from models.memory_card import MemoryCard
 from models.session import Session
 from models.story_atom import StoryAtom
@@ -74,6 +76,9 @@ async def _object_keys(user_id: str, db: AsyncSession, report: ErasureReport):
         ("session_open_audio", Session.session_open_audio_s3_key, Session),
         # Conversation card images (CONVERSATION_CARDS.md §11).
         ("conversation_cards", ConversationCard.image_s3_key, ConversationCard),
+        # Everything else uploaded for her, the consent welcome and other
+        # system voice notes among it (P6, M-08).
+        ("media_objects", MediaObject.s3_key, MediaObject),
     ):
         try:
             rows = await db.execute(
@@ -95,7 +100,7 @@ async def erase_user(user_id: str, db: AsyncSession, *, actor: str) -> ErasureRe
 
     # 1. Objects in the bucket, while the rows that name them still exist.
     removed = 0
-    for key in await _object_keys(user_id, db, report):
+    for key in sorted(set(await _object_keys(user_id, db, report))):
         try:
             await storage.delete_media(key)
             removed += 1
@@ -103,6 +108,16 @@ async def erase_user(user_id: str, db: AsyncSession, *, actor: str) -> ErasureRe
             logger.exception("Erasure: could not delete s3 %s for %s", key, user_id)
             report.failures.append(f"s3:{key}")
     report.counts["s3_objects"] = removed
+
+    # 1b. Twilio's copies of her messages (P6, D8). A failure stays queued
+    # under "DELETED" and the scheduler keeps trying.
+    try:
+        gone, failed = await twilio_cleanup.erase_for_user(user_id, db)
+        report.counts["twilio_messages"] = gone
+        report.failures += [f"twilio:{sid}" for sid in failed]
+    except Exception:
+        logger.exception("Erasure: could not delete Twilio messages for %s", user_id)
+        report.failures.append("twilio")
 
     # 2. Rows that belong to this user_id. Children before parents.
     for label, stmt in [
@@ -131,6 +146,7 @@ async def erase_user(user_id: str, db: AsyncSession, *, actor: str) -> ErasureRe
             "family_questions",
             delete(FamilyQuestion).where(FamilyQuestion.user_id == user_id),
         ),
+        ("media_objects", delete(MediaObject).where(MediaObject.user_id == user_id)),
     ]:
         try:
             result = await db.execute(stmt)

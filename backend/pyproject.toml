@@ -46,5 +46,7 @@ markers = [
     "opener_off: run a scheduler test with SCHEDULED_OPENER_ENABLED=false, the default (see tests/test_session_initiator.py).",
     "real_s3_client: build a real boto3 S3 client (with dummy credentials, no network) instead of the refusal every other test gets (see backend/conftest.py).",
     "real_ledger: write usage-ledger rows to the real database instead of the in-memory capture every other test gets (see backend/conftest.py).",
+    "real_twilio_queue: write core/twilio_cleanup's deletion queue to the real database instead of the in-memory capture every other test gets (see backend/conftest.py).",
+    "real_media_tracking: record uploaded S3 keys in the real media_objects table instead of the in-memory capture every other test gets (see backend/conftest.py).",
     "integration: requires a real Postgres (pgvector) connection — skips itself if DATABASE_URL isn't reachable rather than failing CI, which has no DB service. Run against `docker compose up db` for real verification (see REMEDIATION_PLAN WS5).",
 ]

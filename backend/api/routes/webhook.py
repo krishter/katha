@@ -25,6 +25,7 @@ from core import (
     orchestrator,
     parent_consent,
     session_manager,
+    twilio_cleanup,
     usage,
     withdrawal,
 )
@@ -578,6 +579,12 @@ async def twilio_status_callback(
         await record_card_delivery(message_sid, status, error_code, db)
         await usage.record_status(message_sid, status, error_code)
 
+        # Final: Twilio's copy of what Katha sent her can go (P6, D8). Only
+        # after the status is recorded above. A delete that fails stays
+        # queued for the scheduler.
+        if status in twilio_cleanup.FINAL_STATUSES:
+            await twilio_cleanup.delete_now(message_sid, whatsapp)
+
     except Exception:
         logger.error("Status callback processing error", exc_info=True)
 
@@ -716,6 +723,16 @@ async def _whatsapp_incoming(
         # it with "your session isn't scheduled yet".
         profile = await _load_profile_by_number(from_number, db)
 
+        # Twilio keeps every message until told otherwise (P6, D8). Queue
+        # this one for deletion now, so even a message whose handling fails
+        # below is deleted by the scheduler once INBOUND_GRACE has passed.
+        # A voice note is deleted sooner, straight after it is transcribed.
+        await twilio_cleanup.queue(
+            message_sid,
+            direction=twilio_cleanup.INBOUND,
+            user_id=profile.user_id if profile is not None else None,
+        )
+
         # 5a. The child confirming the family number (P3, D3): "CONFIRM
         # <code>" from the number memory cards go to. Cards on or off, since
         # memory cards go to that number either way. A parent's own number
@@ -775,6 +792,10 @@ async def _whatsapp_incoming(
                     audio_bytes = await whatsapp.download_voice_note(media_url)
                     stt = await sarvam_stt.transcribe(audio_bytes)
                     transcript = stt.transcript
+                    # Heard; Twilio's copy can go, after the response.
+                    background_tasks.add_task(
+                        twilio_cleanup.delete_now, message_sid, whatsapp
+                    )
                 except Exception:
                     logger.exception(
                         "Could not transcribe consent reply from %s", from_number
@@ -800,6 +821,10 @@ async def _whatsapp_incoming(
             audio_bytes = await whatsapp.download_voice_note(media_url)
             try:
                 stt_result = await sarvam_stt.transcribe(audio_bytes)
+                # Heard; Twilio's copy can go, after the response (P6).
+                background_tasks.add_task(
+                    twilio_cleanup.delete_now, message_sid, whatsapp
+                )
             except Exception:
                 logger.warning(
                     "STT failed before the withdrawal check for %s",

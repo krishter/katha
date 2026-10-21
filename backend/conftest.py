@@ -75,6 +75,59 @@ def no_real_s3(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def media_objects(request, monkeypatch):
+    """
+    Record media/storage's object tracking in memory (P6), like the usage
+    ledger above: a unit test must not open a real DB connection to write
+    it. A test that needs the real write marks itself real_media_tracking.
+    Yields the list of keys recorded.
+    """
+    if request.node.get_closest_marker("real_media_tracking"):
+        yield None
+        return
+
+    from core import usage
+
+    keys: list[tuple[str, str]] = []
+
+    async def _track(key):
+        user_id = usage.current_scope().get("user_id")
+        if user_id and not key.startswith("system/"):
+            keys.append((user_id, key))
+
+    monkeypatch.setattr("media.storage._track", _track)
+    yield keys
+
+
+@pytest.fixture(autouse=True)
+def twilio_queue(request, monkeypatch):
+    """
+    Capture core/twilio_cleanup's queue and deletes in memory (P6): unit
+    tests must not write the queue to a real database or call Twilio. A
+    test that needs the real thing marks itself real_twilio_queue. Yields
+    (sid, "inbound" | "outbound" | "deleted") in order.
+    """
+    if request.node.get_closest_marker("real_twilio_queue"):
+        yield None
+        return
+
+    queued: list[tuple[str, str]] = []
+
+    async def _queue(message_sid, *, direction, user_id=None, delay=None):
+        if message_sid:
+            queued.append((message_sid, direction))
+
+    async def _delete_now(message_sid, whatsapp=None):
+        if message_sid:
+            queued.append((message_sid, "deleted"))
+        return True
+
+    monkeypatch.setattr("core.twilio_cleanup.queue", _queue)
+    monkeypatch.setattr("core.twilio_cleanup.delete_now", _delete_now)
+    yield queued
+
+
+@pytest.fixture(autouse=True)
 def no_real_gemini(monkeypatch):
     """
     No test reaches Google with the developer's real key from backend/.env.
