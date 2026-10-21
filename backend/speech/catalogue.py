@@ -52,6 +52,8 @@ MESSAGE_IDS: tuple[str, ...] = (
     "fallback_other",
     "malformed",
     "already_talked",
+    "already_talked_addendum",
+    "trial_paused",
     "text_only",
     "crisis",
     "crisis_text",

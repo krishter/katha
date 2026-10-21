@@ -17,6 +17,8 @@
   "fallback_other": "Something went wrong on my side. I'll be here tomorrow at our usual time.",
   "malformed": "I'm so sorry, I lost my train of thought just now! Could you tell me that again? I want to make sure I give you my full attention.",
   "already_talked": "We already had our conversation today — thank you for that. I'll be here again tomorrow, and I'm looking forward to it. If there's something you want to add, just send it and I'll keep it safe.",
+  "already_talked_addendum": "Thank you — I've kept that safe. Let's talk more tomorrow.",
+  "trial_paused": "Thank you for wanting to talk with me — it means a great deal. Our conversations are paused for now. This is nothing you have done. Your family will be in touch with you about it soon.",
   "text_only": "Please send me a voice message — I'd love to hear your voice! 🎙",
   "crisis": "I can hear that things feel very difficult right now, and I'm glad you felt safe enough to share that with me. Please reach out to iCall India: 9152987821 — they are available to talk and to help. Your wellbeing matters more than any story we could share today. Please take care of yourself.",
   "crisis_text": "I'm worried about you. Please reach out to iCall India: 9152987821. They are available and ready to help."

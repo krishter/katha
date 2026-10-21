@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fastapi import (
@@ -40,6 +41,19 @@ from speech import catalogue
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# At the free limit she is told her conversations are paused at most this
+# often (P8, D7); in between, Katha stays quiet rather than repeat it.
+_TRIAL_PAUSED_EVERY = timedelta(days=7)
+
+
+@dataclass(frozen=True)
+class _Addendum:
+    """The day's conversation is over: what she sends now is kept on it
+    (P8, D6)."""
+
+    session_id: str
+
 
 # After a "no" or a withdrawal, Katha answers her at most this often (P4).
 # "I will not message you again" has to hold; one reply a month keeps her
@@ -354,9 +368,10 @@ async def _open_session_on_demand(
     """
     Open a session because the parent sent something and none was active.
 
-    Returns the new SessionState, or None if no session should start — in
-    which case this has already said something appropriate and the caller
-    should just acknowledge the webhook.
+    Returns the new SessionState; an _Addendum naming the conversation she
+    already finished today, for the caller to keep what she sent on it; or
+    None if nothing should happen, in which case this has already said
+    something appropriate and the caller should just acknowledge.
 
     Consent is not re-checked here: step 5 above returns before this point
     for anyone who has not granted it, so reaching this function means she
@@ -374,32 +389,30 @@ async def _open_session_on_demand(
     # cadence the product does not promise, and the daily rhythm is the
     # therapeutic design (PRD 5.1), not a rate limit. An abandoned session
     # does not count — that is the case this whole path exists for.
-    if await session_manager.completed_session_today(
+    done_today = await session_manager.completed_session_today_id(
         profile.user_id, db, profile.timezone or "Asia/Kolkata"
-    ):
+    )
+    if done_today is not None:
         logger.info(
-            "Inbound from %s but a session already completed today — not opening",
+            "Inbound from %s after today's session — keeping it as an addendum",
             profile.user_id,
         )
-        await _speak(
-            whatsapp,
-            profile,
-            _say("already_talked", profile),
-            stage="already_talked",
-            fixed=True,
-        )
-        return None
+        return _Addendum(done_today)
 
     try:
         state = await session_manager.start_session(profile.user_id, db)
     except HTTPException as exc:
         # 402 is the freemium limit. start_session has already sent the
-        # upgrade prompt to the family, so say nothing further to her —
-        # being asked to pay is not her transaction.
+        # upgrade prompt to the family. Being asked to pay is not her
+        # transaction, but silence is the worst thing a friend can do (M-13,
+        # D7): she hears, once a week at most, that the conversations are
+        # paused, that it is nothing she did, and that her family will be
+        # in touch.
         if exc.status_code == 402:
             logger.info(
                 "On-demand session refused for %s — free limit", profile.user_id
             )
+            await _say_trial_paused(whatsapp, profile, db)
             return None
         raise
     except Exception:
@@ -420,6 +433,79 @@ async def _open_session_on_demand(
         state.domain,
     )
     return state
+
+
+async def _say_trial_paused(
+    whatsapp, profile: UserProfileModel, db: AsyncSession
+) -> None:
+    last = profile.trial_paused_said_at
+    now = datetime.now(timezone.utc)
+    if last is not None and now - last < _TRIAL_PAUSED_EVERY:
+        logger.info("Free limit for %s — told within the week; quiet", profile.user_id)
+        return
+    await _speak(
+        whatsapp,
+        profile,
+        _say("trial_paused", profile),
+        stage="trial_paused",
+        fixed=True,
+    )
+    profile.trial_paused_said_at = now
+    db.add(profile)
+    await db.commit()
+
+
+async def _keep_addendum(
+    whatsapp,
+    profile: UserProfileModel,
+    addendum: _Addendum,
+    *,
+    media_url: str,
+    media_type: str,
+    audio_bytes,
+    stt_result,
+    message_sid,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession,
+) -> None:
+    """She sent something after today's conversation ended (P8, D6). A
+    voice note is kept on that conversation; a typed message gets the
+    already-talked reply, which tells her to send a voice note."""
+    if not (media_url and "audio" in media_type):
+        await _speak(
+            whatsapp,
+            profile,
+            _say("already_talked", profile),
+            stage="already_talked",
+            fixed=True,
+        )
+        return
+
+    if audio_bytes is None:
+        audio_bytes = await whatsapp.download_voice_note(media_url)
+    state = await session_manager.get_session(addendum.session_id, db)
+    usage.enter_scope(user_id=state.user_id, session_id=state.session_id)
+    user_profile = await _load_user_profile_for_session(state, db)
+    result = await orchestrator.process_addendum_turn(
+        audio_bytes,
+        addendum.session_id,
+        user_profile,
+        db,
+        inbound_message_sid=message_sid,
+        background_tasks=background_tasks,
+        stt_result=stt_result,
+    )
+    if result is None:
+        return
+    usage.enter_scope(turn_id=result.turn_id)
+    await _deliver_turn_result(whatsapp, profile.whatsapp_number, result, db)
+    if result.crisis_detected:
+        await _safe_send_text(
+            whatsapp,
+            profile.whatsapp_number,
+            _say("crisis_text", profile),
+            stage="crisis",
+        )
 
 
 async def _load_profile_by_number(
@@ -867,9 +953,24 @@ async def _whatsapp_incoming(
         # manufacture. Open a session and let her talk.
         state = await session_manager.get_active_session_by_number(from_number, db)
         if state is None:
-            state = await _open_session_on_demand(whatsapp, profile, from_number, db)
-            if state is None:
+            opened = await _open_session_on_demand(whatsapp, profile, from_number, db)
+            if opened is None:
                 return _ack()
+            if isinstance(opened, _Addendum):
+                await _keep_addendum(
+                    whatsapp,
+                    profile,
+                    opened,
+                    media_url=media_url,
+                    media_type=media_type,
+                    audio_bytes=audio_bytes,
+                    stt_result=stt_result,
+                    message_sid=message_sid,
+                    background_tasks=background_tasks,
+                    db=db,
+                )
+                return _ack()
+            state = opened
         usage.enter_scope(user_id=state.user_id, session_id=state.session_id)
 
         # 6. Handle voice note

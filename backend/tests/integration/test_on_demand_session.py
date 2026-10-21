@@ -27,10 +27,15 @@ import pytest
 from sqlalchemy import select
 
 from core import parent_consent
+from core.freemium import FREE_SESSION_LIMIT
 from main import app
 from models.consent_record import ConsentRecord
+from models.crisis_event import CrisisEvent
 from models.db import AsyncSessionLocal, get_db
+from models.family_account import FamilyAccount
 from models.session import Session
+from models.story_atom import StoryAtom
+from models.turn import Turn
 from models.user_profile import UserProfileModel
 from speech import catalogue
 
@@ -75,7 +80,9 @@ async def _seed_consented_parent(db) -> str:
 class _Harness:
     """Drives the real webhook with only the network edges patched."""
 
-    def __init__(self):
+    def __init__(self, transcript="I grew up in Madurai.", extraction="{}"):
+        self.transcript = transcript
+        self.extraction = extraction
         self.adapter = MagicMock()
         self.adapter.validate_signature = MagicMock(return_value=True)
         self.adapter.send_voice_note = AsyncMock(return_value=("SM_V", "audio/x.ogg"))
@@ -103,7 +110,7 @@ class _Harness:
             content = (
                 "<response>Tell me more about that.</response>"
                 if system is not None
-                else "<extraction>{}</extraction>"
+                else f"<extraction>{self.extraction}</extraction>"
             )
             return SimpleNamespace(
                 content=content,
@@ -117,7 +124,7 @@ class _Harness:
                 "core.orchestrator.sarvam_stt.transcribe",
                 new=AsyncMock(
                     return_value=SimpleNamespace(
-                        transcript="I grew up in Madurai.",
+                        transcript=self.transcript,
                         language_code="ta-IN",
                         language_probability=0.95,
                     )
@@ -239,16 +246,16 @@ async def test_an_abandoned_session_does_not_block_a_new_one(real_db):
     assert len(active) == 1, "an abandoned session wrongly blocked a new one"
 
 
-async def test_a_completed_session_today_is_not_repeated(real_db):
-    """One conversation a day. She is answered warmly, not stonewalled."""
-    user_id = await _seed_consented_parent(real_db)
-    real_db.add(
+async def _completed_today(db, user_id) -> uuid.UUID:
+    session_id = uuid.uuid4()
+    db.add(
         Session(
-            id=uuid.uuid4(),
+            id=session_id,
             user_id=user_id,
             session_number=1,
             domain="childhood",
             status="completed",
+            exchange_count=4,
             # Minutes, not hours: "today" is the IST calendar day, and two
             # hours ago is yesterday for the first two hours after midnight
             # IST, which made this fail every night between 00:00 and 02:00.
@@ -257,19 +264,162 @@ async def test_a_completed_session_today_is_not_repeated(real_db):
             ended_reason="goal_met",
         )
     )
-    await real_db.commit()
+    await db.commit()
+    return session_id
 
-    async with _Harness() as h:
+
+async def _turns(db, session_id) -> list[Turn]:
+    db.expire_all()
+    return list(
+        (await db.execute(select(Turn).where(Turn.session_id == session_id)))
+        .scalars()
+        .all()
+    )
+
+
+async def test_a_completed_session_today_keeps_what_she_sends(real_db):
+    """M-12: one conversation a day, and what she remembers after it is
+    kept, not thrown away under a promise to keep it."""
+    user_id = await _seed_consented_parent(real_db)
+    session_id = await _completed_today(real_db, user_id)
+
+    async with _Harness(transcript="And the temple bell, every evening.") as h:
         await h.inbound()
         said = h.everything_said()
 
-    # In Tamil, her language — not the English it used to be (M-14).
-    assert _ALREADY_TALKED_TA in said, f"got: {said[:160]!r}"
-    assert "already had our conversation" not in said
+    turns = await _turns(real_db, session_id)
+    assert [t.transcript for t in turns] == ["And the temple bell, every evening."]
+    # In Tamil, her language, and the words match what happened.
+    assert catalogue.text("already_talked_addendum", "ta-IN").lower() in said
     assert "isn't scheduled" not in said, "the cold brush-off survived"
 
+    sessions = await _sessions(real_db, user_id)
+    assert not [s for s in sessions if s.status == "active"], (
+        "a second session was opened on the same day"
+    )
+    done = next(s for s in sessions if s.id == session_id)
+    assert done.status == "completed" and done.ended_reason == "goal_met"
+
+
+async def test_an_addendum_s_stories_are_extracted(real_db):
+    user_id = await _seed_consented_parent(real_db)
+    session_id = await _completed_today(real_db, user_id)
+    atom = (
+        '{"story_atoms": [{"domain": "childhood", "title": "The temple bell", '
+        '"narrative": "The temple bell rang every evening.", "who": [], '
+        '"what": "the bell", "when_approx": null, "where_approx": "Madurai", '
+        '"why": null, "verbatim_quote": null, "open_threads": []}], '
+        '"named_entities": {}, "significant_people": [], "themes": [], '
+        '"energy_signal": "high", "gaps_remaining": [], '
+        '"session_end_suggested": true, "share_restriction": "none", '
+        '"topic_label": null}'
+    )
+
+    async with _Harness(transcript="The temple bell.", extraction=atom) as h:
+        await h.inbound()
+
+    turn = (await _turns(real_db, session_id))[0]
+    atoms = (
+        (await real_db.execute(select(StoryAtom).where(StoryAtom.turn_id == turn.id)))
+        .scalars()
+        .all()
+    )
+    assert [a.title for a in atoms] == ["The temple bell"]
+    assert turn.extraction_status == "done"
+    done = next(s for s in await _sessions(real_db, user_id) if s.id == session_id)
+    assert done.exchange_count == 4, "the finished session is not touched"
+
+
+async def test_a_crisis_in_an_addendum_is_answered_as_a_crisis(real_db):
+    user_id = await _seed_consented_parent(real_db)
+    session_id = await _completed_today(real_db, user_id)
+
+    async with _Harness(transcript="I want to die, I am so alone") as h:
+        await h.inbound()
+        said = h.everything_said()
+
+    events = (
+        (
+            await real_db.execute(
+                select(CrisisEvent).where(CrisisEvent.session_id == session_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 1
+    assert "9152987821" in said, "the crisis reply, with the helpline"
+    assert catalogue.text("already_talked_addendum", "ta-IN").lower() not in said
+
+
+async def test_after_five_a_day_she_is_still_kept_but_not_answered(real_db):
+    user_id = await _seed_consented_parent(real_db)
+    session_id = await _completed_today(real_db, user_id)
+
+    async with _Harness(transcript="One more thing.") as h:
+        for _ in range(6):
+            await h.inbound()
+        voice_notes = h.adapter.send_voice_note.await_count
+
+    assert len(await _turns(real_db, session_id)) == 6, "all six kept"
+    assert voice_notes == 5, "answered five times, then quiet until tomorrow"
+
+
+# ── the free limit (M-13, D7) ────────────────────────────────────────────────
+
+
+async def _past_the_free_limit(db, user_id, plan: str) -> None:
+    db.add(
+        FamilyAccount(
+            email=f"{user_id}@example.test",
+            user_id=user_id,
+            plan=plan,
+            onboarding_complete=True,
+        )
+    )
+    for n in range(1, FREE_SESSION_LIMIT + 1):
+        db.add(
+            Session(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                session_number=n,
+                domain="childhood",
+                status="completed",
+                exchange_count=3,
+                started_at=datetime.now(timezone.utc) - timedelta(days=30 - n),
+                ended_at=datetime.now(timezone.utc) - timedelta(days=30 - n),
+            )
+        )
+    await db.commit()
+
+
+async def test_a_pilot_family_is_never_stopped_at_the_free_limit(real_db):
+    user_id = await _seed_consented_parent(real_db)
+    await _past_the_free_limit(real_db, user_id, "pilot")
+
+    async with _Harness() as h:
+        await h.inbound()
+
     active = [s for s in await _sessions(real_db, user_id) if s.status == "active"]
-    assert not active, "a second session was opened on the same day"
+    assert len(active) == 1 and active[0].session_number == FREE_SESSION_LIMIT + 1
+
+
+async def test_at_the_free_limit_she_hears_why_once_a_week(real_db):
+    user_id = await _seed_consented_parent(real_db)
+    await _past_the_free_limit(real_db, user_id, "free")
+    paused = catalogue.text("trial_paused", "ta-IN").lower()
+
+    with patch("core.freemium.send_email_ses", new=AsyncMock()):
+        async with _Harness() as h:
+            await h.inbound()
+            first = h.everything_said()
+        async with _Harness() as h2:
+            await h2.inbound()
+            second = h2.everything_said()
+
+    assert paused in first, "not silence: she is told, kindly, in Tamil"
+    assert second.strip() == "", "and not again within the week"
+    assert not [s for s in await _sessions(real_db, user_id) if s.status == "active"]
 
 
 async def test_an_active_session_is_reused_not_duplicated(real_db):
@@ -285,4 +435,27 @@ async def test_an_active_session_is_reused_not_duplicated(real_db):
     ]
     assert len(domain_sessions) == 1, (
         f"two messages produced {len(domain_sessions)} sessions"
+    )
+
+
+async def test_set_plan_moves_a_family_to_pilot(real_db):
+    from scripts.set_plan import set_plan
+
+    user_id = await _seed_consented_parent(real_db)
+    real_db.add(
+        FamilyAccount(email=f"{user_id}@example.test", user_id=user_id, plan="free")
+    )
+    await real_db.commit()
+
+    assert (await set_plan(user_id, "pilot", "test", real_db, apply=False)).startswith(
+        "DRY RUN"
+    )
+    assert (await set_plan(user_id, "gold", "test", real_db, apply=True)).startswith(
+        "REFUSED"
+    )
+    assert (await set_plan(user_id, "pilot", "test", real_db, apply=True)).startswith(
+        "CHANGED"
+    )
+    assert (await set_plan(user_id, "pilot", "test", real_db, apply=True)).startswith(
+        "UNCHANGED"
     )
