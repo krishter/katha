@@ -151,6 +151,15 @@ async def completed_session_today(
     and the parent never replied — which is precisely the person this is
     meant to let back in.
     """
+    return await completed_session_today_id(user_id, db, tz_name) is not None
+
+
+async def completed_session_today_id(
+    user_id: str, db: AsyncSession, tz_name: str = "Asia/Kolkata"
+) -> str | None:
+    """The latest conversation she finished today, in her own day, or None.
+    See completed_session_today for what "today" and "finished" mean. A
+    voice note after it is kept on it as an addendum (P8, D6)."""
     try:
         tz = pytz.timezone(tz_name)
     except Exception:
@@ -163,12 +172,15 @@ async def completed_session_today(
     ).astimezone(timezone.utc)
 
     result = await db.execute(
-        select(func.count(Session.id))
+        select(Session.id)
         .where(Session.user_id == user_id)
         .where(Session.status == "completed")
         .where(Session.started_at >= midnight_utc)
+        .order_by(Session.started_at.desc())
+        .limit(1)
     )
-    return result.scalar_one() > 0
+    session_id = result.scalar_one_or_none()
+    return str(session_id) if session_id is not None else None
 
 
 async def get_session(session_id: str, db: AsyncSession) -> SessionState:

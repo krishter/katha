@@ -47,6 +47,7 @@ from prompts.system_prompt import (
     build_extraction_prompt,
     build_system_prompt_parts,
 )
+from speech import catalogue
 
 logger = logging.getLogger(__name__)
 
@@ -842,6 +843,181 @@ async def _fallback_turn_result(
     )
 
 
+# After this many addendum turns in a day she still has everything kept,
+# but Katha stops replying until tomorrow (P8): a bound on cost, and on a
+# loop of thank-yous.
+ADDENDUM_REPLIES_PER_DAY = 5
+
+
+async def process_addendum_turn(
+    audio_bytes: bytes,
+    session_id: str,
+    user_profile: UserProfile,
+    db,
+    *,
+    inbound_message_sid: Optional[str] = None,
+    background_tasks: BackgroundTasks | None = None,
+    stt_result=None,
+) -> Optional[TurnResult]:
+    """
+    A voice note after the day's conversation has ended (P8, D6). It used to
+    be answered "send it and I'll keep it safe", and then thrown away.
+
+    Kept, without a dialogue call: transcribed, checked for a crisis like
+    any turn, stored as a turn on that session, and extracted (atoms and
+    privacy) in the background, without touching or re-closing the
+    session. She hears one fixed sentence in her language. After
+    ADDENDUM_REPLIES_PER_DAY of them it is still kept but not answered;
+    returns None then.
+    """
+    from sqlalchemy import func
+
+    state = await session_manager.get_session(session_id, db)
+    language = user_profile.preferred_language
+
+    # 1. Transcribe, unless the webhook already has (P4).
+    try:
+        if stt_result is None:
+            stt_result = await sarvam_stt.transcribe(audio_bytes)
+    except Exception:
+        logger.error(
+            "STT failed for an addendum to session %s", session_id, exc_info=True
+        )
+        return await _fallback_turn_result(
+            FailureStage.STT,
+            state,
+            transcript="",
+            detected_language=language,
+            user_profile=user_profile,
+        )
+
+    # 2. The crisis check. An addendum must not be a way round it.
+    pre_check = conversation_policy.check_pre_turn(
+        stt_result.transcript,
+        state,
+        language=language,
+        gender=user_profile.katha_gender,
+    )
+    if not pre_check.allowed:
+        logger.warning("Addendum blocked by the pre-turn policy: crisis detected")
+        await _log_crisis_event(
+            session_id, None, "user_transcript", pre_check.matched_pattern or "", db
+        )
+        return await _send_or_degrade(
+            pre_check.override_response or "",
+            stt_result.language_code,
+            stt_result.transcript,
+            state,
+            dict(_EMPTY_EXTRACTION),
+            crisis_detected=True,
+            user_profile=user_profile,
+        )
+
+    # 3. Keep it, on that session, after its last turn.
+    session_row = (
+        await db.execute(select(Session).where(Session.id == uuid.UUID(session_id)))
+    ).scalar_one()
+    last_turn = (
+        await db.execute(
+            select(func.max(Turn.turn_number)).where(
+                Turn.session_id == uuid.UUID(session_id)
+            )
+        )
+    ).scalar_one()
+    earlier_addenda = 0
+    if session_row.ended_at is not None:
+        earlier_addenda = (
+            await db.execute(
+                select(func.count(Turn.id))
+                .where(Turn.session_id == uuid.UUID(session_id))
+                .where(Turn.created_at > session_row.ended_at)
+            )
+        ).scalar_one()
+    reply = earlier_addenda < ADDENDUM_REPLIES_PER_DAY
+    response_text = (
+        catalogue.text(
+            "already_talked_addendum", language, gender=user_profile.katha_gender
+        )
+        if reply
+        else "[addendum kept; daily replies used up]"
+    )
+    turn = await _persist_turn(
+        session_id,
+        state.user_id,
+        (last_turn or 0) + 1,
+        inbound_message_sid,
+        stt_result.transcript,
+        stt_result.language_code,
+        response_text,
+        dict(_EMPTY_EXTRACTION),
+        0,
+        0,
+        db,
+    )
+    logger.info(
+        "Kept an addendum on session %s (turn %s; %d earlier today)",
+        session_id,
+        turn.id,
+        earlier_addenda,
+    )
+
+    # 4. Its atoms and her privacy, read like any turn's.
+    if background_tasks is not None:
+        prior_context = await prior_context_for_session(
+            session_id, state.user_id, state.domain, db
+        )
+        background_tasks.add_task(
+            run_extraction_for_turn,
+            turn.id,
+            session_id,
+            state,
+            user_profile,
+            prior_context,
+            stt_result.transcript,
+            response_text,
+            db,
+            addendum=True,
+        )
+    if not reply:
+        return None
+
+    # 5. The one fixed sentence, from the system-speech cache.
+    with usage.usage_scope(turn_id=turn.id):
+        try:
+            from media import system_speech
+
+            audio = await system_speech.get_system_speech(
+                response_text,
+                language,
+                gender=user_profile.katha_gender,
+                voice=tts.voice_of(user_profile),
+            )
+            return TurnResult(
+                response_audio=audio,
+                response_text=response_text,
+                extraction_json=dict(_EMPTY_EXTRACTION),
+                transcript=stt_result.transcript,
+                detected_language=stt_result.language_code,
+                session_state=state,
+                crisis_detected=False,
+                response_mime_type="audio/ogg",
+                turn_id=turn.id,
+            )
+        except Exception:
+            logger.error("Addendum speech failed — sending it as text", exc_info=True)
+            return TurnResult(
+                response_audio=b"",
+                response_text=response_text,
+                extraction_json=dict(_EMPTY_EXTRACTION),
+                transcript=stt_result.transcript,
+                detected_language=stt_result.language_code,
+                session_state=state,
+                crisis_detected=False,
+                response_mime_type="text/plain",
+                turn_id=turn.id,
+            )
+
+
 async def process_voice_turn(
     audio_bytes: bytes,
     session_id: str,
@@ -1257,6 +1433,7 @@ async def run_extraction_for_turn(
     transcript: str,
     response_text: str,
     db,
+    addendum: bool = False,
 ) -> None:
     """
     See _run_extraction_for_turn. A background task, so the usage-ledger
@@ -1275,6 +1452,7 @@ async def run_extraction_for_turn(
             transcript,
             response_text,
             db,
+            addendum=addendum,
         )
 
 
@@ -1317,6 +1495,7 @@ async def _run_extraction_for_turn(
     transcript: str,
     response_text: str,
     db,
+    addendum: bool = False,
 ) -> None:
     """
     Background task: the structured-extraction half of a turn, decoupled
@@ -1388,6 +1567,12 @@ async def _run_extraction_for_turn(
             await db.commit()
         if not privacy_read:
             await _alert_extraction_failed(turn_id, session_state.user_id)
+
+        if addendum:
+            # Kept on a session that has already ended (P8): its atoms and
+            # privacy are read like any turn's, but the session's state is
+            # not touched and it does not close a second time.
+            return
 
         new_state = await session_manager.apply_extraction(
             session_id, extraction_json, db

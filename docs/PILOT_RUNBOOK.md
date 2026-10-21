@@ -30,9 +30,9 @@ The parent never touches a browser. Everything she sees arrives on WhatsApp.
    It is the only thing standing between you and a repeat of the webhook `ImportError`.
 4. **Check sender health.** `python backend/scripts/verify_whatsapp_sender.py` — real send,
    real number. Template approvals expire and quality ratings drop silently.
-5. 🔧 **Decide the free-session posture.** `FREE_SESSION_LIMIT = 10` in `core/freemium.py`
-   stops the scheduler at session 11. Either raise it for pilot families or diarise the
-   cliff now (see Day 10). *Replaced by: T3.*
+5. **Put the family on the pilot plan** as soon as their account exists, before her first
+   message: `python -m scripts.set_plan --user-id … --plan pilot --by <you>` (dry run), then
+   add `--apply`. Pilots are not a payment test; on `free`, conversation 11 is refused.
 
 **Gate:** rehearsal green + sender verified. Do not proceed on a red rehearsal.
 
@@ -210,18 +210,16 @@ once atoms span more than five domains the earliest domain drops out of the prom
 🔧 Read the assembled Layer 3 block at session 5 and check `childhood` is still in it. If it
 has vanished, that is T5's trigger firing — do T5 before family #2.
 
-**Session 10 — the free limit. ⚠️ The most harmful interaction in the system today.**
-At session 11 `is_session_allowed` returns false, the scheduler skips the family, and Katha
-simply stops calling. The parent gets no explanation. For a product about loneliness, a
-friend who vanishes without a word is worse than never having called.
+**Session 10 — the free limit.** Pilot families are on the `pilot` plan (pre-flight step 5)
+and never reach it; check with `python -m scripts.set_plan --user-id … --plan pilot --by
+<you>` (it prints UNCHANGED). On `free`, her 11th conversation is refused. She hears once a
+week at most, in her language, that the conversations are paused, that it is nothing she
+did, and that her family will be in touch. The family is emailed the upgrade prompt.
 
-Until T3 ships, **do one of these before session 10, not after:**
-
-- Raise `FREE_SESSION_LIMIT` for pilot families (pilots aren't a payment test), **or**
-- 🔧 Send the parent a warm message yourself, in her language, saying conversations are
-  pausing and that it is nothing she did.
-
-Diarise the date at onboarding: daily cadence puts it ~day 10–11.
+**After the day's conversation ends**, a voice note she sends is kept on that conversation
+(transcribed, crisis-checked, its stories extracted), and she hears "Thank you — I've kept
+that safe. Let's talk more tomorrow." After five in a day they are still kept, but not
+answered until tomorrow.
 
 ---
 

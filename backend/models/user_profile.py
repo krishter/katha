@@ -147,6 +147,11 @@ class UserProfileModel(Base):
     last_decline_reply_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When she was last told her free conversations are paused (P8, D7).
+    # At most once a week: repeated, it would read as being turned away.
+    trial_paused_said_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
