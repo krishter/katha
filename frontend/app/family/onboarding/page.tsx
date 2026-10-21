@@ -38,6 +38,20 @@ export default function OnboardingPage() {
   // What the parent calls the child: Katha's welcome names them, and a
   // name she knows is why she keeps listening.
   const [childName, setChildName] = useState("");
+  // Conversation cards, on for every new family: what you call your parent
+  // goes on each card ("Did you know Amma…"), and a card is sent a few
+  // hours before you usually call. The timezone is yours, from the browser.
+  const [parentTitle, setParentTitle] = useState("");
+  const [familyTimezone, setFamilyTimezone] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
+    } catch {
+      return "Asia/Kolkata";
+    }
+  });
+  const [callSlots, setCallSlots] = useState<Array<{ day: string; time: string }>>([
+    { day: "", time: "" },
+  ]);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [familyWhatsappNumber, setFamilyWhatsappNumber] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState("hi-IN");
@@ -115,6 +129,14 @@ export default function OnboardingPage() {
               : pronouns,
         onboarding_context: onboardingContext,
         child_name: childName,
+        parent_title: parentTitle,
+        family_timezone: familyTimezone,
+        // Only complete rows: a day without a time, or the reverse, is
+        // left out rather than guessed.
+        call_times: callSlots
+          .filter((s) => s.day && s.time)
+          .map((s) => `${s.day} ${s.time}`)
+          .join(","),
       });
       setStep("consent");
     } catch (err) {
@@ -247,8 +269,85 @@ export default function OnboardingPage() {
               </p>
             </div>
             <div>
+              <label htmlFor="parent_title" className={LABEL_CLASS}>
+                What do you call your parent?
+              </label>
+              <input
+                id="parent_title"
+                required
+                value={parentTitle}
+                onChange={(e) => setParentTitle(e.target.value)}
+                placeholder="Amma"
+                maxLength={40}
+                className={INPUT_CLASS}
+              />
+              <p className="mt-1 text-meta text-ink-muted">
+                Cards about their stories will use this, the way you would.
+              </p>
+            </div>
+            <fieldset>
+              <legend className={LABEL_CLASS}>
+                When do you usually call them? (optional)
+              </legend>
+              <p className="mt-1 text-meta text-ink-muted">
+                A card arrives a few hours before, so you have something to ask
+                about. Times are in your time zone, {familyTimezone}.
+              </p>
+              {callSlots.map((slot, i) => (
+                <div key={i} className="mt-2 flex gap-2">
+                  <select
+                    aria-label={`Call ${i + 1} day`}
+                    value={slot.day}
+                    onChange={(e) =>
+                      setCallSlots((all) =>
+                        all.map((s, j) => (j === i ? { ...s, day: e.target.value } : s)),
+                      )
+                    }
+                    className={INPUT_CLASS}
+                  >
+                    <option value="">Day</option>
+                    {["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((d) => (
+                      <option key={d} value={d}>
+                        {d[0].toUpperCase() + d.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="time"
+                    aria-label={`Call ${i + 1} time`}
+                    value={slot.time}
+                    onChange={(e) =>
+                      setCallSlots((all) =>
+                        all.map((s, j) => (j === i ? { ...s, time: e.target.value } : s)),
+                      )
+                    }
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              ))}
+              <label htmlFor="family_timezone" className="mt-3 block text-meta text-ink-muted">
+                Your time zone
+              </label>
+              <input
+                id="family_timezone"
+                value={familyTimezone}
+                onChange={(e) => setFamilyTimezone(e.target.value)}
+                placeholder="Asia/Kolkata"
+                className={INPUT_CLASS}
+              />
+              {callSlots.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => setCallSlots((all) => [...all, { day: "", time: "" }])}
+                  className="mt-2 text-sm text-saffron-ink underline"
+                >
+                  Add another time
+                </button>
+              )}
+            </fieldset>
+            <div>
               <label htmlFor="family_whatsapp_number" className={LABEL_CLASS}>
-                Your WhatsApp number (for memory cards)
+                Your WhatsApp number (for cards about their stories)
               </label>
               <input
                 id="family_whatsapp_number"
@@ -559,7 +658,7 @@ export default function OnboardingPage() {
                 And one for you: confirm your WhatsApp number
               </p>
               <p className="mt-1 text-sm text-ink-mid">
-                Memory cards carry {doneInfo.parentName}&apos;s own words, so
+                Cards carry {doneInfo.parentName}&apos;s own words, so
                 Katha sends them only to a number you&apos;ve confirmed. Open
                 this on your phone and send the message it fills in.
               </p>

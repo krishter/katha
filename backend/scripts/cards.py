@@ -24,39 +24,30 @@ import argparse
 import asyncio
 import pathlib
 import sys
-from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select  # noqa: E402
 
+from cards import setup  # noqa: E402
 from cards.context import family_of  # noqa: E402
 from models.db import AsyncSessionLocal  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
-
-DAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 
 def parse_slot(text: str) -> dict:
     """ "sun 11:00" -> {"dow": 6, "time": "11:00"}."""
     try:
-        day, at = text.strip().lower().split()
-        hour, minute = (int(x) for x in at.split(":"))
-        if day[:3] not in DAYS or not (0 <= hour < 24 and 0 <= minute < 60):
-            raise ValueError
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f'{text!r}: give a slot as "<day> HH:MM", e.g. "sun 11:00"'
-        )
-    return {"dow": DAYS[day[:3]], "time": f"{hour:02d}:{minute:02d}"}
+        return setup.parse_slot(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def parse_timezone(name: str) -> str:
     try:
-        ZoneInfo(name)
-    except Exception:
-        raise argparse.ArgumentTypeError(f"{name!r} is not an IANA timezone")
-    return name
+        return setup.parse_timezone(name)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:

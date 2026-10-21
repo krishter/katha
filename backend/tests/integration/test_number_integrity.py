@@ -379,3 +379,75 @@ async def test_a_new_family_number_must_be_confirmed_again(real_db):
         )
     ).scalar_one()
     assert profile.family_number_confirmed_at is None
+
+
+# ── cards for every new family (owner's decision, 2026-10-21) ────────────────
+
+
+async def _new_account(db) -> str:
+    user_id = f"user_{uuid.uuid4().hex}"
+    db.add(FamilyAccount(email=f"{user_id}@example.test", user_id=user_id, plan="free"))
+    await db.commit()
+    return user_id
+
+
+async def _profile_row(db, user_id):
+    db.expire_all()
+    return (
+        await db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+        )
+    ).scalar_one()
+
+
+async def test_a_new_family_gets_cards_and_its_setup_details(real_db):
+    user_id = await _new_account(real_db)
+    async with _Api(user_id) as api:
+        response = await api.profile(
+            _number(),
+            child_name="Priya",
+            parent_title="Amma",
+            family_timezone="America/New_York",
+            call_times="sun 11:00,wed 19:30",
+        )
+    assert response.status_code == 200, response.text
+
+    assert (await _profile_row(real_db, user_id)).conversation_cards_enabled
+    account = (
+        await real_db.execute(
+            select(FamilyAccount).where(FamilyAccount.user_id == user_id)
+        )
+    ).scalar_one()
+    assert account.parent_title == "Amma"
+    assert account.timezone == "America/New_York"
+    assert account.call_slots == [
+        {"dow": 6, "time": "11:00"},
+        {"dow": 2, "time": "19:30"},
+    ]
+
+
+async def test_the_default_can_be_turned_off(real_db, monkeypatch):
+    monkeypatch.setattr("config.settings.CONVERSATION_CARDS_FOR_NEW_FAMILIES", False)
+    user_id = await _new_account(real_db)
+    async with _Api(user_id) as api:
+        assert (await api.profile(_number(), parent_title="Amma")).status_code == 200
+    assert not (await _profile_row(real_db, user_id)).conversation_cards_enabled
+
+
+async def test_resending_setup_never_flips_the_switch(real_db):
+    """After setup the switch is the operator's (scripts/cards.py)."""
+    user_id, number = await _family(real_db)
+    async with _Api(user_id) as api:
+        assert (await api.profile(number, parent_title="Amma")).status_code == 200
+    assert not (await _profile_row(real_db, user_id)).conversation_cards_enabled
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [("family_timezone", "Mars/Olympus"), ("call_times", "someday 25:00")],
+)
+async def test_bad_setup_details_are_refused(real_db, field, value):
+    user_id = await _new_account(real_db)
+    async with _Api(user_id) as api:
+        response = await api.profile(_number(), **{field: value})
+    assert response.status_code == 422

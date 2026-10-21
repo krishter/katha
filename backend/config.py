@@ -195,6 +195,14 @@ class Settings(BaseSettings):
     # conversation_cards_enabled, which scripts/cards.py turns on one
     # family at a time.
     CONVERSATION_CARDS_ENABLED: bool = False
+    # Every family set up from now on gets cards switched on at onboarding
+    # (owner's decision, 2026-10-21); the form asks what the child calls
+    # her, their timezone and usual call times. Families set up before are
+    # untouched: scripts/cards.py turns them on. False puts new families
+    # back on the memory card; the privacy page (frontend/app/privacy) says
+    # new families get conversation cards, so change it with this. Needs
+    # CONVERSATION_CARDS_ENABLED on, and ADMIN_API_TOKEN for card review.
+    CONVERSATION_CARDS_FOR_NEW_FAMILIES: bool = True
     # D3: every card is reviewed by the operator before she hears it.
     # false sends a card that passed the fidelity check straight to her.
     CARDS_OPERATOR_REVIEW: bool = True

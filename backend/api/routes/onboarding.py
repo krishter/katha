@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cards import setup as card_setup
 from config import settings
 from core import auth, family_number, parent_consent
 from core.auth import get_current_user
@@ -122,6 +123,14 @@ async def onboarding_profile(
     # What she calls the child who set this up. The welcome names them
     # (P3 3.6): "Priya set this up for you" is why she should listen.
     child_name: str = Form(default=""),
+    # For conversation cards (CONVERSATION_CARDS.md §8.2), on by default for
+    # new families: what the child calls her ("Amma"), the child's IANA
+    # timezone, and their usual call times as "<day> HH:MM", comma
+    # separated. A card goes 3 hours before a call; with none, at 18:00
+    # child time the day after she approves it.
+    parent_title: str = Form(default=""),
+    family_timezone: str = Form(default=""),
+    call_times: str = Form(default=""),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -141,6 +150,17 @@ async def onboarding_profile(
     _validate_e164(whatsapp_number, "whatsapp_number")
     _validate_e164(family_whatsapp_number, "family_whatsapp_number")
     scheduled_time = _validate_session_time(session_time)
+    try:
+        family_tz = (
+            card_setup.parse_timezone(family_timezone.strip())
+            if family_timezone.strip()
+            else None
+        )
+        slots = [card_setup.parse_slot(t) for t in call_times.split(",") if t.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if len(slots) > card_setup.MAX_SLOTS:
+        raise HTTPException(status_code=422, detail="Give at most 7 usual call times.")
 
     user_id = current_user["user_id"]
     result = await db.execute(
@@ -164,6 +184,11 @@ async def onboarding_profile(
     is_new = profile is None
     if profile is None:
         profile = UserProfileModel(user_id=user_id)
+        # New families get cards (owner's decision, 2026-10-21). Only at
+        # creation: after that the switch is the operator's (scripts/cards.py).
+        profile.conversation_cards_enabled = (
+            settings.CONVERSATION_CARDS_FOR_NEW_FAMILIES
+        )
         db.add(profile)
     elif profile.whatsapp_number != whatsapp_number:
         # Her consent is hers, given from her number. Once she has agreed,
@@ -209,6 +234,12 @@ async def onboarding_profile(
     ).scalar_one_or_none()
     if account is not None and child_name.strip():
         account.child_name = child_name.strip()
+    if account is not None and parent_title.strip():
+        account.parent_title = parent_title.strip()[:40]
+    if account is not None and family_tz:
+        account.timezone = family_tz
+    if account is not None and slots:
+        account.call_slots = slots
 
     try:
         await db.commit()

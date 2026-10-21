@@ -48,10 +48,12 @@ export default function PrivacyPage() {
         <h2 className="font-display text-lg font-semibold">How it&apos;s used</h2>
         <p className="mt-2 text-sm">
           Transcripts and the details drawn from them are used to keep your
-          parent&apos;s stories, make memory cards, and let Katha remember what
-          she has told it from one conversation to the next. Story summaries
-          and memory cards are shown to you on the family dashboard, and
-          memory cards are sent to your WhatsApp number once you have
+          parent&apos;s stories, make cards, and let Katha remember what she
+          has told it from one conversation to the next. Story summaries are
+          shown to you on the family dashboard. Families set up from October
+          2026 get conversation cards, described below; families set up
+          before then may instead get a memory card after each conversation,
+          a quote from it sent to your WhatsApp number once you have
           confirmed it.
         </p>
         <p className="mt-2 text-sm">

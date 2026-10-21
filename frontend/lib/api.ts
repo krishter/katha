@@ -141,6 +141,11 @@ export interface OnboardingProfilePayload {
   onboarding_context: string;
   // What the parent calls the child. Katha's welcome names them.
   child_name: string;
+  // Conversation cards: what the child calls the parent, the child's IANA
+  // timezone, and usual call times as "<day> HH:MM", comma separated.
+  parent_title: string;
+  family_timezone: string;
+  call_times: string;
 }
 
 export interface OnboardingConsentResponse {
