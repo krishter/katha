@@ -19,9 +19,10 @@ from adapters.whatsapp_stub import get_whatsapp_adapter
 from cards import context as card_context
 from cards import family_inbox
 from config import settings
-from core import orchestrator, parent_consent, session_manager, usage
+from core import family_number, orchestrator, parent_consent, session_manager, usage
 from core.delivery import record_card_delivery
 from models.db import get_db
+from models.family_account import FamilyAccount
 from models.user_profile import UserProfileModel
 from prompts.system_prompt import UserProfile
 from speech import catalogue
@@ -69,6 +70,24 @@ def _ack() -> Response:
     )
 
 
+async def _welcome_text(profile: UserProfileModel, db: AsyncSession) -> str:
+    """The welcome, naming the child who set it up (P3 3.6). "Your family"
+    only when the family gave no name."""
+    child = (
+        await db.execute(
+            select(FamilyAccount.child_name).where(
+                FamilyAccount.user_id == profile.user_id
+            )
+        )
+    ).scalar_one_or_none()
+    return parent_consent.build_welcome_text(
+        profile.name,
+        (child or "").strip() or None,
+        language=profile.preferred_language,
+        gender=profile.katha_gender,
+    )
+
+
 async def _handle_parent_consent(
     whatsapp,
     profile: UserProfileModel,
@@ -81,17 +100,26 @@ async def _handle_parent_consent(
     Ask the parent, or read her answer. Runs instead of a domain session
     for anyone who has not yet agreed (F-02).
 
+    The conversation (P3, D2):
+      welcome → yes → "just so I am sure…" → yes → recorded
+      welcome → unclear → one re-ask → unclear → halted for a person
+      no, at any point → recorded as a decline
+    A first yes is never recorded on its own: a classifier can be wrong,
+    and the confirmation restates what she is agreeing to. Anything but a
+    second yes goes back to asking, under the same two-ask limit.
+
     Everything here is a free-form message inside the 24-hour window her
     own inbound message opened. That is the only reason a voice note is
     possible at all — Meta rejected the approved template for first
     contact with 63049, so there is no template path to fall back on.
     """
     state = await parent_consent.get_status(profile.user_id, db)
+    language, gender = profile.preferred_language, profile.katha_gender
 
     if state.status is parent_consent.ConsentStatus.HALTED:
-        # Asked twice, still unclear. Pestering an elderly person who does
-        # not understand what is being asked is its own harm; a human picks
-        # this up from the dashboard.
+        # Still unclear after the re-ask. Pestering an elderly person who
+        # does not understand what is being asked is its own harm; a human
+        # picks this up from the dashboard.
         logger.info("Parent consent halted for %s — not re-asking", profile.user_id)
         return
 
@@ -100,60 +128,79 @@ async def _handle_parent_consent(
         await _speak(
             whatsapp,
             profile,
-            parent_consent.build_welcome_text(
-                profile.name,
-                language=profile.preferred_language,
-                gender=profile.katha_gender,
-            ),
+            await _welcome_text(profile, db),
             stage="parent_welcome",
         )
         await parent_consent.note_asked(profile.user_id, db)
         return
 
-    # She has been asked. Read what she said.
-    answer = parent_consent.interpret_answer(transcript)
+    # She has been asked. Read what she said, against what she was asked.
+    confirming = state.status is parent_consent.ConsentStatus.CONFIRMING
+    if confirming:
+        question = parent_consent.confirm_text(language, gender)
+    elif state.times_asked >= 2:
+        question = parent_consent.build_reask_text(
+            profile.name, language=language, gender=gender
+        )
+    else:
+        question = await _welcome_text(profile, db)
+    answer = await parent_consent.interpret_answer(transcript, question)
 
     # Persist the exchange before recording anything. A ConsentRecord whose
     # evidence_ref points at nothing proves nothing — the audio and the
     # transcript of her saying yes are what make it auditable.
-    if answer is not parent_consent.Answer.UNCLEAR:
-        turn_id = await _persist_consent_turn(profile, transcript, answer, db)
+    if answer is parent_consent.Answer.YES and not confirming:
+        await _persist_consent_turn(profile, transcript, "yes, asked to confirm", db)
+        await parent_consent.set_state(
+            profile.user_id, parent_consent.STATE_CONFIRMING, db
+        )
+        await _speak(
+            whatsapp,
+            profile,
+            parent_consent.confirm_text(language, gender),
+            stage="parent_confirm",
+            fixed=True,
+        )
+        return
 
     if answer is parent_consent.Answer.YES:
+        turn_id = await _persist_consent_turn(profile, transcript, "yes, confirmed", db)
         await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
         await _speak(
             whatsapp,
             profile,
-            parent_consent.granted_text(
-                profile.preferred_language, profile.katha_gender
-            ),
+            parent_consent.granted_text(language, gender),
             stage="parent_granted",
             fixed=True,
         )
         return
 
     if answer is parent_consent.Answer.NO:
+        turn_id = await _persist_consent_turn(profile, transcript, "no", db)
         await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
         await _speak(
             whatsapp,
             profile,
-            parent_consent.declined_text(
-                profile.preferred_language, profile.katha_gender
-            ),
+            parent_consent.declined_text(language, gender),
             stage="parent_declined",
             fixed=True,
         )
         return
 
-    # Unclear — one clarification, then stop.
+    # Unclear. After the re-ask, stop; before it, one clarification.
+    if state.times_asked >= 2:
+        await parent_consent.set_state(profile.user_id, parent_consent.STATE_HALTED, db)
+        logger.info(
+            "Parent consent for %s still unclear after the re-ask — halted",
+            profile.user_id,
+        )
+        return
+    if confirming:
+        await parent_consent.set_state(profile.user_id, parent_consent.STATE_ASKING, db)
     await _speak(
         whatsapp,
         profile,
-        parent_consent.build_reask_text(
-            profile.name,
-            language=profile.preferred_language,
-            gender=profile.katha_gender,
-        ),
+        parent_consent.build_reask_text(profile.name, language=language, gender=gender),
         stage="parent_reask",
     )
     await parent_consent.note_asked(profile.user_id, db)
@@ -162,7 +209,7 @@ async def _handle_parent_consent(
 async def _persist_consent_turn(
     profile: UserProfileModel,
     transcript: str,
-    answer,
+    label: str,
     db: AsyncSession,
 ):
     """Store the consent exchange as a Turn, and return its id."""
@@ -177,7 +224,7 @@ async def _persist_consent_turn(
             inbound_message_sid=None,
             transcript=transcript,
             detected_language=profile.preferred_language,
-            response_text=f"[parent consent: {answer.value}]",
+            response_text=f"[parent consent: {label}]",
             extraction_json={},
             input_tokens=0,
             output_tokens=0,
@@ -613,7 +660,26 @@ async def _whatsapp_incoming(
         # it with "your session isn't scheduled yet".
         profile = await _load_profile_by_number(from_number, db)
 
-        # 5a. A child replying about a conversation card (CONVERSATION_CARDS.md
+        # 5a. The child confirming the family number (P3, D3): "CONFIRM
+        # <code>" from the number memory cards go to. Cards on or off, since
+        # memory cards go to that number either way. A parent's own number
+        # never takes this path.
+        confirm_code = family_number.parse(params.get("Body", ""))
+        if profile is None and confirm_code:
+            parent = await family_number.confirm(from_number, confirm_code, db)
+            usage.enter_scope(user_id=parent.user_id if parent else None)
+            await usage.record_inbound(message_sid)
+            await _safe_send_text(
+                whatsapp,
+                from_number,
+                family_number.CONFIRMED_TEXT
+                if parent
+                else family_number.NOT_CONFIRMED_TEXT,
+                stage="family_confirm",
+            )
+            return _ack()
+
+        # 5b. A child replying about a conversation card (CONVERSATION_CARDS.md
         # §10.1). Only for a number that is no parent's own — the parent
         # wins a clash — and only when cards are on for that family. With
         # cards off, the child's number takes the unknown-number path as

@@ -78,6 +78,8 @@ async def seed(
             name="Kamala",
             whatsapp_number=f"+9193{uuid.uuid4().int % 10**8:08d}",
             family_whatsapp_number=number,
+            # The child has proved the number is theirs (P3).
+            family_number_confirmed_at=datetime.now(timezone.utc),
             preferred_language="ta-IN",
             scheduled_time=time(10, 0),
             conversation_cards_enabled=True,

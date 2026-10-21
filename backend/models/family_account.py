@@ -45,6 +45,15 @@ class FamilyAccount(Base):
     card_email_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
+    # The code the child sends from their own WhatsApp to prove the family
+    # number is theirs (core/family_number.py). Hashed; one live code at a
+    # time.
+    family_confirm_code_hash: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True
+    )
+    family_confirm_code_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

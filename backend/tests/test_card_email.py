@@ -119,8 +119,12 @@ def test_template_variables_match_the_registered_template():
     }
 
 
-def _profile(number="+919000000001", enabled=True):
-    return SimpleNamespace(family_whatsapp_number=number, card_whatsapp_enabled=enabled)
+def _profile(number="+919000000001", enabled=True, confirmed=True):
+    return SimpleNamespace(
+        family_whatsapp_number=number,
+        card_whatsapp_enabled=enabled,
+        family_number_confirmed_at="2026-10-20" if confirmed else None,
+    )
 
 
 @pytest.mark.parametrize(
@@ -146,3 +150,8 @@ def test_other_whatsapp_skips():
     )
     assert deliver.whatsapp_skip_reason(_profile(), "") == "no_template"
     assert deliver.whatsapp_skip_reason(_profile(number=None), "HX") == "no_number"
+    # Whatever the child typed, until they prove it is theirs (P3).
+    assert (
+        deliver.whatsapp_skip_reason(_profile(confirmed=False), "HX")
+        == "family_number_unconfirmed"
+    )

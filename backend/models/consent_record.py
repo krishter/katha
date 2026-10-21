@@ -48,3 +48,8 @@ class ConsentRecord(Base):
         ForeignKey("turns.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    # The number a parent record was given from (P3, M-03). Consent is the
+    # person's, and Katha knows her by her number: a grant stands only
+    # while the profile still has the number it was given from.
+    whatsapp_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)

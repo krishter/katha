@@ -177,12 +177,18 @@ async def delete_user(
 
     # 9. Anonymize consent records — retained for audit per DPDP Act, never
     # hard-deleted. email_hash stays; everything else that could identify
-    # the person is cleared.
+    # the person is cleared, including the number a parent record was
+    # given from (P3).
     try:
         await db.execute(
             update(ConsentRecord)
             .where(ConsentRecord.user_id == user_id)
-            .values(user_id="DELETED", ip_address=None, user_agent=None)
+            .values(
+                user_id="DELETED",
+                ip_address=None,
+                user_agent=None,
+                whatsapp_number=None,
+            )
         )
         await db.commit()
     except Exception:

@@ -19,7 +19,7 @@ from cards import asks as card_asks
 from cards import privacy as card_privacy
 from cards import write as card_writer
 from config import settings
-from core import conversation_policy, session_manager, usage
+from core import conversation_policy, family_number, session_manager, usage
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
 from extraction import entity_extractor, story_extractor
@@ -449,6 +449,26 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
     await storage.upload_media(
         card_result.image_bytes, s3_key, content_type="image/png"
     )
+
+    # The family number is whatever the child typed until they prove it is
+    # theirs (core/family_number.py, P3). Until then the card is kept for
+    # the dashboard and not sent: a mistyped digit would send her words to
+    # a stranger. Only cards made after the confirmation are sent.
+    if not family_number.is_confirmed(user_profile):
+        logger.info(
+            "Family number for %s not confirmed — card for session %s stored, not sent",
+            user_id,
+            session_id,
+        )
+        await save_memory_card(
+            session_id=session_id,
+            user_id=user_id,
+            card_result=card_result,
+            s3_key=s3_key,
+            message_sid=None,
+            db=db,
+        )
+        return
 
     caption = f"A memory from today's conversation with {user_profile.name} \U0001f338"
     whatsapp = get_whatsapp_adapter()

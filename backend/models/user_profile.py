@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Index,
     Integer,
     String,
     Text,
@@ -32,6 +33,13 @@ class UserProfileModel(Base):
             "('not_asked', 'share_with_approval', 'unsure', 'never')",
             name="ck_user_profiles_share_preference",
         ),
+        CheckConstraint(
+            "parent_consent_state IN ('asking', 'confirming', 'halted')",
+            name="ck_user_profiles_parent_consent_state",
+        ),
+        # The webhook knows her only by this number (P3, M-03): two profiles
+        # sharing it would put one parent's voice in another's story.
+        Index("uq_user_profiles_whatsapp_number", "whatsapp_number", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -82,6 +90,13 @@ class UserProfileModel(Base):
     parent_consent_asks: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )
+    # Where the consent conversation is when no answer is recorded yet:
+    # "asking", "confirming" (she said yes once and was asked to confirm;
+    # only a second yes is recorded) or "halted" (still unclear after the
+    # re-ask; a person picks it up).
+    parent_consent_state: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="asking"
+    )
 
     # When she last messaged Katha. Meta allows free-form messages only
     # within 24 hours of this, so it is what decides whether a send needs an
@@ -114,6 +129,12 @@ class UserProfileModel(Base):
     # only.
     card_whatsapp_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
+    )
+    # When the child proved family_whatsapp_number is theirs, by sending
+    # the code from it (core/family_number.py). Until then nothing of hers
+    # goes to that number on WhatsApp; email is unaffected.
+    family_number_confirmed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     created_at: Mapped[datetime] = mapped_column(

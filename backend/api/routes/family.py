@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards.privacy import not_private_atom
 from config import settings
-from core import freemium, parent_consent
+from core import family_number, freemium, parent_consent
 from core.auth import get_current_user
 from core.freemium import FREE_SESSION_LIMIT
 from media import storage
@@ -221,6 +221,10 @@ async def get_stats(
         # nothing they do not already hold.
         "user_id": user_id,
         "user_name": user_name,
+        # Memory cards wait on WhatsApp until the child proves this number
+        # is theirs (core/family_number.py); the dashboard asks until then.
+        "family_whatsapp_number": profile.family_whatsapp_number if profile else None,
+        "family_number_confirmed": family_number.is_confirmed(profile),
         "pronouns": profile.pronouns if profile else "",
         "total_sessions": total_sessions,
         "total_story_atoms": total_story_atoms,
@@ -276,6 +280,27 @@ async def update_family_profile(
     db.add(profile)
     await db.commit()
     return {"status": "ok", "pronouns": profile.pronouns}
+
+
+@router.post("/family/family-number/confirm-link")
+async def family_number_confirm_link(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    A fresh link for the child to confirm their WhatsApp number from that
+    phone. The code is stored hashed, so an earlier link cannot be shown
+    again; asking for a new one replaces it.
+    """
+    user_id = current_user["user_id"]
+    account = (
+        await db.execute(select(FamilyAccount).where(FamilyAccount.user_id == user_id))
+    ).scalar_one_or_none()
+    if account is None:
+        raise HTTPException(status_code=404, detail="Family account not found")
+    code = family_number.issue_code(account)
+    await db.commit()
+    return {"link": family_number.confirm_link(code)}
 
 
 @router.get("/family/stories")

@@ -28,6 +28,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import parent_answers
 from models.consent_record import ConsentRecord
 from models.user_profile import UserProfileModel
 from speech import catalogue
@@ -37,6 +38,14 @@ logger = logging.getLogger(__name__)
 # Bumped when the spoken wording below changes materially. Separate from
 # the web form's version — the two principals agree to different text.
 PARENT_CONSENT_VERSION = "parent-1.0"
+# Written by scripts/change_parent_number.py: whatever she said on her old
+# number is not an answer from whoever holds the new one.
+RESET_VERSION = f"{PARENT_CONSENT_VERSION}-reset"
+
+# user_profiles.parent_consent_state
+STATE_ASKING = "asking"
+STATE_CONFIRMING = "confirming"
+STATE_HALTED = "halted"
 
 PRINCIPAL_PARENT = "parent"
 PRINCIPAL_BUYER = "buyer"
@@ -57,9 +66,10 @@ class ConsentStatus(str, Enum):
 
     NOT_ASKED = "not_asked"  # she has never messaged; nothing sent
     AWAITING = "awaiting"  # welcome sent, no clear answer yet
+    CONFIRMING = "confirming"  # she said yes once; asked to confirm
     GRANTED = "granted"
     DECLINED = "declined"
-    HALTED = "halted"  # asked twice, still unclear — needs a human
+    HALTED = "halted"  # still unclear after the re-ask — needs a human
 
 
 class Answer(str, Enum):
@@ -73,6 +83,14 @@ class Answer(str, Enum):
 # wrong in the permissive direction means recording an elderly person's
 # life history on the strength of a "hmm".
 #
+# A yes is read by the classifier (core/parent_answers.py), never by these
+# patterns. A word list cannot tell "theek hai, record kar lo" from "theek
+# hai, par yeh kya hai?", and "Kaun ho aap?" matched the bare "ho" (M-01).
+# _YES_PATTERNS is kept as a test oracle only: the clear yeses in the tests
+# must match it, so a classifier that drifts permissive shows up against
+# it. Removed from it too, for the same reason: ok, okay, fine, start, ho,
+# han and sure.
+#
 # Deliberately absent: "acha" / "अच्छा". It is an acknowledgement at least
 # as often as an agreement — the Hindi "I see" — and a filler word is not
 # informed consent. Same reasoning excludes a bare "hmm".
@@ -80,9 +98,6 @@ _YES_PATTERNS = [
     r"\byes\b",
     r"\byeah\b",
     r"\byep\b",
-    r"\bok\b",
-    r"\bokay\b",
-    r"\bsure\b",
     r"\bagree\b",
     r"\bagreed\b",
     r"\bi accept\b",
@@ -90,14 +105,11 @@ _YES_PATTERNS = [
     r"\bgo ahead\b",
     r"\bplease do\b",
     r"\bthat.s fine\b",
-    r"\bfine\b",
     r"\bhappy to\b",
     r"\bi.m in\b",
-    r"\bstart\b",
     r"\bcarry on\b",
     # Hindi / Urdu
     r"\bhaan\b",
-    r"\bhan\b",
     r"\bji haan\b",
     r"\btheek hai\b",
     r"\bthik hai\b",
@@ -127,7 +139,6 @@ _YES_PATTERNS = [
     r"\bathe\b",
     r"ശരി",
     r"അതെ",
-    r"\bho\b",
     r"होय",
     r"चालेल",
     r"\bhyan\b",
@@ -186,26 +197,49 @@ _YES_RE = [re.compile(p, re.IGNORECASE | re.UNICODE) for p in _YES_PATTERNS]
 _NO_RE = [re.compile(p, re.IGNORECASE | re.UNICODE) for p in _NO_PATTERNS]
 
 
-def interpret_answer(transcript: str) -> Answer:
-    """
-    Read a spoken reply as yes, no, or unclear.
+def said_no(transcript: str) -> bool:
+    """A refusal the word list can see. Checked before the classifier, so
+    refusing never depends on a model being up."""
+    return bool(transcript) and any(r.search(transcript) for r in _NO_RE)
 
-    A negation beats an affirmative when both appear: "ok but no" and "haan
-    nahi" are refusals, and the cost of misreading a refusal as consent is
-    far higher than the reverse — the remedy for an over-cautious UNCLEAR
-    is one more question, while the remedy for a wrongly-recorded YES is a
-    DPDP breach.
+
+def regex_answer(transcript: str) -> Answer:
+    """
+    The word-list reading. A TEST ORACLE ONLY: nothing decides on it.
+
+    A negation beats an affirmative when both appear: "ok but no" and
+    "haan nahi" are refusals.
     """
     if not transcript or not transcript.strip():
         return Answer.UNCLEAR
-
-    said_yes = any(r.search(transcript) for r in _YES_RE)
-    said_no = any(r.search(transcript) for r in _NO_RE)
-
-    if said_no:
+    if said_no(transcript):
         return Answer.NO
-    if said_yes:
+    if any(r.search(transcript) for r in _YES_RE):
         return Answer.YES
+    return Answer.UNCLEAR
+
+
+async def interpret_answer(transcript: str, question: str) -> Answer:
+    """
+    Read her reply to `question` as yes, no, or unclear.
+
+    1. A refusal in the word list is NO, without asking a model.
+    2. Otherwise the classifier reads it (core/parent_answers.py). A yes
+       stands only if it quotes her words; any failure is UNCLEAR.
+
+    The cost is asymmetric, and so is the design: the remedy for an
+    over-cautious UNCLEAR is one more question, while the remedy for a
+    wrongly recorded YES is a DPDP breach.
+    """
+    if not transcript or not transcript.strip():
+        return Answer.UNCLEAR
+    if said_no(transcript):
+        return Answer.NO
+    result = await parent_answers.classify(parent_answers.CONSENT, question, transcript)
+    if result.label == "yes":
+        return Answer.YES
+    if result.label == "no":
+        return Answer.NO
     return Answer.UNCLEAR
 
 
@@ -260,6 +294,14 @@ def granted_text(
     return catalogue.text("consent_granted", language, gender=gender)
 
 
+def confirm_text(
+    language: str = catalogue.SOURCE_LANGUAGE, gender: Optional[str] = None
+) -> str:
+    """After her first yes: what she is agreeing to, once more, and the
+    question again. Only a second yes is recorded (P3, D2)."""
+    return catalogue.text("consent_confirm", language, gender=gender)
+
+
 @dataclass
 class ParentConsentState:
     status: ConsentStatus
@@ -270,7 +312,13 @@ class ParentConsentState:
 async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
     """
     The parent's consent state, derived from consent_records plus the
-    profile's ask counter.
+    profile's consent state and ask counter.
+
+    A grant counts only while the profile still has the number it was given
+    from (M-03): Katha knows her by her number, so a grant given on one
+    number says nothing about whoever holds another. A decline is not
+    loosened the same way; a reset record (scripts/change_parent_number.py)
+    is what clears either.
     """
     result = await db.execute(
         select(ConsentRecord)
@@ -286,20 +334,32 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
     )
     profile = profile_result.scalar_one_or_none()
     times_asked = getattr(profile, "parent_consent_asks", 0) or 0
+    state = getattr(profile, "parent_consent_state", None) or STATE_ASKING
+    number = getattr(profile, "whatsapp_number", None)
 
     for record in records:
         # The query already filters, but this is the one place a wrong row
         # would turn into recording someone who said no.
         if record.consent_version.startswith(SHARING_VERSION_PREFIX):
             continue
+        if record.consent_version == RESET_VERSION:
+            break
         if record.consent_version.endswith("-declined"):
             return ParentConsentState(ConsentStatus.DECLINED, record.consented_at)
+        if record.whatsapp_number != number:
+            logger.warning(
+                "Parent consent for %s was given from another number — not a grant",
+                user_id,
+            )
+            break
         return ParentConsentState(ConsentStatus.GRANTED, record.consented_at)
 
+    if state == STATE_HALTED:
+        return ParentConsentState(ConsentStatus.HALTED, times_asked=times_asked)
+    if state == STATE_CONFIRMING:
+        return ParentConsentState(ConsentStatus.CONFIRMING, times_asked=times_asked)
     if times_asked == 0:
         return ParentConsentState(ConsentStatus.NOT_ASKED, times_asked=0)
-    if times_asked >= 2:
-        return ParentConsentState(ConsentStatus.HALTED, times_asked=times_asked)
     return ParentConsentState(ConsentStatus.AWAITING, times_asked=times_asked)
 
 
@@ -328,6 +388,15 @@ async def record_answer(
     if answer is Answer.NO:
         version = f"{PARENT_CONSENT_VERSION}-declined"
 
+    profile = (
+        await db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    if profile is not None:
+        # Answered: the conversation is no longer mid-way.
+        profile.parent_consent_state = STATE_ASKING
+
     db.add(
         ConsentRecord(
             user_id=user_id,
@@ -340,6 +409,7 @@ async def record_answer(
             evidence_ref=turn_id,
             ip_address=None,
             user_agent=None,
+            whatsapp_number=profile.whatsapp_number if profile else None,
         )
     )
     await db.commit()
@@ -351,8 +421,22 @@ async def record_answer(
     )
 
 
+async def set_state(user_id: str, state: str, db: AsyncSession) -> None:
+    """Move the consent conversation to `state` (asking, confirming,
+    halted)."""
+    result = await db.execute(
+        select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+    )
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        return
+    profile.parent_consent_state = state
+    await db.commit()
+
+
 async def note_asked(user_id: str, db: AsyncSession) -> int:
-    """Count that we have asked. Two unclear answers and we stop asking."""
+    """Count that we have asked: the welcome is one, the re-ask two. An
+    unclear answer to the re-ask halts (webhook._handle_parent_consent)."""
     result = await db.execute(
         select(UserProfileModel).where(UserProfileModel.user_id == user_id)
     )

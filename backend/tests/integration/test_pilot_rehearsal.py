@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import time
+from datetime import datetime, time, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -96,6 +96,8 @@ async def test_full_session_pilot_rehearsal(real_db):
             preferred_language="ta-IN",
             onboarding_context="Grew up in Madurai.",
             family_whatsapp_number="+919876511111",
+            # The child has proved the number is theirs (P3).
+            family_number_confirmed_at=datetime.now(timezone.utc),
             scheduled_time=time(10, 30),
         )
     )

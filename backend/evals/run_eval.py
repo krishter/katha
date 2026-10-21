@@ -1855,6 +1855,92 @@ async def tc17(db):
     )
 
 
+async def consent(db):
+    """
+    The consent answer (docs/PRE_PILOT_FIX_PLAN.md P3, M-01), on the
+    decision path the webhook uses: parent_consent.interpret_answer. Pass
+    like TC-15: no false yes, and 85%+ of labels correct.
+
+    With EVAL_RECORD_CONSENT=1 the classifier's raw replies are saved to
+    tests/fixtures/consent_classifier_replay.json, which the integration
+    tests replay so they run the real parsing and quoting rules offline.
+    """
+    from adapters import llm as llm_adapter
+    from core import parent_answers, parent_consent
+
+    root = pathlib.Path(__file__).resolve().parent
+    fixture = json.loads((root / "fixtures/consent_answers.json").read_text())
+    name, child = fixture["parent_name"], fixture["child_name"]
+
+    def question(case):
+        if case["question"] == "confirm":
+            return parent_consent.confirm_text(case["language"])
+        return parent_consent.build_welcome_text(name, child, language=case["language"])
+
+    recorded: dict[str, str] = {}
+    real_chat = llm_adapter.chat
+
+    async def recording_chat(messages, **kwargs):
+        response = await real_chat(messages, **kwargs)
+        if kwargs.get("purpose") == parent_answers._PURPOSE:
+            reply = messages[0].content.split("HER REPLY\n", 1)[1]
+            recorded[reply.split("\n\nRespond with", 1)[0]] = response.content
+        return response
+
+    rows, correct, false_yes = [], 0, []
+    llm_adapter.chat = recording_chat
+    try:
+        with usage.usage_scope(user_id="eval-consent"):
+            for case in fixture["cases"]:
+                got = (
+                    await parent_consent.interpret_answer(
+                        case["transcript"], question(case)
+                    )
+                ).value
+                ok = got == case["expected"]
+                correct += ok
+                if got == "yes" and case["expected"] != "yes":
+                    false_yes.append(case["transcript"])
+                rows.append(
+                    f"  {'ok ' if ok else 'BAD'} [{case['language']} "
+                    f"{case['question']}] expected={case['expected']} got={got}"
+                    f" :: {case['transcript']!r}"
+                )
+    finally:
+        llm_adapter.chat = real_chat
+
+    if os.environ.get("EVAL_RECORD_CONSENT") == "1":
+        out = root.parent / "tests/fixtures/consent_classifier_replay.json"
+        out.parent.mkdir(exist_ok=True)
+        out.write_text(
+            json.dumps(
+                {
+                    "_about": "Raw classifier replies to evals/fixtures/"
+                    "consent_answers.json, recorded by `run_eval.py consent` "
+                    "with EVAL_RECORD_CONSENT=1. Replayed by the integration "
+                    "tests. Re-record after changing the consent guide.",
+                    "model": settings.LLM_CLASSIFIER_MODEL,
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "replies": recorded,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
+        )
+        print(f"recorded {len(recorded)} classifier replies to {out}")
+
+    accuracy = correct / len(fixture["cases"])
+    record(
+        "CONSENT",
+        "objective",
+        not false_yes and accuracy >= 0.85,
+        f"accuracy={accuracy:.0%} ({correct}/{len(fixture['cases'])}) "
+        f"false_yes={false_yes}\n" + "\n".join(rows),
+    )
+    await cleanup(db, "eval-consent")
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -1885,7 +1971,7 @@ async def main():
     selected = sys.argv[1:] or list(ALL_CASES.keys())
     if selected == ["cards"]:
         selected = list(CARD_CASES.keys())
-    cases = {**ALL_CASES, **CARD_CASES}
+    cases = {**ALL_CASES, **CARD_CASES, "consent": consent}
     async with AsyncSessionLocal() as db:
         for name in selected:
             fn = cases[name]
