@@ -38,7 +38,7 @@ export function FamilyNumberPrompt({ number }: { number: string }) {
         Confirm your WhatsApp number
       </h2>
       <p className="mt-2 text-sm text-ink-mid">
-        Memory cards will go to <strong>{number}</strong> once you confirm it
+        Cards will go to <strong>{number}</strong> once you confirm it
         is yours. Open this on that phone and send the message WhatsApp fills
         in. Until then, cards are kept here on the dashboard.
       </p>

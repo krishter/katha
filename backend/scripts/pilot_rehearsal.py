@@ -556,6 +556,26 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 "family_accounts.onboarding_complete is set",
             )
 
+            # New families get conversation cards (2026-10-21). This
+            # rehearsal drives the memory-card path, so it turns cards off
+            # for its own family; cards have their own suites
+            # (tests/integration/test_card_*.py).
+            rehearsal_profile = (
+                await db.execute(
+                    select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+                )
+            ).scalar_one()
+            report.check(
+                rehearsal_profile.conversation_cards_enabled
+                == settings.CONVERSATION_CARDS_FOR_NEW_FAMILIES,
+                "onboarding switched cards on for the new family, as configured",
+            )
+            rehearsal_profile.conversation_cards_enabled = False
+            await db.commit()
+            report.note(
+                "cards turned off for this rehearsal family: it tests the memory card"
+            )
+
             buyer_consents = (
                 (
                     await db.execute(
