@@ -16,7 +16,10 @@ docs/PRE_PILOT_FIX_PLAN.md P3 (M-01, M-03).
 - A unique index on user_profiles.whatsapp_number. The migration stops,
   naming the user_ids, if any number is already shared.
 - user_profiles.family_number_confirmed_at, and the hashed code the child
-  sends to confirm it (on family_accounts).
+  sends to confirm it (on family_accounts). Families set up before this
+  migration are marked confirmed (owner's decision, 2026-10-21): their
+  cards already reach those numbers, and stopping them would be a change
+  no one asked for. Every family set up from now on confirms.
 """
 
 import sqlalchemy as sa
@@ -85,6 +88,16 @@ def upgrade() -> None:
         sa.Column(
             "family_number_confirmed_at", sa.DateTime(timezone=True), nullable=True
         ),
+    )
+    grandfathered = bind.execute(
+        sa.text(
+            "UPDATE user_profiles SET family_number_confirmed_at = now() "
+            "WHERE family_whatsapp_number IS NOT NULL"
+        )
+    ).rowcount
+    print(
+        f"family_number_confirmed_at: {grandfathered} existing family "
+        "number(s) marked confirmed"
     )
     op.add_column(
         "family_accounts",
