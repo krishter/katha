@@ -76,7 +76,11 @@ async def _request(text: str, voice: voices.Voice, purpose: str) -> bytes:
         )
 
     if response.status_code != 200:
-        raise RuntimeError(f"Sarvam TTS error {response.status_code}: {response.text}")
+        # The status and Sarvam's error code, not its body: an error body
+        # can echo the input (P7).
+        raise RuntimeError(
+            f"Sarvam TTS error {response.status_code}: {_error_code(response)}"
+        )
 
     body = response.json()
     audio = base64.b64decode(body["audios"][0])
@@ -154,3 +158,12 @@ async def synthesize(
             " — sending it anyway" if last else "",
         )
     return audio
+
+
+def _error_code(response) -> str:
+    """Sarvam's machine-readable error code, if the body has one."""
+    try:
+        error = response.json().get("error") or {}
+        return str(error.get("code") or "no code")
+    except Exception:
+        return "unparsed body"

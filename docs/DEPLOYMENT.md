@@ -206,7 +206,17 @@ gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to s
    attestation, since `katha-app` is denied `GetPublicAccessBlock`.
 3. Confirm exactly **one** backend process is running. `docker compose ps`, then check the
    logs say "Scheduler started" once.
-4. Only then: Stage B of `docs/SELF_TRIAL.md`, on your own number, on these URLs.
+4. **Logs (owner; P7).** Logs sit outside every erasure. The backend no longer writes
+   transcripts, private topics, model output, numbers or emails to them, and every container's
+   log now rotates at 5 × 20 MB. But a log written before this deploy, during the self-trial,
+   holds full transcripts.
+   - The deploy itself (`docker compose -f docker-compose.prod.yml up -d`) recreates every
+     container for the new logging settings, and Docker deletes a removed container's log
+     with it.
+   - Check: `sudo grep -l "transcript=" $(docker inspect --format='{{.LogPath}}' $(docker compose -f docker-compose.prod.yml ps -q backend))`
+     must print nothing.
+   - If it prints a file, empty it: `sudo truncate -s 0 <that file>`.
+5. Only then: Stage B of `docs/SELF_TRIAL.md`, on your own number, on these URLs.
 
 ---
 

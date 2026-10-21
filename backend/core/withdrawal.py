@@ -298,7 +298,8 @@ async def notify(profile: UserProfileModel, erase_at: datetime, db: AsyncSession
     """Tell the operator and the family. Never raises."""
     when = erase_at.strftime("%d %B %Y")
     await send_operator_alert(
-        f"{profile.name} withdrew consent",
+        # No name in the subject: subjects reach logs (P7).
+        "A parent withdrew consent",
         f"{profile.name} ({profile.user_id}) asked Katha to stop. Katha has "
         f"stopped. Everything will be erased on {when} unless you clear the "
         "hold first:\n"

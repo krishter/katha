@@ -24,6 +24,7 @@ from email.utils import make_msgid
 import boto3
 
 from config import settings
+from core import redact
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,15 @@ async def send_email_ses(to: str, subject: str, body_text: str, body_html: str) 
     In dev (SES_MOCK=true), print the email instead of sending it.
     """
     if settings.SES_MOCK:
-        logger.info("[SES_MOCK] To: %s | Subject: %s\n%s", to, subject, body_text)
+        # The whole message only off production: a developer needs the
+        # magic link from it, but on the box it would put tokens and
+        # family names in the log (P7).
+        if settings.ENVIRONMENT == "production":
+            logger.info(
+                "[SES_MOCK] To: %s (%d chars)", redact.email(to), len(body_text)
+            )
+        else:
+            logger.info("[SES_MOCK] To: %s | Subject: %s\n%s", to, subject, body_text)
         return
 
     client = boto3.client("ses", region_name=settings.AWS_S3_REGION)
@@ -50,7 +59,7 @@ async def send_email_ses(to: str, subject: str, body_text: str, body_html: str) 
             },
         },
     )
-    logger.info("Sent email via SES: %s", subject)
+    logger.info("Sent email via SES to %s", redact.email(to))
 
 
 def build_mime(
@@ -96,11 +105,7 @@ async def send_raw_email_ses(message: EmailMessage) -> str:
     """Send a built message. Returns SES's MessageId (a mock id under
     SES_MOCK)."""
     if settings.SES_MOCK:
-        logger.info(
-            "[SES_MOCK] Raw email To: %s | Subject: %s",
-            message["To"],
-            message["Subject"],
-        )
+        logger.info("[SES_MOCK] Raw email to %s", redact.email(message["To"]))
         return f"mock-{uuid.uuid4()}"
 
     client = boto3.client("ses", region_name=settings.AWS_S3_REGION)
@@ -120,7 +125,11 @@ async def send_operator_alert(subject: str, body: str) -> None:
     sent is logged, since the thing it is about is already recorded.
     """
     if not settings.OPERATOR_EMAIL:
-        logger.info("Operator alert (OPERATOR_EMAIL unset): %s — %s", subject, body)
+        # The body names families and can quote them: off production only.
+        if settings.ENVIRONMENT == "production":
+            logger.warning("Operator alert (OPERATOR_EMAIL unset): %s", subject)
+        else:
+            logger.info("Operator alert (OPERATOR_EMAIL unset): %s — %s", subject, body)
         return
     try:
         await send_email_ses(

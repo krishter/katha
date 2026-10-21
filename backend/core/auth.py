@@ -11,6 +11,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
+from core import redact
 from core.email import send_email_ses  # noqa: F401  (re-exported)
 from models.family_account import FamilyAccount
 from models.magic_link_token import MagicLinkToken
@@ -148,7 +149,9 @@ async def send_magic_link(email: str, db: AsyncSession) -> bool:
         # typo'd or differently-cased address looks exactly like a working
         # one from outside. Consistent with the rate-limit branch below,
         # which already logs it.
-        logger.info("Magic link requested for unknown email %s — no-op", email)
+        logger.info(
+            "Magic link requested for unknown email %s — no-op", redact.email(email)
+        )
         return True
 
     now = datetime.now(timezone.utc)
@@ -157,7 +160,7 @@ async def send_magic_link(email: str, db: AsyncSession) -> bool:
         last_requested is not None
         and now - last_requested < _MAGIC_LINK_RATE_LIMIT_WINDOW
     ):
-        logger.info("Magic link request rate-limited for %s", email)
+        logger.info("Magic link request rate-limited for %s", redact.email(email))
         return True
 
     token = secrets.token_hex(32)
@@ -197,7 +200,7 @@ async def send_magic_link(email: str, db: AsyncSession) -> bool:
         logger.exception(
             "Could not send magic link to %s — not recording a rate-limit "
             "stamp, so they can retry immediately",
-            account.email,
+            redact.email(account.email),
         )
         return False
 

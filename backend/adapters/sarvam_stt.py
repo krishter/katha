@@ -48,7 +48,11 @@ async def _transcribe_one(
     )
 
     if response.status_code != 200:
-        raise RuntimeError(f"Sarvam STT error {response.status_code}: {response.text}")
+        # The status and Sarvam's error code, not its body: an error body
+        # can echo the input (P7).
+        raise RuntimeError(
+            f"Sarvam STT error {response.status_code}: {_error_code(response)}"
+        )
 
     body = response.json()
     return TranscriptResult(
@@ -152,3 +156,12 @@ async def transcribe(
         language_code=best.language_code,
         language_probability=best.language_probability,
     )
+
+
+def _error_code(response) -> str:
+    """Sarvam's machine-readable error code, if the body has one."""
+    try:
+        error = response.json().get("error") or {}
+        return str(error.get("code") or "no code")
+    except Exception:
+        return "unparsed body"
