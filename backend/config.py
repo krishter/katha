@@ -219,6 +219,12 @@ class Settings(BaseSettings):
     # Her answers to an ask, and screening the child's questions (§9.3,
     # §10.2).
     LLM_CLASSIFIER_MODEL: str = "claude-haiku-5-5"
+    # Classifiers label a short reply; they need no deliberation. With no
+    # effort set the model thinks at its default and, on a long question
+    # (the 1.1 consent update), spent the whole token budget thinking and
+    # returned nothing: a clear "yes" read as unclear, twice, and the
+    # parent was halted (found in the self-trial, 2026-10-21).
+    LLM_CLASSIFIER_EFFORT: str = "low"
 
 
 settings = Settings()

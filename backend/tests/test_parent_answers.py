@@ -98,3 +98,32 @@ def test_the_safe_label_never_moves_a_card():
 async def test_an_unknown_kind_is_a_programming_error(model):
     with pytest.raises(ValueError):
         await classify("send_now", QUESTION, "yes")
+
+
+async def test_classifiers_ask_for_low_effort_and_leave_headroom():
+    """Self-trial 2026-10-21: with no effort set, the model thought through
+    its whole 300-token budget on the long 1.1 consent update and answered
+    nothing, so a clear "yes" read as unclear twice and the parent was
+    halted. Every classifier now asks for low effort, with room to spare."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from cards import privacy
+    from config import settings
+    from core import parent_answers, question_screen
+
+    reply = SimpleNamespace(
+        content='{"label": "unclear", "span": "", "indexes": []}',
+        input_tokens=1,
+        output_tokens=1,
+        stop_reason="end_turn",
+    )
+    chat = AsyncMock(return_value=reply)
+    with patch("adapters.llm.chat", new=chat):
+        await parent_answers.classify(parent_answers.CONSENT, "May I?", "yes")
+        await question_screen.screen("What did Appa do for work?")
+        await privacy.match_topic_turns("health", [(__import__("uuid").uuid4(), "x")])
+    assert chat.await_count == 3
+    for call in chat.await_args_list:
+        assert call.kwargs["effort"] == settings.LLM_CLASSIFIER_EFFORT == "low"
+        assert call.kwargs["max_tokens"] >= 1024
