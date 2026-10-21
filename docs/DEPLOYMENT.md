@@ -177,6 +177,17 @@ gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to s
    number to your phone.
 3. Confirm the signature check passes rather than 403s. If every webhook 403s, `PUBLIC_BASE_URL`
    and the URL Twilio signed disagree — the exact H2 failure the code now guards against.
+4. **What Twilio keeps, and for how long (owner; P6, D8).** Katha now deletes each message and
+   its media from Twilio: her voice note once it is transcribed, its own messages at a final
+   status, and anything left by the `delete_twilio_messages` job every 5 minutes. Check the
+   account in the Twilio console and write the answers here:
+   - Media retention: is there an account-level setting, and what is it? `______`
+   - PII redaction for message bodies: available on this account? Turned on? `______`
+   - Message log retention after a delete: does anything survive (billing records, Messaging
+     Insights)? `______`
+5. **After the first self-trial voice note**, open the message in the Twilio console a minute
+   later and confirm it and its media are gone. If not, read the `delete_twilio_messages` and
+   `Could not delete … from Twilio` lines in the backend log.
 
 ## Step 7 — Frontend
 

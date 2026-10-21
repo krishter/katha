@@ -386,6 +386,7 @@ async def save_memory_card(
     s3_key: str,
     message_sid: Optional[str],
     db,
+    delivery_status: Optional[str] = None,
 ) -> None:
     """Persist a MemoryCard row for a generated and delivered card. Stores
     only the S3 key — the dashboard generates a short-lived presigned URL
@@ -405,7 +406,7 @@ async def save_memory_card(
         # SID, then rejected by Meta asynchronously. delivered_at is set
         # by the status callback (core/delivery.py) and only for a status
         # that means the handset got it.
-        delivery_status="queued" if message_sid else None,
+        delivery_status=delivery_status or ("queued" if message_sid else None),
         twilio_message_sid=message_sid,
     )
     db.add(card)
@@ -500,16 +501,31 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
 
     # Hand over the key just uploaded rather than the bytes — the adapter
     # presigns it instead of uploading a second, untracked copy (S2.4b).
-    message_sid = await whatsapp.send_image(
-        to_number=user_profile.family_whatsapp_number,
-        s3_key=s3_key,
-        caption=caption,
-        template_sid=template_sid or None,
-        template_variables={
-            "2": user_profile.name,
-            "3": domain_label(card_result.domain),
-        },
-    )
+    try:
+        message_sid = await whatsapp.send_image(
+            to_number=user_profile.family_whatsapp_number,
+            s3_key=s3_key,
+            caption=caption,
+            template_sid=template_sid or None,
+            template_variables={
+                "2": user_profile.name,
+                "3": domain_label(card_result.domain),
+            },
+        )
+    except Exception:
+        # The image is in the bucket already. Without a row naming its key,
+        # nothing could ever find it to delete (P6). Kept, marked failed.
+        logger.exception("Memory card send failed for session %s", session_id)
+        await save_memory_card(
+            session_id=session_id,
+            user_id=user_id,
+            card_result=card_result,
+            s3_key=s3_key,
+            message_sid=None,
+            db=db,
+            delivery_status="failed",
+        )
+        return
 
     await save_memory_card(
         session_id=session_id,

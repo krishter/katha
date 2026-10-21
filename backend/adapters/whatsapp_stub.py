@@ -4,7 +4,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from core import usage
+from core import twilio_cleanup, usage
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +14,21 @@ _FIXTURE_AUDIO = Path(__file__).parent.parent / "tests" / "fixtures" / "sample.o
 _FALLBACK_AUDIO = b"OggS" + b"\x00" * 28
 
 
+# Every message the stub was asked to delete from Twilio, in order (P6).
+# Module-level because the adapter is built per request.
+DELETED: list[str] = []
+
+
 class StubWhatsAppAdapter:
     """
     No-op WhatsApp adapter for dev and tests.
     All methods log their arguments and return fake MessageSids.
     Configured via WHATSAPP_ADAPTER=stub.
     """
+
+    async def delete_message(self, message_sid: str) -> None:
+        logger.info("[STUB] delete_message sid=%s (and its media)", message_sid)
+        DELETED.append(message_sid)
 
     def _fake_sid(self) -> str:
         return "STUB_MSG_" + uuid.uuid4().hex[:8]
@@ -39,6 +48,7 @@ class StubWhatsAppAdapter:
         )
         # Recorded like a real send, so tests can assert on the ledger.
         await usage.record_outbound("outbound_voice", sid)
+        await twilio_cleanup.queue(sid, direction=twilio_cleanup.OUTBOUND)
         return sid, s3_key
 
     async def send_image(
@@ -62,6 +72,7 @@ class StubWhatsAppAdapter:
             sid,
         )
         await usage.record_outbound(operation, sid, template_sid)
+        await twilio_cleanup.queue(sid, direction=twilio_cleanup.OUTBOUND)
         return sid
 
     async def send_text(
@@ -83,6 +94,7 @@ class StubWhatsAppAdapter:
         await usage.record_outbound(
             "outbound_template" if template_sid else "outbound_text", sid, template_sid
         )
+        await twilio_cleanup.queue(sid, direction=twilio_cleanup.OUTBOUND)
         return sid
 
     async def download_voice_note(self, media_url: str) -> bytes:
