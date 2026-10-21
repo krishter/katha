@@ -536,7 +536,7 @@ async def test_deletion_removes_cards_questions_and_images(real_db, as_family):
     await real_db.commit()
     holder["user"] = {"user_id": s.user_id, "sub": f"{s.user_id}@example.com"}
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()) as deleted:
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()) as deleted:
         response = await http.delete(f"/user/{s.user_id}")
     assert response.status_code == 200
     assert "cards/conv/a.png" in {c.args[0] for c in deleted.await_args_list}

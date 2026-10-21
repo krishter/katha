@@ -136,6 +136,17 @@ class UserProfileModel(Base):
     family_number_confirmed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # She withdrew (core/withdrawal.py, P4). Everything is erased when this
+    # passes, unless an operator clears it first (scripts/erase_user.py
+    # --cancel-hold). The hold covers a misheard "stop" (D4).
+    erase_after: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When Katha last answered her after a "no" or a withdrawal. At most
+    # one reply in 30 days: "I will not message you again" has to hold.
+    last_decline_reply_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

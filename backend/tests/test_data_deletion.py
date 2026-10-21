@@ -110,7 +110,7 @@ def test_delete_calls_s3_delete_for_each_memory_card(db):
         side_effect=_default_execute_results(s3_keys=["cards/a.png", "cards/b.png"])
     )
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()) as mock_delete:
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()) as mock_delete:
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
@@ -122,7 +122,7 @@ def test_delete_calls_s3_delete_for_each_memory_card(db):
 def test_delete_removes_rows_for_each_table(db):
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
@@ -138,7 +138,7 @@ def test_delete_removes_rows_for_each_table(db):
 def test_delete_anonymizes_consent_records_not_deletes_them(db):
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
     # The 14th execute() call is the consent_records UPDATE (anonymize).
@@ -151,7 +151,7 @@ def test_delete_anonymizes_consent_records_not_deletes_them(db):
 def test_delete_removes_turns(db):
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
     # 6th execute() call is the turns DELETE (after the three key selects,
@@ -167,7 +167,7 @@ def test_delete_calls_s3_delete_for_turn_audio_keys(db):
         side_effect=_default_execute_results(audio_keys=["audio/a.ogg", "audio/b.ogg"])
     )
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()) as mock_delete:
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()) as mock_delete:
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
@@ -178,7 +178,7 @@ def test_delete_calls_s3_delete_for_turn_audio_keys(db):
 def test_delete_removes_family_account(db):
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
     last_stmt = db.execute.await_args_list[-1].args[0]
@@ -190,7 +190,7 @@ def test_delete_removes_family_account(db):
 def test_delete_clears_session_cookie(db):
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     set_cookie = response.headers.get("set-cookie", "")
@@ -204,7 +204,7 @@ def test_delete_continues_after_s3_failure(db):
     )
 
     with patch(
-        "api.routes.admin.storage.delete_media",
+        "core.erasure.storage.delete_media",
         new=AsyncMock(side_effect=RuntimeError("S3 down")),
     ):
         response = client.request("DELETE", f"/user/{_USER_ID}")
@@ -224,7 +224,7 @@ def test_delete_calls_s3_delete_for_session_open_audio(db):
         )
     )
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()) as mock_delete:
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()) as mock_delete:
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
@@ -236,7 +236,7 @@ def test_delete_removes_usage_ledger_rows(db):
     """COST_TO_SERVE.md §3.6: DPDP deletion covers the usage ledger."""
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
     # 10th execute() call: the DELETE-by-user_id after user_profiles.
@@ -250,7 +250,7 @@ def test_delete_removes_voice_change_history(db):
     """GEMINI_TTS.md §4.2: the record of who moved her voice is hers too."""
     db.execute = AsyncMock(side_effect=_default_execute_results())
 
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()):
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
         client.request("DELETE", f"/user/{_USER_ID}")
 
     stmt = str(db.execute.await_args_list[11].args[0])
@@ -265,7 +265,7 @@ def test_delete_removes_conversation_card_images(db):
             card_image_keys=["cards/conv/a-1.png", "cards/conv/b-2.png"]
         )
     )
-    with patch("api.routes.admin.storage.delete_media", new=AsyncMock()) as mock_delete:
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()) as mock_delete:
         response = client.request("DELETE", f"/user/{_USER_ID}")
     assert response.status_code == 200
     assert {c.args[0] for c in mock_delete.await_args_list} == {

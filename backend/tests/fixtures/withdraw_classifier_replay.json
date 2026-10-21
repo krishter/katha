@@ -1,0 +1,19 @@
+{
+  "_about": "Raw classifier replies to evals/fixtures/withdraw_messages.json, recorded by `run_eval.py withdraw` with EVAL_RECORD_WITHDRAW=1. Replayed by the integration tests. Re-record after changing the withdraw guide.",
+  "model": "claude-haiku-5-5",
+  "recorded_at": "2026-10-21T07:43:46.824884+00:00",
+  "replies": {
+    "I've thought about it and I don't want to do this. Please delete what you have.": "{\"label\": \"withdraw\", \"span\": \"I don't want to do this. Please delete what you have.\"}",
+    "இனிமே எனக்கு இது வேண்டாம், நிறுத்திடுங்க.": "{\"label\": \"withdraw\", \"span\": \"இனிமே எனக்கு இது வேண்டாம், நிறுத்திடுங்க\"}",
+    "Ab mujhe yeh sab nahi karna, aap mujhe phone mat karna.": "{\"label\": \"withdraw\", \"span\": \"aap mujhe phone mat karna\"}",
+    "My daughter set this up but honestly I don't want it. Don't call me again.": "{\"label\": \"withdraw\", \"span\": \"Don't call me again.\"}",
+    "My father told us to stop playing and come home": "{\"label\": \"none\", \"span\": \"\"}",
+    "We had to stop the car in the middle of the flood and wait for hours.": "{\"label\": \"none\", \"span\": \"\"}",
+    "Let's stop for today, I am a bit tired.": "{\"label\": \"pause\", \"span\": \"Let's stop for today, I am a bit tired.\"}",
+    "My son deleted all the old photos by mistake and I was so upset.": "{\"label\": \"none\", \"span\": \"\"}",
+    "Mat ro beta, my grandmother would always say that to me.": "{\"label\": \"none\", \"span\": \"\"}",
+    "When the rain came my mother would shout khidki band karo and we all ran to close them.": "{\"label\": \"none\", \"span\": \"\"}",
+    "அப்பா கடையை எட்டு மணிக்கு நிறுத்திவிட்டு வீட்டுக்கு வருவார்.": "{\"label\": \"none\", \"span\": \"\"}",
+    "The mill would stop at noon and everyone ate together under the tree.": "{\"label\": \"none\", \"span\": \"\"}"
+  }
+}

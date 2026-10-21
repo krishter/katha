@@ -13,6 +13,8 @@ export type ParentConsentStatus =
   | "confirming"
   | "granted"
   | "declined"
+  // She agreed, then asked Katha to stop. Erased after a 7-day hold.
+  | "withdrawn"
   | "halted";
 
 export interface Stats {
@@ -25,6 +27,8 @@ export interface Stats {
   // this number, proving it is theirs.
   family_whatsapp_number: string | null;
   family_number_confirmed: boolean;
+  // When everything is erased, after she asked Katha to stop.
+  erase_after: string | null;
   total_sessions: number;
   total_story_atoms: number;
   total_memory_cards: number;

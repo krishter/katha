@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import (
     APIRouter,
@@ -19,7 +20,14 @@ from adapters.whatsapp_stub import get_whatsapp_adapter
 from cards import context as card_context
 from cards import family_inbox
 from config import settings
-from core import family_number, orchestrator, parent_consent, session_manager, usage
+from core import (
+    family_number,
+    orchestrator,
+    parent_consent,
+    session_manager,
+    usage,
+    withdrawal,
+)
 from core.delivery import record_card_delivery
 from models.db import get_db
 from models.family_account import FamilyAccount
@@ -30,6 +38,11 @@ from speech import catalogue
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# After a "no" or a withdrawal, Katha answers her at most this often (P4).
+# "I will not message you again" has to hold; one reply a month keeps her
+# from talking into silence if she has forgotten.
+_REPLY_AFTER_NO_EVERY = timedelta(days=30)
 
 # The one fixed message that stays English: it goes to a number with no
 # profile, so there is no language to speak it in. Every other fixed
@@ -116,6 +129,13 @@ async def _handle_parent_consent(
     state = await parent_consent.get_status(profile.user_id, db)
     language, gender = profile.preferred_language, profile.katha_gender
 
+    if state.status in (
+        parent_consent.ConsentStatus.DECLINED,
+        parent_consent.ConsentStatus.WITHDRAWN,
+    ):
+        await _reply_after_no(whatsapp, profile, state.status, db)
+        return
+
     if state.status is parent_consent.ConsentStatus.HALTED:
         # Still unclear after the re-ask. Pestering an elderly person who
         # does not understand what is being asked is its own harm; a human
@@ -185,6 +205,7 @@ async def _handle_parent_consent(
             stage="parent_declined",
             fixed=True,
         )
+        await _note_reply_after_no(profile, db)
         return
 
     # Unclear. After the re-ask, stop; before it, one clarification.
@@ -204,6 +225,41 @@ async def _handle_parent_consent(
         stage="parent_reask",
     )
     await parent_consent.note_asked(profile.user_id, db)
+
+
+async def _note_reply_after_no(profile: UserProfileModel, db: AsyncSession) -> None:
+    profile.last_decline_reply_at = datetime.now(timezone.utc)
+    db.add(profile)
+    await db.commit()
+
+
+async def _reply_after_no(
+    whatsapp,
+    profile: UserProfileModel,
+    status: parent_consent.ConsentStatus,
+    db: AsyncSession,
+) -> None:
+    """
+    She said no, or asked Katha to stop, and has messaged again. Katha said
+    it would not message her again, so it answers at most once a month,
+    with the same words as before, and otherwise says nothing (P4).
+    """
+    last = profile.last_decline_reply_at
+    if last is not None and datetime.now(timezone.utc) - last < _REPLY_AFTER_NO_EVERY:
+        logger.info(
+            "Parent %s (%s) messaged again — not replying",
+            profile.user_id,
+            status.value,
+        )
+        return
+    language, gender = profile.preferred_language, profile.katha_gender
+    text = (
+        parent_consent.withdraw_text(language, gender)
+        if status is parent_consent.ConsentStatus.WITHDRAWN
+        else parent_consent.declined_text(language, gender)
+    )
+    await _speak(whatsapp, profile, text, stage="reply_after_no", fixed=True)
+    await _note_reply_after_no(profile, db)
 
 
 async def _persist_consent_turn(
@@ -729,6 +785,46 @@ async def _whatsapp_incoming(
             await _handle_parent_consent(whatsapp, profile, transcript, turn_id, db=db)
             return _ack()
 
+        # 5c. Does she want Katha to stop (P4)? Checked on every message from
+        # a parent who has agreed, before a session is looked up or opened:
+        # a "stop" sent after the day's session closed, or at the free
+        # limit, must be heard too. So the voice note is transcribed here,
+        # and the same transcript is handed to the turn below; it is never
+        # transcribed twice. A failed STT is left to the turn, which
+        # retries it and apologises. Only for a parent Katha knows: a
+        # stranger's voice note is never downloaded or transcribed.
+        audio_bytes = None
+        stt_result = None
+        heard = ""
+        if profile is not None and media_url and "audio" in media_type:
+            audio_bytes = await whatsapp.download_voice_note(media_url)
+            try:
+                stt_result = await sarvam_stt.transcribe(audio_bytes)
+            except Exception:
+                logger.warning(
+                    "STT failed before the withdrawal check for %s",
+                    profile.user_id,
+                    exc_info=True,
+                )
+            heard = stt_result.transcript if stt_result else ""
+        elif profile is not None:
+            heard = params.get("Body", "") or ""
+        if profile is not None and await withdrawal.is_withdrawal(heard):
+            erase_at = await withdrawal.record(
+                profile, heard, db, inbound_message_sid=message_sid
+            )
+            await _speak(
+                whatsapp,
+                profile,
+                parent_consent.withdraw_text(
+                    profile.preferred_language, profile.katha_gender
+                ),
+                stage="withdrawn",
+                fixed=True,
+            )
+            await withdrawal.notify(profile, erase_at, db)
+            return _ack()
+
         # 6. Look up active session, or open one because she just asked.
         #
         # The scheduled session is abandoned four hours after it opens, so
@@ -751,7 +847,8 @@ async def _whatsapp_incoming(
 
         # 6. Handle voice note
         if media_url and "audio" in media_type:
-            audio_bytes = await whatsapp.download_voice_note(media_url)
+            if audio_bytes is None:
+                audio_bytes = await whatsapp.download_voice_note(media_url)
             user_profile = await _load_user_profile_for_session(state, db)
 
             result = await orchestrator.process_voice_turn(
@@ -761,6 +858,7 @@ async def _whatsapp_incoming(
                 db,
                 inbound_message_sid=message_sid,
                 background_tasks=background_tasks,
+                stt_result=stt_result,
             )
 
             usage.enter_scope(turn_id=result.turn_id)

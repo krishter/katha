@@ -10,6 +10,7 @@ from models.consent_record import ConsentRecord
 from models.conversation_card import ConversationCard
 from models.crisis_event import CrisisEvent
 from models.db import AsyncSessionLocal, engine
+from models.erasure_log import ErasureLog
 from models.fact import Fact
 from models.family_account import FamilyAccount
 from models.family_question import FamilyQuestion
@@ -27,6 +28,7 @@ from models.voice_change import VoiceChange
 # so a row left behind makes the second run of that test fail on a
 # collision rather than on anything real.
 _TABLES_IN_DELETE_ORDER = [
+    ErasureLog,
     ApiUsage,
     VoiceChange,
     FamilyQuestion,

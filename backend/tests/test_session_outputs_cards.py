@@ -25,6 +25,16 @@ def paths():
             orchestrator.card_writer, "draft_for_session", new=AsyncMock()
         ) as draft,
         patch.object(orchestrator, "get_user_profile", new=AsyncMock()) as profile,
+        # She has agreed: P4's guard lets the outputs through.
+        patch.object(
+            orchestrator.parent_consent,
+            "get_status",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    status=orchestrator.parent_consent.ConsentStatus.GRANTED
+                )
+            ),
+        ),
     ):
         yield SimpleNamespace(
             post=post, memory_card=memory_card, draft=draft, profile=profile
@@ -109,3 +119,22 @@ def test_a_readback_that_leaves_the_english_hook_untranslated_is_a_problem():
         fields, readback_text="प्रिया साठी. अप्पांनी आंब्याच्या झाडाला राजा नाव दिलं."
     )
     assert shape_problems(translated, "mr-IN") == []
+
+
+@pytest.mark.parametrize("status", ["WITHDRAWN", "DECLINED"])
+async def test_nothing_is_made_once_she_has_said_stop(paths, monkeypatch, status):
+    """P4: an earlier turn's extraction can close the session after she
+    withdrew. Her family must not get a card from it."""
+    monkeypatch.setattr("config.settings.CONVERSATION_CARDS_ENABLED", True)
+    consent = orchestrator.parent_consent
+    with patch.object(
+        consent,
+        "get_status",
+        new=AsyncMock(
+            return_value=SimpleNamespace(status=getattr(consent.ConsentStatus, status))
+        ),
+    ):
+        await orchestrator._produce_session_outputs("s1", "u1", db=object())
+    paths.post.assert_not_awaited()
+    paths.memory_card.assert_not_awaited()
+    paths.draft.assert_not_awaited()

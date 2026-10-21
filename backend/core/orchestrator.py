@@ -19,7 +19,13 @@ from cards import asks as card_asks
 from cards import privacy as card_privacy
 from cards import write as card_writer
 from config import settings
-from core import conversation_policy, family_number, session_manager, usage
+from core import (
+    conversation_policy,
+    family_number,
+    parent_consent,
+    session_manager,
+    usage,
+)
 from core.fallback_audio import FailureStage, get_fallback_audio, get_fallback_text
 from core.session_manager import SessionState
 from extraction import entity_extractor, story_extractor
@@ -544,6 +550,23 @@ async def _produce_session_outputs(session_id: str, user_id: str, db) -> None:
     cost the card, and neither can raise into a caller that has already
     done the thing it was called for.
     """
+    # Nothing is made from a session once she has asked Katha to stop (P4).
+    # An earlier turn's extraction can finish after her withdrawal and try
+    # to close the session; that must not send her family a card.
+    try:
+        status = (await parent_consent.get_status(user_id, db)).status
+    except Exception:
+        logger.exception("Could not read consent before outputs for %s", user_id)
+        return
+    if status in (
+        parent_consent.ConsentStatus.WITHDRAWN,
+        parent_consent.ConsentStatus.DECLINED,
+    ):
+        logger.info(
+            "No outputs for session %s: %s has %s", session_id, user_id, status.value
+        )
+        return
+
     try:
         await run_post_session(session_id, user_id, db)
     except Exception:
@@ -809,6 +832,7 @@ async def process_voice_turn(
     db,
     inbound_message_sid: Optional[str] = None,
     background_tasks: BackgroundTasks | None = None,
+    stt_result=None,
 ) -> TurnResult:
     """
     session → STT → pre-policy → prior context → dialogue LLM call
@@ -833,9 +857,11 @@ async def process_voice_turn(
         state.exchange_count,
     )
 
-    # 2. Transcribe
+    # 2. Transcribe, unless the webhook already did: it reads every message
+    # for a withdrawal before the turn (P4), and hands its transcript on.
     try:
-        stt_result = await sarvam_stt.transcribe(audio_bytes)
+        if stt_result is None:
+            stt_result = await sarvam_stt.transcribe(audio_bytes)
     except Exception:
         logger.error(
             "STT failed for session %s turn %d",

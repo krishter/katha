@@ -41,6 +41,9 @@ PARENT_CONSENT_VERSION = "parent-1.0"
 # Written by scripts/change_parent_number.py: whatever she said on her old
 # number is not an answer from whoever holds the new one.
 RESET_VERSION = f"{PARENT_CONSENT_VERSION}-reset"
+# She agreed, then asked Katha to stop (core/withdrawal.py, P4). Read like a
+# decline: nothing is recorded, and she is not asked again.
+WITHDRAWN_VERSION = f"{PARENT_CONSENT_VERSION}-withdrawn"
 
 # user_profiles.parent_consent_state
 STATE_ASKING = "asking"
@@ -69,6 +72,7 @@ class ConsentStatus(str, Enum):
     CONFIRMING = "confirming"  # she said yes once; asked to confirm
     GRANTED = "granted"
     DECLINED = "declined"
+    WITHDRAWN = "withdrawn"  # agreed, then asked Katha to stop
     HALTED = "halted"  # still unclear after the re-ask — needs a human
 
 
@@ -294,6 +298,13 @@ def granted_text(
     return catalogue.text("consent_granted", language, gender=gender)
 
 
+def withdraw_text(
+    language: str = catalogue.SOURCE_LANGUAGE, gender: Optional[str] = None
+) -> str:
+    """What she hears once, when she asks Katha to stop (P4)."""
+    return catalogue.text("withdraw_confirm", language, gender=gender)
+
+
 def confirm_text(
     language: str = catalogue.SOURCE_LANGUAGE, gender: Optional[str] = None
 ) -> str:
@@ -346,6 +357,8 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
             break
         if record.consent_version.endswith("-declined"):
             return ParentConsentState(ConsentStatus.DECLINED, record.consented_at)
+        if record.consent_version == WITHDRAWN_VERSION:
+            return ParentConsentState(ConsentStatus.WITHDRAWN, record.consented_at)
         if record.whatsapp_number != number:
             logger.warning(
                 "Parent consent for %s was given from another number — not a grant",
