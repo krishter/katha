@@ -75,11 +75,16 @@ def test_prompt_length_stays_bounded():
     exactly one question per reply, vary the opening, and no emoji in
     speech. Each was a fault heard in real replies.
 
+    Raised from 6000 to 6300 (5810 -> 6041) on 2026-10-21 for P5: the
+    "keep this between us" rule moved from the cards-only block into
+    Layer 2 for every family. Without it Katha could not even say "this
+    stays between us" to a family without cards (M-04).
+
     Raise it again only for something equally load-bearing, and say what
     in here.
     """
     prompt = _build()
-    assert len(prompt) < 6000, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 6300, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():

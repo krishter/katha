@@ -34,7 +34,7 @@ Each was found by running the real path. None could have been found by a mock.
 
 **Every criterion must correspond to something §3.3 actually states.**
 
-This is not pedantry. The harness once failed TC-04 on a keyword list of temporal words (`after`, `years later`, `looking back`) when §3.3 asks only that a response "introduces new angle" — so a model asking about the house, the street, and the father's role scored zero for choosing spatial angles over temporal ones. It failed TC-05 on a `≤60 words` cap that appears nowhere in the spec, while the criterion §3.3 *does* state — `session_end_suggested` within 3 exchanges — passed.
+This is not pedantry. The harness once failed TC-04 on a keyword list of temporal words (`after`, `years later`, `looking back`) when §3.3 asks only that a response "introduces new angle" — so a model asking about the house, the street, and the father's role scored zero for choosing spatial angles over temporal ones. It failed TC-05 on a `≤60 words` cap that appears nowhere in the spec, while the criterion §3.3 *does* state — `session_end_suggested` within 3 exchanges — passed. Later, TC-05 failed four runs in a row because "acknowledges the tiredness" was scored by six literal words, and replies like "Thank you for telling me. Some days are slower than others, and that is quite all right" contained none of them. The list was widened on 2026-10-21 after the owner reviewed those replies. The same day, the "replies must not grow" allowance went from 5 words to 10, after a 32-word reply followed by a 38-word goodbye failed it.
 
 Both produced good conversations and a failing grade. An eval that fails on invented criteria cannot gate anything, because you cannot tell a real regression from a scoring artifact.
 

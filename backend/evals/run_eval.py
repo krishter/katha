@@ -347,9 +347,10 @@ async def _real_turn(
         # would.
         session_domain=state.domain,
     )
-    if prompt_profile.cards is not None:
-        from cards import privacy as card_privacy
+    # "Keep this between us" for every family, as production does (P5).
+    from cards import privacy as card_privacy
 
+    if prompt_profile.cards is not None:
         await card_privacy.apply_share_signals(
             extraction_json,
             turn_id=turn.id,
@@ -357,6 +358,13 @@ async def _real_turn(
             user_id=user_id,
             db=db,
         )
+    else:
+        await card_privacy.apply_private_request(
+            extraction_json, turn_id=turn.id, user_id=user_id, db=db, cards_on=False
+        )
+    turn.extraction_json = extraction_json
+    turn.extraction_status = "done"
+    await db.commit()
     new_state = await session_manager.apply_extraction(session_id, extraction_json, db)
 
     return {
@@ -710,7 +718,11 @@ async def tc05(db):
     # well under a normal full-length turn. The ceiling guards against
     # runaway output; it is not a style rule.
     word_counts = [len(resp.split()) for resp, _ in responses]
-    not_growing = all(b <= a + 5 for a, b in zip(word_counts, word_counts[1:]))
+    # +10 words, not +5 (owner's decision, 2026-10-21): a warm goodbye after
+    # "rest today" naturally runs a sentence longer, and +5 failed a 32- then
+    # 38-word reply that was plainly brief. The 100-word ceiling below still
+    # stops runaway output.
+    not_growing = all(b <= a + 10 for a, b in zip(word_counts, word_counts[1:]))
     under_ceiling = all(n <= 100 for n in word_counts)
     brief_and_warm = not_growing and under_ceiling
     # At most one question per reply — two is an interrogation of someone
@@ -720,9 +732,39 @@ async def tc05(db):
     # §3.3 TC-05 Pass (2026-10-17): "The first response acknowledges the
     # tiredness, offers rest, and asks no memory question."
     first = responses[0][0].lower()
+    # Acknowledging is responding to what she said about how she feels, in
+    # whatever words. The list was six literal words, and four runs in a
+    # row failed replies like "Thank you for telling me. Some days are
+    # slower than others, and that is quite all right" — an acknowledgement
+    # by any reading of §3.3 (owner's review, 2026-10-21; see README).
     acknowledges = any(
         w in first
-        for w in ["tired", "no rush", "no hurry", "of course", "understand", "sorry"]
+        for w in [
+            "tired",
+            "no rush",
+            "no hurry",
+            "of course",
+            "understand",
+            "sorry",
+            "thank you for telling me",
+            "thanks for telling me",
+            "for letting me know",
+            "all right",
+            "alright",
+            "that's okay",
+            "that is okay",
+            "that's fine",
+            "that is fine",
+            "no pressure",
+            "don't have to",
+            "do not have to",
+            "slower",
+            "take it easy",
+            "gently",
+            "worn out",
+            "exhausted",
+            "weary",
+        ]
     )
     offers_rest = any(
         w in first
@@ -1497,10 +1539,16 @@ async def tc12(db):
     await cleanup(db, uid)
 
 
-async def tc13(db):
-    uid = "eval-tc13"
+async def _tc13_once(db, cards_on: bool) -> tuple[bool, str]:
+    uid = f"eval-tc13-{'on' if cards_on else 'off'}"
     await cleanup(db, uid)
-    _, pp = await seed_cards_profile(db, uid)
+    if cards_on:
+        _, pp = await seed_cards_profile(db, uid)
+    else:
+        row = await seed_profile(db, uid)
+        row.conversation_cards_enabled = False
+        await db.commit()
+        pp = dataclasses_replace(to_prompt_profile(row), cards=None)
     state = await session_manager.start_session(uid, db)
     r = await real_turn(
         db,
@@ -1527,15 +1575,105 @@ async def tc13(db):
             "only between",
         ]
     )
-    # §3.3 TC-13 Pass: "`share_restriction` is not `none` and the turn is
-    # private." The confirmation is reported, not scored (rubric wording).
     passed = flag in ("this_turn", "topic") and turn.is_private
     evidence = (
-        f"share_restriction={flag!r} turn.is_private={turn.is_private}\n"
+        f"[cards {'on' if cards_on else 'off'}] share_restriction={flag!r} "
+        f"turn.is_private={turn.is_private}\n"
         f"Katha: {resp!r}\nconfirmation_detected={confirms} "
         f"asks_why={'why' in resp.lower()}"
     )
-    record("TC-13", "objective", passed, evidence)
+    await cleanup(db, uid)
+    return passed, evidence
+
+
+async def tc13(db):
+    # §3.3 TC-13 Pass: "`share_restriction` is not `none` and the turn is
+    # private." The confirmation is reported, not scored (rubric wording).
+    # Run with cards on and off: since P5 the request is read for every
+    # family, and the plan's gate asks for 100% in both.
+    on_passed, on_evidence = await _tc13_once(db, cards_on=True)
+    off_passed, off_evidence = await _tc13_once(db, cards_on=False)
+    record(
+        "TC-13",
+        "objective",
+        on_passed and off_passed,
+        f"{on_evidence}\n{off_evidence}",
+    )
+
+
+async def privacy(db):
+    """
+    P5's acceptance sentence, cards off, through the real dialogue and
+    extraction calls: "Mere bete ko mat batana, par…" and a story. Passes
+    when the turn ends private. With EVAL_RECORD_PRIVATE=1 the raw
+    extraction reply is saved to tests/fixtures/private_request_extraction
+    _replay.json, which the integration test replays.
+    """
+    from adapters import llm as llm_adapter
+
+    uid = "eval-privacy"
+    await cleanup(db, uid)
+    row = await seed_profile(db, uid)
+    row.conversation_cards_enabled = False
+    row.preferred_language = "hi-IN"
+    await db.commit()
+    pp = dataclasses_replace(to_prompt_profile(row), cards=None)
+    state = await session_manager.start_session(uid, db)
+    transcript = (
+        "Mere bete ko mat batana, par jab main chhoti thi, hamare ghar mein "
+        "paison ki bahut tangi thi. Papa ne chupke se apni zameen bech di thi "
+        "Kanpur mein, aur Amma ko bhi baad mein pata chala."
+    )
+
+    recorded: dict[str, str] = {}
+    real_chat = llm_adapter.chat
+
+    async def recording_chat(messages, **kwargs):
+        response = await real_chat(messages, **kwargs)
+        if kwargs.get("purpose") in ("extraction", "dialogue"):
+            recorded[kwargs["purpose"]] = response.content
+        return response
+
+    llm_adapter.chat = recording_chat
+    orchestrator.llm.chat = recording_chat
+    try:
+        r = await real_turn(db, uid, state.session_id, state, pp, transcript)
+    finally:
+        llm_adapter.chat = real_chat
+        orchestrator.llm.chat = real_chat
+
+    turn = (await db.execute(select(Turn).where(Turn.id == r["turn_id"]))).scalar_one()
+    flag = r["extraction_json"].get("share_restriction")
+    atoms = len(r["extraction_json"].get("story_atoms") or [])
+    if os.environ.get("EVAL_RECORD_PRIVATE") == "1":
+        root = pathlib.Path(__file__).resolve().parent
+        out = root.parent / "tests/fixtures/private_request_extraction_replay.json"
+        out.write_text(
+            json.dumps(
+                {
+                    "_about": "A live extraction of a cards-off parent saying "
+                    "'don't tell my son' before a story, recorded by "
+                    "`run_eval.py privacy` with EVAL_RECORD_PRIVATE=1 and "
+                    "replayed by tests/integration/test_private_for_everyone.py.",
+                    "model": settings.LLM_EXTRACTION_MODEL,
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "transcript": transcript,
+                    "response_text": r["response_text"],
+                    "extraction": recorded.get("extraction", ""),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
+        )
+        print(f"recorded the extraction reply to {out}")
+    record(
+        "PRIVACY",
+        "objective",
+        flag in ("this_turn", "topic") and turn.is_private and atoms > 0,
+        f"share_restriction={flag!r} turn.is_private={turn.is_private} "
+        f"atoms={atoms}\nKatha: {r['response_text']!r}",
+    )
     await cleanup(db, uid)
 
 
@@ -2051,7 +2189,13 @@ async def main():
     selected = sys.argv[1:] or list(ALL_CASES.keys())
     if selected == ["cards"]:
         selected = list(CARD_CASES.keys())
-    cases = {**ALL_CASES, **CARD_CASES, "consent": consent, "withdraw": withdraw}
+    cases = {
+        **ALL_CASES,
+        **CARD_CASES,
+        "consent": consent,
+        "withdraw": withdraw,
+        "privacy": privacy,
+    }
     async with AsyncSessionLocal() as db:
         for name in selected:
             fn = cases[name]

@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,6 +22,12 @@ from models.db import Base
 
 class Turn(Base):
     __tablename__ = "turns"
+    __table_args__ = (
+        CheckConstraint(
+            "extraction_status IN ('pending', 'done', 'failed')",
+            name="ck_turns_extraction_status",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -43,6 +58,13 @@ class Turn(Base):
         Boolean, nullable=False, server_default="false"
     )
     private_topic: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Whether this turn's extraction, and with it the check for "keep this
+    # between us", has run (P5): pending | done | failed. Its atoms reach
+    # the family only once it is done and the turn is not private, so a
+    # request for privacy can never lose a race with the dashboard.
+    extraction_status: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="pending"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -512,9 +512,15 @@ async def generate_memory_card(
     Selects the best story atom from the session and renders a memory card.
     Returns None if the session has no story atoms with usable quotes.
     """
+    # Only what the family may see (P5): nothing from a turn she asked to
+    # keep private, or one whose privacy has not been read. If that leaves
+    # nothing, there is no card.
+    from cards.privacy import not_private_atom
+
     result = await db.execute(
         select(StoryAtom)
         .where(StoryAtom.session_id == uuid.UUID(session_id))
+        .where(not_private_atom())
         .order_by(StoryAtom.completeness_score.desc())
     )
     rows = result.scalars().all()
