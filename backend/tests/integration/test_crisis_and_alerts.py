@@ -16,7 +16,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from core import alerts, orchestrator
+from core import alerts, orchestrator, parent_consent
 from core.fallback_audio import FailureStage
 from core.session_manager import SessionState
 from main import app
@@ -63,7 +63,7 @@ async def _parent_in_session(db, language="ta-IN") -> SimpleNamespace:
         ConsentRecord(
             user_id=user_id,
             email_hash="",
-            consent_version="parent-1.0",
+            consent_version=parent_consent.PARENT_CONSENT_VERSION,
             principal="parent",
             whatsapp_number=number,
         )

@@ -2213,6 +2213,16 @@ async def main():
                     False,
                     f"Exception during test: {e}\n{traceback.format_exc()}",
                 )
+                # A case that crashed skipped its own cleanup. Its profile
+                # holds the eval's fixed number, which is unique, so every
+                # case after it failed on insert (2026-10-21, TC-03). Keep
+                # its spend, then clear it.
+                try:
+                    await db.rollback()
+                    await capture_usage(db, f"eval-{name}")
+                    await cleanup(db, f"eval-{name}")
+                except Exception:
+                    await db.rollback()
 
         # Rows a case left behind (an error before its own cleanup, or
         # EVAL_SKIP_CLEANUP=1) are still this run's spend.

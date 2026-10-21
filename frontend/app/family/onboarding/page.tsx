@@ -417,7 +417,7 @@ export default function OnboardingPage() {
               },
               {
                 key: "residency",
-                node: "Your family's data is stored securely in India (Mumbai)",
+                node: "Your family's data is stored in India (Mumbai). To reply and to speak, Katha uses AI companies, some outside India; the privacy policy names each one",
               },
               {
                 key: "deletion",

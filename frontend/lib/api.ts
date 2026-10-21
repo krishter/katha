@@ -15,6 +15,9 @@ export type ParentConsentStatus =
   | "declined"
   // She agreed, then asked Katha to stop. Erased after a 7-day hold.
   | "withdrawn"
+  // She agreed before the notice named who processes her words; Katha is
+  // asking her once more (P10).
+  | "update"
   | "halted";
 
 export interface Stats {

@@ -58,6 +58,22 @@ export function ParentConsentBanner({
     );
   }
 
+  if (status === "update") {
+    return (
+      <section className="rounded-xl border border-border bg-surface p-6">
+        <h2 className="font-display text-lg font-semibold text-ink">
+          Katha is checking something with {parentName}
+        </h2>
+        <p className="mt-2 text-sm text-ink-mid">
+          Katha&apos;s privacy notice now says more about who processes{" "}
+          {parentName}&apos;s words, and Katha is telling {parentName} and
+          asking once more before carrying on. Conversations continue as soon
+          as they say yes.
+        </p>
+      </section>
+    );
+  }
+
   if (status === "withdrawn") {
     return (
       <section className="rounded-xl border border-border bg-surface p-6">

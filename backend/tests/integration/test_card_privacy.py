@@ -222,7 +222,7 @@ async def test_never_share_withdraws_everything_unsent_and_keeps_her_recording(
         .scalars()
         .all()
     )
-    assert versions == ["parent-1.0", "share-1.0-never"]
+    assert versions == [parent_consent.PARENT_CONSENT_VERSION, "share-1.0-never"]
     # Not sharing is not withdrawing consent to be recorded.
     assert await parent_consent.has_granted(user_id, real_db)
 

@@ -263,7 +263,7 @@ async def test_status_is_confirming_between_the_two_yeses():
 async def test_a_grant_from_another_number_is_not_a_grant():
     """M-03: consent is the person's, and Katha knows her by her number."""
     granted = SimpleNamespace(
-        consent_version="parent-1.0",
+        consent_version=parent_consent.PARENT_CONSENT_VERSION,
         consented_at="2026-08-30",
         whatsapp_number="+919999999999",
     )
@@ -288,7 +288,9 @@ async def test_a_reset_retires_earlier_answers():
 
 async def test_status_reflects_a_granted_record():
     granted = SimpleNamespace(
-        consent_version="parent-1.0", consented_at="2026-08-30", whatsapp_number=_NUMBER
+        consent_version=parent_consent.PARENT_CONSENT_VERSION,
+        consented_at="2026-08-30",
+        whatsapp_number=_NUMBER,
     )
     state = await get_status(_USER_ID, _status_db([granted], times_asked=1))
     assert state.status is ConsentStatus.GRANTED
@@ -309,7 +311,9 @@ async def test_a_never_share_answer_does_not_withdraw_recording_consent():
     """She said yes to being recorded, then "don't send anything to my
     son". That is a sharing answer; she is still recording."""
     granted = SimpleNamespace(
-        consent_version="parent-1.0", consented_at="2026-08-30", whatsapp_number=_NUMBER
+        consent_version=parent_consent.PARENT_CONSENT_VERSION,
+        consented_at="2026-08-30",
+        whatsapp_number=_NUMBER,
     )
     never = SimpleNamespace(
         consent_version="share-1.0-never", consented_at="2026-09-02"
