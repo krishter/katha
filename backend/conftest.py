@@ -128,6 +128,26 @@ def twilio_queue(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def turn_failures(request, monkeypatch):
+    """
+    Count turn failures in memory (P9): unit tests must not write them to a
+    real database. A test that needs the real count and alert marks itself
+    real_alerts. Yields (user_id, stage) in order.
+    """
+    if request.node.get_closest_marker("real_alerts"):
+        yield None
+        return
+
+    failed: list[tuple[str, str]] = []
+
+    async def _turn_failed(user_id, stage):
+        failed.append((user_id, stage))
+
+    monkeypatch.setattr("core.alerts.turn_failed", _turn_failed)
+    yield failed
+
+
+@pytest.fixture(autouse=True)
 def no_real_gemini(monkeypatch):
     """
     No test reaches Google with the developer's real key from backend/.env.

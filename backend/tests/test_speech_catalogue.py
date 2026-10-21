@@ -39,7 +39,7 @@ def test_every_supported_language_has_a_message_file():
 @pytest.mark.parametrize("language", SUPPORTED_LANGUAGES)
 def test_every_language_has_exactly_the_known_messages(language):
     entries = catalogue._load(language)
-    ids = {k for k in entries if not k.startswith("_")}
+    ids = {k for k in entries if not k.startswith("_") and k not in catalogue.DATA_KEYS}
     assert ids == set(catalogue.MESSAGE_IDS), (
         f"{language}: missing {set(catalogue.MESSAGE_IDS) - ids}, "
         f"unknown {ids - set(catalogue.MESSAGE_IDS)}"
@@ -204,3 +204,34 @@ def test_metrics_report_each_languages_review_status():
     ]
     html = metrics_page._languages(rows)
     assert "<b>machine</b>" in html and "ta-IN" in html
+
+
+# ── crisis coverage (P9, M-11) ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("language", SUPPORTED_LANGUAGES)
+def test_every_language_can_hear_and_answer_a_crisis(language):
+    """It covered six languages; a Malayalam speaker in distress was not
+    detected at all. Every language now has a crisis reply in it, and at
+    least five crisis phrases, and one of them trips the pre-turn check."""
+    from core.conversation_policy import check_pre_turn
+    from core.session_manager import SessionState
+
+    patterns = catalogue.crisis_patterns(language)
+    assert len(patterns) >= 5, f"{language}: only {len(patterns)} crisis patterns"
+
+    state = SessionState(
+        session_id="s",
+        user_id="u",
+        session_number=1,
+        domain="childhood",
+        exchange_count=1,
+        energy_signal="high",
+        goal_met=False,
+        session_end_suggested=False,
+    )
+    said = f"Some days are hard. {patterns[0]}. That is how I feel."
+    result = check_pre_turn(said, state, language=language)
+    assert result.crisis_detected and not result.allowed, language
+    assert result.override_response == catalogue.text("crisis", language)
+    assert _ICALL in result.override_response

@@ -176,13 +176,18 @@ and the parent's model of "what this is" forms here.
 |---|---|---|
 | Session completed yesterday | `sessions` | No session, or 0 turns |
 | Crisis detections | `crisis_events` rows since yesterday | **Any row.** Read it the same day |
-| Turn failures | logs / `FailureStage` | Two failures in a row for one family |
+| Turn failures | `[Katha] Turns are failing` email | Any. It fires on >3 in an hour, or 2 in a row for one family |
 | Cards delivered and opened | cards + child engagement | No open by day 3 |
 
-**`crisis_events` is written by the orchestrator and read by nothing.** Until T1.3 lands,
-*you* are the reader. For a product serving isolated elderly people, this is the one check
-that cannot be skipped for a day. Escalation is a phone call to the child, plus iCall India
-(9152987821) referenced in the protocol — not a dashboard note.
+**Every crisis signal is emailed to `OPERATOR_EMAIL` at once** (`[Katha] Crisis signal:
+read this today`), with what she said, the family and the session. She has already heard
+the crisis reply, in her language, with iCall India (9152987821). Read the email the same
+day; for a product serving isolated elderly people, this cannot wait for tomorrow.
+Escalation is a phone call to the child, not a dashboard note. The `crisis_events` row
+points at her turn, which is kept private: never on a card or the dashboard.
+
+The crisis phrases for every language are machine-drafted (D1) and generous on purpose.
+Expect some false alarms; a miss costs more.
 
 **Silence handling is manual until T2:** 🔧
 

@@ -16,6 +16,10 @@ class FailureStage(str, Enum):
     STT = "stt"
     LLM = "llm"
     OTHER = "other"
+    # Not a failure: the crisis reply (P9, M-11). Kept with the apologies
+    # because it shares their need: pre-synthesised at startup in every
+    # language and voice, so it never waits on, or fails with, live TTS.
+    CRISIS = "crisis"
 
 
 # Each stage's apology, by message id in speech/catalogue.py: the words
@@ -24,6 +28,7 @@ _MESSAGE_IDS: dict[FailureStage, str] = {
     FailureStage.STT: "fallback_stt",
     FailureStage.LLM: "fallback_llm",
     FailureStage.OTHER: "fallback_other",
+    FailureStage.CRISIS: "crisis",
 }
 
 _DEFAULT_LANGUAGE = "en-IN"

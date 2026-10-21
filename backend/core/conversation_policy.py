@@ -15,51 +15,13 @@ from speech import catalogue
 SOURCE_LANGUAGE = catalogue.SOURCE_LANGUAGE
 
 
-CRISIS_KEYWORDS: list[str] = [
-    "end my life",
-    "don't want to live",
-    "do not want to live",
-    "suicide",
-    "kill myself",
-    "no reason to live",
-    "want to die",
-    "better off dead",
-    "wish i was dead",
-    "can't go on",
-    "cannot go on",
-    # Hindi crisis phrases (romanized)
-    "jeena nahi chahta",
-    "jeena nahi chahti",
-    "marna chahta hoon",
-    "marna chahti hoon",
-    "jaan dena chahta",
-    "khud ko khatam",
-    # Hindi / Marathi crisis phrases (Devanagari — shared script).
-    # NOTE: reviewed for correctness of common suicide-risk phrasing, but
-    # per the architecture review this list still needs native-speaker
-    # sign-off before pilot launch — do not treat as clinically validated.
-    "जीना नहीं चाहता",
-    "जीना नहीं चाहती",
-    "मरना चाहता हूँ",
-    "मरना चाहती हूँ",
-    "जान देना चाहता",
-    "खुद को खत्म",
-    "आत्महत्या",
-    "जगायचं नाही",
-    "मरायचं आहे",
-    # Tamil crisis phrases
-    "தற்கொலை",
-    "சாக விரும்புகிறேன்",
-    "வாழ விரும்பவில்லை",
-    # Telugu crisis phrases
-    "ఆత్మహత్య",
-    "చనిపోవాలని అనిపిస్తుంది",
-    "జీవించాలని అనుకోవడం లేదు",
-    # Bengali crisis phrases
-    "আত্মহত্যা",
-    "বাঁচতে চাই না",
-    "মরে যেতে ইচ্ছা করছে",
-]
+# Every language's crisis phrases (speech/messages/<lang>.json,
+# "crisis_patterns"; P9, M-11). It was one hard-coded list covering English,
+# romanised Hindi, Hindi and Marathi, Tamil, Telugu and Bengali, and nothing
+# for Kannada, Malayalam, Gujarati, Punjabi, Odia, Urdu or Assamese. The
+# lists are machine-drafted and reviewed with the rest of the catalogue
+# (D1): not clinically validated, and drafted generously on purpose.
+CRISIS_KEYWORDS: tuple[str, ...] = catalogue.all_crisis_patterns()
 
 
 def find_crisis_keyword(text: str) -> str | None:

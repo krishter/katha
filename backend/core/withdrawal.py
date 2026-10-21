@@ -34,8 +34,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards import state as card_state
-from core import conversation_policy, parent_answers, parent_consent, session_manager
-from core.email import send_email_ses, send_operator_alert
+from core import (
+    alerts,
+    conversation_policy,
+    parent_answers,
+    parent_consent,
+    session_manager,
+)
+from core.email import send_email_ses
 from models.consent_record import ConsentRecord
 from models.conversation_card import ConversationCard
 from models.family_account import FamilyAccount
@@ -297,7 +303,7 @@ async def record(
 async def notify(profile: UserProfileModel, erase_at: datetime, db: AsyncSession):
     """Tell the operator and the family. Never raises."""
     when = erase_at.strftime("%d %B %Y")
-    await send_operator_alert(
+    await alerts.send(
         # No name in the subject: subjects reach logs (P7).
         "A parent withdrew consent",
         f"{profile.name} ({profile.user_id}) asked Katha to stop. Katha has "
@@ -354,7 +360,7 @@ async def erase_due(db: AsyncSession, now: Optional[datetime] = None) -> int:
     for user_id, name in due:
         report = await erasure.erase_user(user_id, db, actor=erasure.ACTOR_HOLD)
         flag = "" if report.complete else " — WITH FAILURES"
-        await send_operator_alert(
+        await alerts.send(
             f"Erased a family after withdrawal{flag}",
             f"The 7-day hold for {name} ({user_id}) passed and their data was "
             f"erased.\nRemoved: {report.counts}\n"

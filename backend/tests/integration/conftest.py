@@ -17,6 +17,7 @@ from models.family_question import FamilyQuestion
 from models.magic_link_token import MagicLinkToken
 from models.media_object import MediaObject
 from models.memory_card import MemoryCard
+from models.operator_alert import AlertSent, TurnFailure
 from models.session import Session
 from models.story_atom import StoryAtom
 from models.turn import Turn
@@ -31,6 +32,8 @@ from models.voice_change import VoiceChange
 # collision rather than on anything real.
 _TABLES_IN_DELETE_ORDER = [
     ErasureLog,
+    AlertSent,
+    TurnFailure,
     MediaObject,
     TwilioDeletion,
     ApiUsage,

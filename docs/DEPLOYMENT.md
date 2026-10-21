@@ -119,6 +119,8 @@ SARVAM_API_KEY / ANTHROPIC_API_KEY
 GEMINI_API_KEY                           # from a BILLING-ENABLED Google project (see below)
 TTS_VENDOR=gemini                        # sarvam = rollback for new families
 GEMINI_TTS_LANGUAGES=all
+OPERATOR_EMAIL=<an inbox you read daily> # crisis signals, failing turns, stale backups,
+                                         # withdrawals; production refuses to boot without it
 ```
 
 `GEMINI_API_KEY` must come from a Google project with billing enabled. On the free tier
@@ -216,7 +218,16 @@ gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to s
    - Check: `sudo grep -l "transcript=" $(docker inspect --format='{{.LogPath}}' $(docker compose -f docker-compose.prod.yml ps -q backend))`
      must print nothing.
    - If it prints a file, empty it: `sudo truncate -s 0 <that file>`.
-5. Only then: Stage B of `docs/SELF_TRIAL.md`, on your own number, on these URLs.
+5. **Uptime monitor (owner; P9).** Point any free uptime monitor (UptimeRobot, Better Stack)
+   at `https://api.katha.life/health` every 5 minutes, alerting your phone. `/health` now
+   runs `SELECT 1` and answers 503 when the database is down. Prove it fires: stop the
+   backend on the box (`docker compose -f docker-compose.prod.yml stop backend`), wait for
+   the alert, start it again.
+6. **Operator alerts arrive (owner).** With `OPERATOR_EMAIL` set, send yourself a test: on the
+   box, `docker compose -f docker-compose.prod.yml exec backend python -c "import asyncio;
+   from core import alerts; asyncio.run(alerts.send('Test alert', 'If you can read this,
+   alerts work.'))"`. It must land in the inbox, not spam.
+7. Only then: Stage B of `docs/SELF_TRIAL.md`, on your own number, on these URLs.
 
 ---
 

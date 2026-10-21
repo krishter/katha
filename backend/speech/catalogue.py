@@ -59,6 +59,13 @@ MESSAGE_IDS: tuple[str, ...] = (
     "crisis_text",
 )
 
+# Keys in a language file that are data, not something Katha says.
+# crisis_patterns: phrases that mean she may be in danger, in that language
+# (P9, M-11). Detection checks every language's list together, so a parent
+# who switches language, or whose speech is transcribed in another
+# script, is still heard.
+DATA_KEYS: tuple[str, ...] = ("crisis_patterns",)
+
 REVIEW_SOURCES = ("original", "machine", "human")
 # Sources whose words a person has stood behind.
 _REVIEWED = frozenset({"original", "human"})
@@ -113,6 +120,22 @@ def text(
     if isinstance(value, dict):
         value = value[gender if gender in _GENDERS else _DEFAULT_GENDER]
     return value.format(**fields)
+
+
+def crisis_patterns(language: str) -> list[str]:
+    """The crisis phrases written for this language (P9)."""
+    return list(_entries(language).get("crisis_patterns") or [])
+
+
+@lru_cache(maxsize=None)
+def all_crisis_patterns() -> tuple[str, ...]:
+    """Every language's crisis phrases, lowercased and de-duplicated, in a
+    stable order. What detection checks, whatever her language."""
+    seen: dict[str, None] = {}
+    for language in languages():
+        for pattern in crisis_patterns(language):
+            seen.setdefault(pattern.lower(), None)
+    return tuple(seen)
 
 
 def review(language: str) -> dict:

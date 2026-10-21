@@ -62,6 +62,25 @@ async def upload_media(
     return key
 
 
+async def newest_modified(prefix: str):
+    """When the newest object under `prefix` was last written, or None if
+    there is none (core/alerts.check_backup)."""
+    client = _s3_client()
+    newest = None
+    token = None
+    while True:
+        kwargs = {"Bucket": settings.AWS_S3_BUCKET, "Prefix": prefix}
+        if token:
+            kwargs["ContinuationToken"] = token
+        page = await asyncio.to_thread(client.list_objects_v2, **kwargs)
+        for item in page.get("Contents", []):
+            if newest is None or item["LastModified"] > newest:
+                newest = item["LastModified"]
+        if not page.get("IsTruncated"):
+            return newest
+        token = page.get("NextContinuationToken")
+
+
 # Shared by every parent, never personal: the system-speech cache holds the
 # same fixed sentence for everyone who hears it in that voice.
 _UNTRACKED_PREFIXES = ("system/",)

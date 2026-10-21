@@ -61,13 +61,14 @@ def _default_execute_results(
     4. select conversation_cards.image_s3_key
     5. select media_objects.s3_key (P6)
     6. select twilio_deletions.message_sid (P6)
-    7-17. delete memory_cards / story_atoms / turns / facts / sessions /
+    7-18. delete memory_cards / story_atoms / turns / facts / sessions /
           user_profiles / api_usage / voice_changes / conversation_cards /
           family_questions / media_objects
-    18. select family_accounts.email
-    19. delete magic_link_tokens (only if email found)
-    20. update consent_records
-    21. delete family_accounts
+          (and turn_failures, P9)
+    19. select family_accounts.email
+    20. delete magic_link_tokens (only if email found)
+    21. update consent_records
+    22. delete family_accounts
     """
     s3_key_result = MagicMock()
     s3_key_result.scalars.return_value.all.return_value = s3_keys or []
@@ -99,7 +100,7 @@ def _default_execute_results(
         media_objects_result,
         twilio_result,
     ]
-    results += [generic() for _ in range(11)]  # the 11 DELETE-by-user_id statements
+    results += [generic() for _ in range(12)]  # the 12 DELETE-by-user_id statements
     results.append(email_result)
     if email is not None:
         results.append(generic())  # delete magic_link_tokens
@@ -140,13 +141,13 @@ def test_delete_removes_rows_for_each_table(db):
         response = client.request("DELETE", f"/user/{_USER_ID}")
 
     assert response.status_code == 200
-    # 21 execute calls: memory_cards select, turn audio keys select,
+    # 22 execute calls: memory_cards select, turn audio keys select,
     # session-open audio key select, card image select, media_objects
-    # select, twilio_deletions select, 11 deletes (api_usage, voice_changes,
-    # conversation_cards, family_questions and media_objects included),
-    # email select, magic_link_tokens delete, consent update,
+    # select, twilio_deletions select, 12 deletes (api_usage, voice_changes,
+    # conversation_cards, family_questions, media_objects and turn_failures
+    # included), email select, magic_link_tokens delete, consent update,
     # family_accounts delete.
-    assert db.execute.await_count == 21
+    assert db.execute.await_count == 22
     assert db.commit.await_count >= 6
 
 
@@ -157,7 +158,7 @@ def test_delete_anonymizes_consent_records_not_deletes_them(db):
         client.request("DELETE", f"/user/{_USER_ID}")
 
     # The 14th execute() call is the consent_records UPDATE (anonymize).
-    consent_stmt = db.execute.await_args_list[19].args[0]
+    consent_stmt = db.execute.await_args_list[20].args[0]
     compiled = str(consent_stmt)
     assert "consent_records" in compiled.lower()
     assert "UPDATE" in compiled.upper()

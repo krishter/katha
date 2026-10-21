@@ -22,6 +22,7 @@ from cards import context as card_context
 from cards import family_inbox
 from config import settings
 from core import (
+    alerts,
     family_number,
     orchestrator,
     parent_consent,
@@ -417,6 +418,7 @@ async def _open_session_on_demand(
         raise
     except Exception:
         logger.exception("Could not open on-demand session for %s", profile.user_id)
+        await alerts.turn_failed(profile.user_id, "other")
         await _safe_send_text(
             whatsapp,
             from_number,
@@ -1012,6 +1014,9 @@ async def _whatsapp_incoming(
     except Exception:
         logger.error(
             "Webhook processing error for %s", redact.phone(from_number), exc_info=True
+        )
+        await alerts.turn_failed(
+            profile.user_id if profile is not None else None, "other"
         )
         if from_number:
             await _safe_send_text(

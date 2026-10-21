@@ -21,5 +21,18 @@
   "trial_paused": "Thank you for wanting to talk with me — it means a great deal. Our conversations are paused for now. This is nothing you have done. Your family will be in touch with you about it soon.",
   "text_only": "Please send me a voice message — I'd love to hear your voice! 🎙",
   "crisis": "I can hear that things feel very difficult right now, and I'm glad you felt safe enough to share that with me. Please reach out to iCall India: 9152987821 — they are available to talk and to help. Your wellbeing matters more than any story we could share today. Please take care of yourself.",
-  "crisis_text": "I'm worried about you. Please reach out to iCall India: 9152987821. They are available and ready to help."
+  "crisis_text": "I'm worried about you. Please reach out to iCall India: 9152987821. They are available and ready to help.",
+  "crisis_patterns": [
+    "end my life",
+    "don't want to live",
+    "do not want to live",
+    "suicide",
+    "kill myself",
+    "no reason to live",
+    "want to die",
+    "better off dead",
+    "wish i was dead",
+    "can't go on",
+    "cannot go on"
+  ]
 }
