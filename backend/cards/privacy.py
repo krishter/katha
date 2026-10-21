@@ -82,12 +82,14 @@ Respond with ONLY this JSON object: {{"indexes": [numbers]}}"""
         )
         indexes = parse_json_object(response.content).get("indexes")
         if not isinstance(indexes, list):
-            raise ValueError(f"no index list in {response.content!r}")
+            # Not the reply: it repeats what she said (P7).
+            raise ValueError("no index list in the topic match reply")
         return {
             turns[i][0] for i in indexes if isinstance(i, int) and 0 <= i < len(turns)
         }
     except Exception:
-        logger.exception("Topic match failed for %r — marking every turn", label)
+        # No label: it names what she asked to keep private (P7).
+        logger.exception("Topic match failed — marking every turn")
         return {turn_id for turn_id, _ in turns}
 
 
@@ -268,11 +270,10 @@ async def apply_private_request(
             await withdraw_cards_using(user_id, private_ids, db)
         await _alert_if_already_sent(user_id, private_ids, db)
         logger.info(
-            "Marked %d turn(s) private for %s (%s%s)",
+            "Marked %d turn(s) private for %s (%s)",
             len(turns),
             user_id,
             restriction,
-            f": {label}" if restriction == "topic" else "",
         )
     await db.commit()
     return private_ids

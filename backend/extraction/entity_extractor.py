@@ -87,9 +87,10 @@ async def extract_entities(
         entities.dates = raw.get("dates", [])
         entities.institutions = raw.get("institutions", [])
     except (json.JSONDecodeError, AttributeError, TypeError):
+        # Not the reply itself: it repeats her words (P7).
         logger.warning(
-            "entity_extractor: failed to parse LLM JSON response: %.200r",
-            response.content,
+            "entity_extractor: failed to parse LLM JSON response (%d chars)",
+            len(response.content or ""),
         )
         return entities
 

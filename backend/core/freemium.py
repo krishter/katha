@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core import session_manager
+from core import redact, session_manager
 from core.auth import send_email_ses
 from models.family_account import FamilyAccount
 from models.session import Session
@@ -117,4 +117,6 @@ async def send_upgrade_prompt(user_id: str, db: AsyncSession) -> None:
     )
     await send_email_ses(account.email, subject, body_text, body_html)
     _last_prompt_sent[user_id] = datetime.now(timezone.utc)
-    logger.info("Sent upgrade prompt to %s for user %s", account.email, user_id)
+    logger.info(
+        "Sent upgrade prompt to %s for user %s", redact.email(account.email), user_id
+    )

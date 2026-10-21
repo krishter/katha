@@ -442,7 +442,11 @@ def test_delivery_failure_falls_back_to_text(caplog, failure_label):
     stub.send_text.assert_called_once_with(_FROM_NUMBER, turn.response_text)
 
     error_records = [r for r in caplog.records if r.levelname == "ERROR"]
-    assert any(_FROM_NUMBER in r.getMessage() for r in error_records)
+    # Enough to tell whose turn failed, masked (P7): never the number itself.
+    from core import redact
+
+    assert any(redact.phone(_FROM_NUMBER) in r.getMessage() for r in error_records)
+    assert not any(_FROM_NUMBER in r.getMessage() for r in caplog.records)
 
 
 def test_voice_note_passes_background_tasks_to_process_voice_turn():

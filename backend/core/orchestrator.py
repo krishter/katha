@@ -23,6 +23,7 @@ from core import (
     conversation_policy,
     family_number,
     parent_consent,
+    redact,
     session_manager,
     usage,
 )
@@ -496,7 +497,7 @@ async def _generate_and_deliver_memory_card(session_id: str, user_id: str, db) -
             "TWILIO_TEMPLATE_MEMORY_CARD is unset — sending the card free-form, "
             "which Meta rejects (63016) unless %s has messaged us in the last "
             "24 hours",
-            user_profile.family_whatsapp_number,
+            redact.phone(user_profile.family_whatsapp_number),
         )
 
     # Hand over the key just uploaded rather than the bytes — the adapter
@@ -892,9 +893,11 @@ async def process_voice_turn(
             detected_language=user_profile.preferred_language,
             user_profile=user_profile,
         )
+    # Length and language only. Her words never go into a log: logs sit
+    # outside every erasure (P7, M-07).
     logger.info(
-        "STT: transcript=%r language=%s",
-        stt_result.transcript,
+        "STT: %d chars, language=%s",
+        len(stt_result.transcript or ""),
         stt_result.language_code,
     )
 

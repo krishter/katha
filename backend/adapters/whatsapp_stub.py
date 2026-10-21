@@ -4,7 +4,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from core import twilio_cleanup, usage
+from core import redact, twilio_cleanup, usage
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class StubWhatsAppAdapter:
         s3_key = f"audio/stub-{uuid.uuid4().hex[:12]}.ogg"
         logger.info(
             "[STUB] send_voice_note to=%s mime=%s bytes=%d sid=%s key=%s",
-            to_number,
+            redact.phone(to_number),
             mime_type,
             len(audio_bytes),
             sid,
@@ -63,12 +63,11 @@ class StubWhatsAppAdapter:
     ) -> str:
         sid = self._fake_sid()
         logger.info(
-            "[STUB] send_image to=%s key=%s caption=%r template=%s vars=%s sid=%s",
-            to_number,
+            "[STUB] send_image to=%s key=%s caption=%d chars template=%s sid=%s",
+            redact.phone(to_number),
             s3_key,
-            caption[:80],
+            len(caption),
             template_sid,
-            template_variables,
             sid,
         )
         await usage.record_outbound(operation, sid, template_sid)
@@ -85,9 +84,9 @@ class StubWhatsAppAdapter:
     ) -> str:
         sid = self._fake_sid()
         logger.info(
-            "[STUB] send_text to=%s text=%r template=%s sid=%s",
-            to_number,
-            text[:80],
+            "[STUB] send_text to=%s text=%d chars template=%s sid=%s",
+            redact.phone(to_number),
+            len(text),
             template_name,
             sid,
         )

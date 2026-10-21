@@ -11,7 +11,7 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client as TwilioClient
 
 from config import settings
-from core import twilio_cleanup, usage
+from core import redact, twilio_cleanup, usage
 from media import storage
 
 if TYPE_CHECKING:
@@ -192,7 +192,7 @@ class TwilioWhatsAppAdapter:
             media_url=[presigned_url],
             **self._status_callback(),
         )
-        logger.info("Sent voice note to %s: %s", to_number, msg.sid)
+        logger.info("Sent voice note to %s: %s", redact.phone(to_number), msg.sid)
         await usage.record_outbound("outbound_voice", msg.sid)
         await twilio_cleanup.queue(msg.sid, direction=twilio_cleanup.OUTBOUND)
         return msg.sid, s3_key
@@ -231,7 +231,7 @@ class TwilioWhatsAppAdapter:
         msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
         logger.info(
             "Sent image to %s: %s (template=%s)",
-            to_number,
+            redact.phone(to_number),
             msg.sid,
             template_sid or "none — free-form, needs an open 24h window",
         )
@@ -263,7 +263,7 @@ class TwilioWhatsAppAdapter:
         else:
             kwargs["body"] = text
         msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
-        logger.info("Sent text to %s: %s", to_number, msg.sid)
+        logger.info("Sent text to %s: %s", redact.phone(to_number), msg.sid)
         await usage.record_outbound(
             "outbound_template" if template_sid else "outbound_text",
             msg.sid,

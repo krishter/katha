@@ -24,6 +24,7 @@ from core import (
     family_number,
     orchestrator,
     parent_consent,
+    redact,
     session_manager,
     twilio_cleanup,
     usage,
@@ -363,7 +364,7 @@ async def _open_session_on_demand(
     """
     if profile is None:
         # A number with no profile — not a parent we know. Nothing to open.
-        logger.info("Inbound from unknown number %s", from_number)
+        logger.info("Inbound from unknown number %s", redact.phone(from_number))
         await _safe_send_text(
             whatsapp, from_number, _NOT_SCHEDULED_TEXT, stage="no_active_session"
         )
@@ -475,7 +476,7 @@ async def _safe_send_text(whatsapp, to_number: str, text: str, *, stage: str) ->
         logger.error(
             "Failed to send fallback text (stage=%s) to %s",
             stage,
-            to_number,
+            redact.phone(to_number),
             exc_info=True,
         )
 
@@ -503,7 +504,7 @@ async def _deliver_turn_result(
     except Exception:
         logger.error(
             "Failed to deliver turn result to %s — falling back to text",
-            to_number,
+            redact.phone(to_number),
             exc_info=True,
         )
         await _safe_send_text(whatsapp, to_number, result.response_text, stage="send")
@@ -695,7 +696,7 @@ async def _whatsapp_incoming(
 
         logger.info(
             "Webhook: from=%s media_type=%s sid=%s",
-            from_number,
+            redact.phone(from_number),
             media_type,
             message_sid,
         )
@@ -798,7 +799,8 @@ async def _whatsapp_incoming(
                     )
                 except Exception:
                     logger.exception(
-                        "Could not transcribe consent reply from %s", from_number
+                        "Could not transcribe consent reply from %s",
+                        redact.phone(from_number),
                     )
             else:
                 transcript = params.get("Body", "") or ""
@@ -907,7 +909,9 @@ async def _whatsapp_incoming(
             )
 
     except Exception:
-        logger.error("Webhook processing error for %s", from_number, exc_info=True)
+        logger.error(
+            "Webhook processing error for %s", redact.phone(from_number), exc_info=True
+        )
         if from_number:
             await _safe_send_text(
                 whatsapp,

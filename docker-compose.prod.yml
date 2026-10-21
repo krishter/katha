@@ -14,10 +14,21 @@
 # process re-sends every scheduled session, so a family gets duplicate
 # opening voice notes. This is a correctness constraint, not a default.
 
+# Every container's log is rotated: 5 files of 20 MB, then the oldest goes
+# (P7, M-07). Docker's default json-file driver grows without bound on a
+# single Lightsail disk, and the backend log is outside every erasure, so
+# keeping it short is part of keeping her words from outliving her data.
+x-logging: &rotated
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    logging: *rotated
     # deploy.env, not backend/.env. config.Settings forbids unknown keys, so
     # a POSTGRES_USER line in backend/.env makes the backend raise a
     # ValidationError at import and refuse to start. The two files exist
@@ -39,6 +50,7 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    logging: *rotated
     env_file:
       - ./backend/.env
     depends_on:
@@ -57,6 +69,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *rotated
     ports:
       - "80:80"
       - "443:443"
@@ -73,6 +86,7 @@ services:
     # restore failure discovered at the worst possible moment.
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    logging: *rotated
     # Both: deploy.env for the Postgres credentials, backend/.env for the
     # AWS credentials and bucket the dump is shipped to.
     env_file:
