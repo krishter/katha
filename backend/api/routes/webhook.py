@@ -146,6 +146,10 @@ async def _handle_parent_consent(
     state = await parent_consent.get_status(profile.user_id, db)
     language, gender = profile.preferred_language, profile.katha_gender
 
+    if state.status is parent_consent.ConsentStatus.UPDATE:
+        await _handle_notice_update(whatsapp, profile, transcript, db=db)
+        return
+
     if state.status in (
         parent_consent.ConsentStatus.DECLINED,
         parent_consent.ConsentStatus.WITHDRAWN,
@@ -242,6 +246,87 @@ async def _handle_parent_consent(
         stage="parent_reask",
     )
     await parent_consent.note_asked(profile.user_id, db)
+
+
+async def _handle_notice_update(
+    whatsapp, profile: UserProfileModel, transcript: str, *, db: AsyncSession
+) -> None:
+    """
+    She agreed to the 1.0 wording, before the welcome said who processes her
+    words (P10, M-06). Before anything else she hears the two sentences she
+    was not told and is asked again: a yes is recorded as parent-1.1, a no
+    as a decline. Unclear gets one clarification, then a person follows up,
+    as with her first answer. Nothing else of hers is processed until then.
+    """
+    language, gender = profile.preferred_language, profile.katha_gender
+    current = profile.parent_consent_state
+    update = parent_consent.update_text(profile.name, language=language, gender=gender)
+
+    if current not in (
+        parent_consent.STATE_UPDATING,
+        parent_consent.STATE_UPDATING_REASKED,
+    ):
+        await _speak(whatsapp, profile, update, stage="consent_update")
+        await parent_consent.set_state(
+            profile.user_id, parent_consent.STATE_UPDATING, db
+        )
+        return
+
+    question = (
+        update
+        if current == parent_consent.STATE_UPDATING
+        else parent_consent.build_reask_text(
+            profile.name, language=language, gender=gender
+        )
+    )
+    answer = await parent_consent.interpret_answer(transcript, question)
+
+    if answer is parent_consent.Answer.YES:
+        turn_id = await _persist_consent_turn(
+            profile, transcript, "yes, to the 1.1 notice", db
+        )
+        await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
+        await _speak(
+            whatsapp,
+            profile,
+            parent_consent.granted_text(language, gender),
+            stage="parent_granted",
+            fixed=True,
+        )
+        return
+
+    if answer is parent_consent.Answer.NO:
+        turn_id = await _persist_consent_turn(
+            profile, transcript, "no, to the 1.1 notice", db
+        )
+        await parent_consent.record_answer(profile.user_id, answer, db, turn_id=turn_id)
+        await _speak(
+            whatsapp,
+            profile,
+            parent_consent.declined_text(language, gender),
+            stage="parent_declined",
+            fixed=True,
+        )
+        await _note_reply_after_no(profile, db)
+        return
+
+    if current == parent_consent.STATE_UPDATING:
+        await _speak(
+            whatsapp,
+            profile,
+            parent_consent.build_reask_text(
+                profile.name, language=language, gender=gender
+            ),
+            stage="parent_reask",
+        )
+        await parent_consent.set_state(
+            profile.user_id, parent_consent.STATE_UPDATING_REASKED, db
+        )
+        return
+    await parent_consent.set_state(profile.user_id, parent_consent.STATE_HALTED, db)
+    logger.info(
+        "Notice update for %s still unclear after the re-ask — halted", profile.user_id
+    )
 
 
 async def _note_reply_after_no(profile: UserProfileModel, db: AsyncSession) -> None:

@@ -42,6 +42,8 @@ SOURCE_LANGUAGE = "en-IN"
 MESSAGE_IDS: tuple[str, ...] = (
     "consent_welcome",
     "consent_welcome_no_child",
+    "consent_processing",
+    "consent_update",
     "consent_reask",
     "consent_granted",
     "consent_confirm",

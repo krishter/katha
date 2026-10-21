@@ -407,7 +407,7 @@ async def test_a_clear_yes_is_confirmed_then_recorded_once(real_db):
 
     records = await _records(real_db, user_id)
     assert len(records) == 1
-    assert records[0].consent_version == "parent-1.0"
+    assert records[0].consent_version == "parent-1.1"
     assert records[0].whatsapp_number == _NUMBER
     assert parent_consent.granted_text("hi-IN") in h3.everything_said()
     assert (await parent_consent.get_status(user_id, real_db)).status is (
@@ -566,3 +566,81 @@ async def test_a_dry_run_changes_nothing(real_db):
     assert outcome.startswith("DRY RUN")
     real_db.expire_all()
     assert await parent_consent.has_granted(user_id, real_db)
+
+
+# ── P10: a parent who agreed to the 1.0 wording is asked once more ───────────
+
+
+async def _agreed_to_1_0(db, user_id: str) -> None:
+    await _seed_parent(db, user_id)
+    db.add(
+        ConsentRecord(
+            user_id=user_id,
+            email_hash="",
+            consent_version=parent_consent.PREVIOUS_GRANT_VERSION,
+            principal=parent_consent.PRINCIPAL_PARENT,
+            whatsapp_number=_NUMBER,
+        )
+    )
+    await db.commit()
+
+
+async def test_a_1_0_parent_hears_the_update_then_agrees_to_1_1(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _agreed_to_1_0(real_db, user_id)
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.UPDATE
+    )
+    assert not await parent_consent.has_granted(user_id, real_db)
+
+    async with _Harness(transcript="Yes, that sounds lovely") as h:
+        await _post_inbound(h.client, with_audio=True)
+    said = h.everything_said()
+    assert parent_consent.update_text("Lakshmi", language="ta-IN") in said
+    assert (
+        await _records(real_db, user_id) and len(await _records(real_db, user_id)) == 1
+    ), "her first message after the change only hears the update"
+
+    async with _Harness(transcript="Yes, that sounds lovely") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+
+    versions = [r.consent_version for r in await _records(real_db, user_id)]
+    assert sorted(versions) == ["parent-1.0", "parent-1.1"]
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.GRANTED
+    )
+    assert parent_consent.granted_text("ta-IN") in h2.everything_said()
+
+
+async def test_a_1_0_parent_who_says_no_is_declined(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _agreed_to_1_0(real_db, user_id)
+    async with _Harness(transcript="Namaste") as h:
+        await _post_inbound(h.client, with_audio=True)
+    async with _Harness(transcript="Nahi", classifier_down=True) as h2:
+        await _post_inbound(h2.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.DECLINED
+    )
+
+
+async def test_a_1_0_parent_still_unclear_after_the_re_ask_is_halted(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _agreed_to_1_0(real_db, user_id)
+    async with _Harness(transcript="Namaste") as h:
+        await _post_inbound(h.client, with_audio=True)
+    async with _Harness(transcript="Hmm.") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+    assert parent_consent.build_reask_text("Lakshmi", language="ta-IN") in (
+        h2.everything_said()
+    )
+    async with _Harness(transcript="Hmm.") as h3:
+        await _post_inbound(h3.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.HALTED
+    )
+    assert h3.everything_said().strip() == ""

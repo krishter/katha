@@ -37,7 +37,14 @@ logger = logging.getLogger(__name__)
 
 # Bumped when the spoken wording below changes materially. Separate from
 # the web form's version — the two principals agree to different text.
-PARENT_CONSENT_VERSION = "parent-1.0"
+# 1.1 (P10, M-06): the welcome now says that AI companies, some outside
+# India, process her words, that a person at Katha may read them, and that
+# her family sees summaries.
+PARENT_CONSENT_VERSION = "parent-1.1"
+# A parent who agreed to the 1.0 wording is asked once more, on her next
+# message, before anything else (consent_update). For this change only; a
+# later wording change decides its own rule.
+PREVIOUS_GRANT_VERSION = "parent-1.0"
 # Written by scripts/change_parent_number.py: whatever she said on her old
 # number is not an answer from whoever holds the new one.
 RESET_VERSION = f"{PARENT_CONSENT_VERSION}-reset"
@@ -49,6 +56,9 @@ WITHDRAWN_VERSION = f"{PARENT_CONSENT_VERSION}-withdrawn"
 STATE_ASKING = "asking"
 STATE_CONFIRMING = "confirming"
 STATE_HALTED = "halted"
+# The 1.1 update (P10): asked, and asked once more after an unclear answer.
+STATE_UPDATING = "updating"
+STATE_UPDATING_REASKED = "updating_reasked"
 
 PRINCIPAL_PARENT = "parent"
 PRINCIPAL_BUYER = "buyer"
@@ -73,6 +83,7 @@ class ConsentStatus(str, Enum):
     GRANTED = "granted"
     DECLINED = "declined"
     WITHDRAWN = "withdrawn"  # agreed, then asked Katha to stop
+    UPDATE = "update"  # agreed to the 1.0 wording; asked about 1.1 (P10)
     HALTED = "halted"  # still unclear after the re-ask — needs a human
 
 
@@ -263,6 +274,7 @@ def build_welcome_text(
     consent — and informed consent is the whole purpose of this workstream.
     It therefore comes before the ask, not after it, in every language.
     """
+    processing = catalogue.text("consent_processing", language, gender=gender)
     if child_name:
         return catalogue.text(
             "consent_welcome",
@@ -270,9 +282,31 @@ def build_welcome_text(
             gender=gender,
             name=parent_name,
             child=child_name,
+            processing=processing,
         )
     return catalogue.text(
-        "consent_welcome_no_child", language, gender=gender, name=parent_name
+        "consent_welcome_no_child",
+        language,
+        gender=gender,
+        name=parent_name,
+        processing=processing,
+    )
+
+
+def update_text(
+    parent_name: str,
+    *,
+    language: str = catalogue.SOURCE_LANGUAGE,
+    gender: Optional[str] = None,
+) -> str:
+    """For a parent who agreed to the 1.0 wording (P10): the two sentences
+    she was not told, and the question again."""
+    return catalogue.text(
+        "consent_update",
+        language,
+        gender=gender,
+        name=parent_name,
+        processing=catalogue.text("consent_processing", language, gender=gender),
     )
 
 
@@ -353,11 +387,13 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
         # would turn into recording someone who said no.
         if record.consent_version.startswith(SHARING_VERSION_PREFIX):
             continue
-        if record.consent_version == RESET_VERSION:
+        # By suffix: a reset or withdrawal under an earlier wording still
+        # counts.
+        if record.consent_version.endswith("-reset"):
             break
         if record.consent_version.endswith("-declined"):
             return ParentConsentState(ConsentStatus.DECLINED, record.consented_at)
-        if record.consent_version == WITHDRAWN_VERSION:
+        if record.consent_version.endswith("-withdrawn"):
             return ParentConsentState(ConsentStatus.WITHDRAWN, record.consented_at)
         if record.whatsapp_number != number:
             logger.warning(
@@ -365,6 +401,11 @@ async def get_status(user_id: str, db: AsyncSession) -> ParentConsentState:
                 user_id,
             )
             break
+        if record.consent_version == PREVIOUS_GRANT_VERSION:
+            # She agreed before the notice said who processes her words.
+            if state == STATE_HALTED:
+                return ParentConsentState(ConsentStatus.HALTED, times_asked=times_asked)
+            return ParentConsentState(ConsentStatus.UPDATE, record.consented_at)
         return ParentConsentState(ConsentStatus.GRANTED, record.consented_at)
 
     if state == STATE_HALTED:

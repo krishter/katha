@@ -34,7 +34,8 @@ class UserProfileModel(Base):
             name="ck_user_profiles_share_preference",
         ),
         CheckConstraint(
-            "parent_consent_state IN ('asking', 'confirming', 'halted')",
+            "parent_consent_state IN "
+            "('asking', 'confirming', 'halted', 'updating', 'updating_reasked')",
             name="ck_user_profiles_parent_consent_state",
         ),
         # The webhook knows her only by this number (P3, M-03): two profiles

@@ -235,3 +235,24 @@ def test_every_language_can_hear_and_answer_a_crisis(language):
     assert result.crisis_detected and not result.allowed, language
     assert result.override_response == catalogue.text("crisis", language)
     assert _ICALL in result.override_response
+
+
+# ── the 1.1 notice (P10, M-06) ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("language", SUPPORTED_LANGUAGES)
+def test_every_welcome_says_who_processes_her_words(language):
+    """The spoken notice is all she gets; the web page she never sees. It
+    must say that AI companies, some outside India, process her words, that
+    a person may read them, and that her family sees summaries."""
+    from core.parent_consent import build_welcome_text, update_text
+
+    for gender in ("female", "male"):
+        processing = catalogue.text("consent_processing", language, gender=gender)
+        for child in ("Priya", None):
+            welcome = build_welcome_text(
+                "Lakshmi", child, language=language, gender=gender
+            )
+            assert processing in welcome, (language, gender, child)
+        assert processing in update_text("Lakshmi", language=language, gender=gender)
+    assert "AI" in catalogue.text("consent_processing", language)

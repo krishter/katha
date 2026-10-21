@@ -17,7 +17,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from core import erasure, orchestrator, twilio_cleanup, usage
+from core import erasure, orchestrator, parent_consent, twilio_cleanup, usage
 from main import app
 from media import storage
 from models.consent_record import ConsentRecord
@@ -83,7 +83,7 @@ async def _consented_parent(db) -> SimpleNamespace:
         ConsentRecord(
             user_id=user_id,
             email_hash="",
-            consent_version="parent-1.0",
+            consent_version=parent_consent.PARENT_CONSENT_VERSION,
             principal="parent",
             whatsapp_number=number,
         )

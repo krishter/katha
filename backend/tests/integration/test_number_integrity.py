@@ -21,7 +21,7 @@ import pytest
 from sqlalchemy import select, text
 
 from adapters.whatsapp_stub import get_whatsapp_adapter
-from core import family_number, orchestrator
+from core import family_number, orchestrator, parent_consent
 from core.auth import get_current_user
 from main import app
 from models.consent_record import ConsentRecord
@@ -68,7 +68,7 @@ async def _family(db, *, number: str | None = None, consented: bool = False):
             ConsentRecord(
                 user_id=user_id,
                 email_hash="",
-                consent_version="parent-1.0",
+                consent_version=parent_consent.PARENT_CONSENT_VERSION,
                 principal="parent",
                 whatsapp_number=number,
             )

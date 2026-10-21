@@ -97,7 +97,7 @@ async def test_an_unknown_status_is_refused(real_db):
 
 async def test_sharing_records_do_not_touch_recording_consent(real_db):
     user_id = f"share-{uuid.uuid4().hex[:8]}"
-    for version in ("parent-1.0", "share-1.0-never"):
+    for version in (parent_consent.PARENT_CONSENT_VERSION, "share-1.0-never"):
         real_db.add(
             ConsentRecord(
                 user_id=user_id,
