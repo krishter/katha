@@ -263,6 +263,11 @@ def validate_production_config(s: Settings = settings) -> None:
             "TTS_VENDOR is gemini but GEMINI_API_KEY is empty — every new "
             "family's voice note would fall back to Sarvam"
         )
+    if not s.OPERATOR_EMAIL:
+        problems.append(
+            "OPERATOR_EMAIL is empty — crisis signals, failing turns, stale "
+            "backups and withdrawals would reach no one"
+        )
     if not s.APP_BASE_URL.startswith("https://"):
         problems.append(f"APP_BASE_URL is not https:// (got: {s.APP_BASE_URL!r})")
     if not s.COOKIE_DOMAIN:

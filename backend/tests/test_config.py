@@ -27,6 +27,7 @@ _SAFE_KWARGS = dict(
     ADMIN_API_TOKEN="",
     TTS_VENDOR="gemini",
     GEMINI_API_KEY="AIza-real",
+    OPERATOR_EMAIL="ops@katha.life",
 )
 
 
@@ -37,6 +38,13 @@ def _settings(**overrides) -> SimpleNamespace:
 
 def test_safe_production_config_does_not_raise():
     validate_production_config(_settings())
+
+
+def test_production_without_an_operator_email_refuses_to_boot():
+    """P9: a crisis signal, failing turns or stopped backups would reach no
+    one."""
+    with pytest.raises(RuntimeError, match="OPERATOR_EMAIL"):
+        validate_production_config(_settings(OPERATOR_EMAIL=""))
 
 
 def test_development_config_is_never_validated():

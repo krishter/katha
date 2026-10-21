@@ -296,6 +296,20 @@ async def erase_withdrawn(db_session_factory) -> None:
         logger.exception("Scheduler: erasing withdrawn families failed")
 
 
+async def check_backups() -> None:
+    """Tell the operator if the nightly backup is more than 26 hours old
+    (core/alerts.py, P9). Production only: no other stack has backups."""
+    from config import settings
+    from core import alerts
+
+    if settings.ENVIRONMENT != "production":
+        return
+    try:
+        await alerts.check_backup()
+    except Exception:
+        logger.exception("Scheduler: checking backups failed")
+
+
 async def delete_twilio_messages() -> None:
     """
     Delete from Twilio every message that is due (core/twilio_cleanup.py,
@@ -323,6 +337,14 @@ def create_scheduler(db_session_factory) -> AsyncIOScheduler:
         id="send_conversation_cards",
         replace_existing=True,
         misfire_grace_time=30,
+    )
+    scheduler.add_job(
+        check_backups,
+        trigger="cron",
+        minute=7,
+        id="check_backups",
+        replace_existing=True,
+        misfire_grace_time=1800,
     )
     scheduler.add_job(
         delete_twilio_messages,

@@ -20,6 +20,7 @@ from cards import privacy as card_privacy
 from cards import write as card_writer
 from config import settings
 from core import (
+    alerts,
     conversation_policy,
     family_number,
     parent_consent,
@@ -285,6 +286,99 @@ async def prior_context_for_session(
         )
         await db.rollback()
     return prior_context
+
+
+async def _answer_crisis(
+    session_id: str,
+    state: SessionState,
+    user_profile: UserProfile,
+    stt_result,
+    matched_pattern: str,
+    *,
+    inbound_message_sid: Optional[str],
+    db,
+    addendum: bool = False,
+) -> TurnResult:
+    """
+    A crisis phrase in what she said (P9, M-11). She hears the crisis reply
+    in her language, with the iCall number, from the clip pre-synthesised
+    at startup. The turn is kept, marked private, and the crisis event
+    points at it, so the operator, alerted at once, can read what she said.
+    No dialogue call, and no extraction: nothing from it is for a card.
+
+    `addendum`: the session has already ended (P8). The turn goes after its
+    last one, and the session's count is not touched.
+    """
+    from sqlalchemy import func
+
+    language = user_profile.preferred_language
+    gender = user_profile.katha_gender
+    text = catalogue.text("crisis", language, gender=gender)
+
+    if addendum:
+        last = (
+            await db.execute(
+                select(func.max(Turn.turn_number)).where(
+                    Turn.session_id == uuid.UUID(session_id)
+                )
+            )
+        ).scalar_one()
+        turn_number = (last or 0) + 1
+    else:
+        state = await session_manager.record_turn(session_id, db)
+        turn_number = state.exchange_count
+    turn = await _persist_turn(
+        session_id,
+        state.user_id,
+        turn_number,
+        inbound_message_sid,
+        stt_result.transcript,
+        stt_result.language_code,
+        text,
+        dict(_EMPTY_EXTRACTION),
+        0,
+        0,
+        db,
+    )
+    turn.is_private = True
+    await db.commit()
+    await _log_crisis_event(session_id, turn.id, "user_transcript", matched_pattern, db)
+    await alerts.crisis(
+        user_id=state.user_id,
+        session_id=session_id,
+        turn_id=turn.id,
+        language=language,
+        matched_pattern=matched_pattern,
+        transcript=stt_result.transcript,
+        source="what she said",
+    )
+
+    audio = get_fallback_audio(
+        FailureStage.CRISIS, language, gender, tts.voice_of(user_profile)
+    )
+    if audio is not None:
+        return TurnResult(
+            response_audio=audio,
+            response_text=text,
+            extraction_json=dict(_EMPTY_EXTRACTION),
+            transcript=stt_result.transcript,
+            detected_language=stt_result.language_code,
+            session_state=state,
+            crisis_detected=True,
+            response_mime_type="audio/ogg",
+            turn_id=turn.id,
+        )
+    logger.error("No pre-synthesised crisis clip for %s — synthesising now", language)
+    return await _send_or_degrade(
+        text,
+        stt_result.language_code,
+        stt_result.transcript,
+        state,
+        dict(_EMPTY_EXTRACTION),
+        crisis_detected=True,
+        turn_id=turn.id,
+        user_profile=user_profile,
+    )
 
 
 async def _log_crisis_event(
@@ -803,8 +897,10 @@ async def _fallback_turn_result(
     """
     Build the reply for an STT or LLM failure using pre-synthesized audio —
     never a live TTS call, since TTS may be down too. Degrades to text if
-    even the pre-synthesized clip is unavailable.
+    even the pre-synthesized clip is unavailable. Counted, so the operator
+    hears when failures pile up (P9).
     """
+    await alerts.turn_failed(session_state.user_id, stage.value)
     text = get_fallback_text(
         stage, user_profile.preferred_language, user_profile.katha_gender
     )
@@ -900,17 +996,15 @@ async def process_addendum_turn(
     )
     if not pre_check.allowed:
         logger.warning("Addendum blocked by the pre-turn policy: crisis detected")
-        await _log_crisis_event(
-            session_id, None, "user_transcript", pre_check.matched_pattern or "", db
-        )
-        return await _send_or_degrade(
-            pre_check.override_response or "",
-            stt_result.language_code,
-            stt_result.transcript,
+        return await _answer_crisis(
+            session_id,
             state,
-            dict(_EMPTY_EXTRACTION),
-            crisis_detected=True,
-            user_profile=user_profile,
+            user_profile,
+            stt_result,
+            pre_check.matched_pattern or "",
+            inbound_message_sid=inbound_message_sid,
+            db=db,
+            addendum=True,
         )
 
     # 3. Keep it, on that session, after its last turn.
@@ -1088,17 +1182,14 @@ async def process_voice_turn(
         logger.warning(
             "Pre-turn policy blocked: crisis_detected=%s", pre_check.crisis_detected
         )
-        await _log_crisis_event(
-            session_id, None, "user_transcript", pre_check.matched_pattern or "", db
-        )
-        return await _send_or_degrade(
-            pre_check.override_response or "",
-            stt_result.language_code,
-            stt_result.transcript,
+        return await _answer_crisis(
+            session_id,
             state,
-            dict(_EMPTY_EXTRACTION),
-            crisis_detected=True,
-            user_profile=user_profile,
+            user_profile,
+            stt_result,
+            pre_check.matched_pattern or "",
+            inbound_message_sid=inbound_message_sid,
+            db=db,
         )
 
     # 3b. Conversation cards (CONVERSATION_CARDS.md §6, §9.2): answer the
@@ -1317,12 +1408,18 @@ async def _record_and_send(
     # From here on, paid calls (the reply's TTS) belong to this turn.
     with usage.usage_scope(turn_id=turn.id):
         if crisis_detected:
+            matched = (response_crisis.matched_pattern or "") if response_crisis else ""
             await _log_crisis_event(
-                session_id,
-                turn.id,
-                "assistant_response",
-                (response_crisis.matched_pattern or "") if response_crisis else "",
-                db,
+                session_id, turn.id, "assistant_response", matched, db
+            )
+            await alerts.crisis(
+                user_id=state.user_id,
+                session_id=session_id,
+                turn_id=turn.id,
+                language=user_profile.preferred_language,
+                matched_pattern=matched,
+                transcript=stt_result.transcript,
+                source="Katha's own reply",
             )
 
         if plan is not None:
@@ -1457,15 +1554,9 @@ async def run_extraction_for_turn(
 
 
 async def _alert_extraction_failed(turn_id: uuid.UUID, user_id: str) -> None:
-    """Never raises. Names the turn, not what she said (P7)."""
-    from core.email import send_operator_alert
-
-    await send_operator_alert(
-        "A turn's extraction failed",
-        f"Turn {turn_id} for {user_id}: its extraction, or the check for a "
-        "privacy request in it, did not complete. Its stories stay hidden "
-        "from the family until it is re-run.",
-    )
+    """Never raises. Names the turn, not what she said (P7). Once an hour at
+    most (P9)."""
+    await alerts.extraction_failed(turn_id, user_id)
 
 
 async def _mark_extraction_failed(turn_id: uuid.UUID, user_id: str, db) -> None:

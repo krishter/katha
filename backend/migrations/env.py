@@ -39,6 +39,7 @@ import models.family_question  # noqa: E402, F401
 import models.magic_link_token  # noqa: E402, F401
 import models.media_object  # noqa: E402, F401
 import models.memory_card  # noqa: E402, F401
+import models.operator_alert  # noqa: E402, F401
 import models.session  # noqa: E402, F401
 import models.story_atom  # noqa: E402, F401
 import models.turn  # noqa: E402, F401
