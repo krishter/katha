@@ -39,7 +39,7 @@ from cards import image as card_image
 from cards.candidates import CADENCE_LIMIT, CADENCE_WINDOW
 from cards.context import family_of
 from config import settings
-from core import usage
+from core import family_number, usage
 from core.email import send_operator_alert, send_raw_email_ses
 from memory_cards.generator import render_conversation_card
 from models.conversation_card import ConversationCard
@@ -63,6 +63,9 @@ def whatsapp_skip_reason(profile, template_sid: str) -> Optional[str]:
     number = profile.family_whatsapp_number
     if not number:
         return "no_number"
+    if not family_number.is_confirmed(profile):
+        # Whatever the child typed, until they prove it is theirs (P3).
+        return "family_number_unconfirmed"
     if number.startswith(US_PREFIX) and usage.template_category(template_sid) in (
         "marketing",
         "unknown",

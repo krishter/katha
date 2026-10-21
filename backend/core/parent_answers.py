@@ -1,11 +1,12 @@
 """
 What she meant by her answer to an ask (docs/specs/CONVERSATION_CARDS.md §9.3).
 
-Three questions get a labelled answer: the offer to read a card ("shall I
+Four questions get a labelled answer: the offer to read a card ("shall I
 read it to you?"), the read-back itself ("shall I send this to Priya?"),
-and the sharing question ("would you like me to share some of these with
-Priya?"). Her reply can be in any language, code-mixed, and is often not
-an answer at all.
+the sharing question ("would you like me to share some of these with
+Priya?"), and the consent question itself ("may I record our
+conversations?", core/parent_consent.py, P3). Her reply can be in any
+language, code-mixed, and is often not an answer at all.
 
 The rule is core/parent_consent.py's: when in doubt, it is not a yes.
 Getting this wrong in the permissive direction sends her words to her
@@ -31,15 +32,22 @@ logger = logging.getLogger(__name__)
 OFFER = "offer"
 READBACK = "readback"
 SHARE = "share"
+CONSENT = "consent"
 
 LABELS: dict[str, tuple[str, ...]] = {
     OFFER: ("yes", "not_now", "other"),
     READBACK: ("approve", "correction", "keep_private", "not_now", "unclear"),
     SHARE: ("yes", "no", "unclear"),
+    CONSENT: ("yes", "no", "unclear"),
 }
 
 # What each kind falls back to: the label that sends and changes nothing.
-SAFE: dict[str, str] = {OFFER: "other", READBACK: "unclear", SHARE: "unclear"}
+SAFE: dict[str, str] = {
+    OFFER: "other",
+    READBACK: "unclear",
+    SHARE: "unclear",
+    CONSENT: "unclear",
+}
 
 # Labels that move something forward. Each must quote her.
 POSITIVE = frozenset({"yes", "approve"})
@@ -70,6 +78,19 @@ her child, always reading them to her first.
 - "yes": she clearly agrees to sharing ("yes, share", "haan, zaroor").
 - "no": she does not want her stories shared.
 - "unclear": anything else, including changing the subject.""",
+    CONSENT: """Katha, an AI, introduced itself and asked whether it may record
+their conversations about her life and keep them for her family. This is
+her consent to being recorded.
+- "yes": she clearly agrees to being recorded ("yes, you can record",
+  "haan, theek hai, record kar lo", "சரி, பதிவு பண்ணுங்க"). Agreeing
+  to talk is not enough unless it answers this question.
+- "no": she refuses or wants it to stop ("no", "I don't want this",
+  "nahi chahiye", "வேண்டாம்").
+- "unclear": anything else. A question back ("who are you?", "kaun ho
+  aap?", "what is this about?", "where do we start?") is "unclear", even
+  if it contains "ok", "fine" or "theek hai". So is a greeting, small
+  talk ("I am fine"), a story, "hmm", or "ok" said while asking something
+  else.""",
 }
 
 
@@ -96,8 +117,8 @@ English, or a mix.
 Be conservative. Only an explicit answer to THIS question counts. If she \
 says both yes and no, or you are not sure, do not choose "yes" or \
 "approve". Choosing a cautious label costs one more question; wrongly \
-choosing "yes" or "approve" sends her words to her family without her \
-agreement.
+choosing "yes" or "approve" records her or sends her words to her family \
+without her agreement.
 
 QUESTION KATHA ASKED
 {question}

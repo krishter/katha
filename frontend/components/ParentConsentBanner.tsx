@@ -73,6 +73,20 @@ export function ParentConsentBanner({
     );
   }
 
+  if (status === "confirming") {
+    return (
+      <section className="rounded-xl border border-border bg-surface p-6">
+        <h2 className="font-display text-lg font-semibold text-ink">
+          {parentName} said yes — Katha is checking once more
+        </h2>
+        <p className="mt-2 text-sm text-ink-mid">
+          Katha has repeated what it will do and asked {parentName} to confirm.
+          Nothing is recorded until they say yes a second time.
+        </p>
+      </section>
+    );
+  }
+
   if (status === "awaiting") {
     return (
       <section className="rounded-xl border border-border bg-surface p-6">

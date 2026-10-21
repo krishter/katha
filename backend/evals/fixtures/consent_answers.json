@@ -1,0 +1,43 @@
+{
+  "_about": "Consent answers (docs/PRE_PILOT_FIX_PLAN.md P3): replies to Katha's consent question (\"welcome\") and to its confirmation (\"confirm\"), labelled by hand. Scored on the decision path, parent_consent.interpret_answer: the word-list refusal first, then the classifier. Pass like TC-15: no false yes (precision 100%), and 85%+ of labels correct. The first seven are M-01's: each was, or could have been, read as a yes by the old word list. Synthetic, written for this fixture; no real parent's words. The non-English lines are machine-written and need a native speaker's check before the precision figure is trusted.",
+  "parent_name": "Lakshmi",
+  "child_name": "Priya",
+  "cases": [
+    {"language": "hi-IN", "question": "welcome", "transcript": "Kaun ho aap?", "expected": "unclear"},
+    {"language": "hi-IN", "question": "welcome", "transcript": "Tum kaun ho beta?", "expected": "unclear"},
+    {"language": "en-IN", "question": "welcome", "transcript": "I am fine, who is this?", "expected": "unclear"},
+    {"language": "en-IN", "question": "welcome", "transcript": "Ok, what is this about?", "expected": "unclear"},
+    {"language": "en-IN", "question": "welcome", "transcript": "Where do we start?", "expected": "unclear"},
+    {"language": "hi-IN", "question": "welcome", "transcript": "Hello, kya ho raha hai?", "expected": "unclear"},
+    {"language": "hi-IN", "question": "welcome", "transcript": "Theek hai, par yeh kya hai?", "expected": "unclear"},
+
+    {"language": "hi-IN", "question": "welcome", "transcript": "Haan, theek hai, aap record kar sakte ho", "expected": "yes"},
+    {"language": "hi-IN", "question": "confirm", "transcript": "haan", "expected": "yes"},
+    {"language": "en-IN", "question": "welcome", "transcript": "Yes, that sounds lovely", "expected": "yes"},
+    {"language": "en-IN", "question": "welcome", "transcript": "Yes, you can record. I'm happy to talk.", "expected": "yes"},
+    {"language": "en-IN", "question": "confirm", "transcript": "Yes, that's right.", "expected": "yes"},
+    {"language": "ta-IN", "question": "welcome", "transcript": "சரி, பதிவு பண்ணுங்க.", "expected": "yes"},
+    {"language": "ta-IN", "question": "confirm", "transcript": "Aamaa, record pannunga, paravaillai.", "expected": "yes"},
+    {"language": "hi-IN", "question": "welcome", "transcript": "हाँ, रिकॉर्ड कर लीजिए।", "expected": "yes"},
+    {"language": "gu-IN", "question": "welcome", "transcript": "હા, રેકોર્ડ કરો, વાંધો નથી.", "expected": "yes"},
+    {"language": "pa-IN", "question": "welcome", "transcript": "ਹਾਂ ਜੀ, ਰਿਕਾਰਡ ਕਰ ਲਓ।", "expected": "yes"},
+    {"language": "or-IN", "question": "welcome", "transcript": "ହଁ, ରେକର୍ଡ କରନ୍ତୁ।", "expected": "yes"},
+    {"language": "as-IN", "question": "welcome", "transcript": "হয়, ৰেকৰ্ড কৰক।", "expected": "yes"},
+    {"language": "ur-IN", "question": "welcome", "transcript": "جی ہاں، ریکارڈ کر لیجیے۔", "expected": "yes"},
+
+    {"language": "hi-IN", "question": "welcome", "transcript": "Nahi", "expected": "no"},
+    {"language": "gu-IN", "question": "welcome", "transcript": "ના, મારે આ નથી જોઈતું.", "expected": "no"},
+    {"language": "pa-IN", "question": "welcome", "transcript": "ਨਹੀਂ, ਮੈਨੂੰ ਨਹੀਂ ਚਾਹੀਦਾ।", "expected": "no"},
+    {"language": "ur-IN", "question": "welcome", "transcript": "نہیں، مجھے یہ نہیں چاہیے۔", "expected": "no"},
+    {"language": "or-IN", "question": "welcome", "transcript": "ନା, ମୋତେ ଦରକାର ନାହିଁ।", "expected": "no"},
+    {"language": "as-IN", "question": "welcome", "transcript": "নহয়, মোক নালাগে।", "expected": "no"},
+
+    {"language": "ta-IN", "question": "welcome", "transcript": "யாரு பேசறது?", "expected": "unclear"},
+    {"language": "en-IN", "question": "welcome", "transcript": "Hmm.", "expected": "unclear"},
+    {"language": "hi-IN", "question": "welcome", "transcript": "Accha, aur sunao, kya haal hai?", "expected": "unclear"},
+    {"language": "en-IN", "question": "welcome", "transcript": "My son told me about this. What do you want to know?", "expected": "unclear"},
+    {"language": "ta-IN", "question": "confirm", "transcript": "Enna solreenga?", "expected": "unclear"},
+    {"language": "hi-IN", "question": "confirm", "transcript": "Pehle bataiye, yeh recording kaun sunega?", "expected": "unclear"},
+    {"language": "en-IN", "question": "welcome", "transcript": "Yes... wait, who did you say you are?", "expected": "unclear"}
+  ]
+}

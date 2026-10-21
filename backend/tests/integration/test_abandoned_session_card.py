@@ -39,6 +39,8 @@ async def _stale_session(db, *, exchanges: int, with_quote: bool = True) -> tupl
             name="Lakshmi",
             whatsapp_number=f"+9199{uuid.uuid4().int % 100000000:08d}",
             family_whatsapp_number="+919876543211",
+            # The child has proved the number is theirs (P3).
+            family_number_confirmed_at=datetime.now(timezone.utc),
             preferred_language="ml-IN",
             onboarding_context="",
             scheduled_time=time(9, 30),

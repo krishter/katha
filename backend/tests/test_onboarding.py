@@ -54,6 +54,9 @@ def db():
 
 def _query_result(**kwargs):
     result = MagicMock()
+    # The number-clash check reads .first(); a bare MagicMock would be a
+    # clash on every call. Tests that want one pass first=<row>.
+    result.first.return_value = None
     for key, value in kwargs.items():
         getattr(result, key).return_value = value
     return result

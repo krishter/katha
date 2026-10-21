@@ -58,7 +58,8 @@ much as they are.
 **Child:**
 
 1. Works through the wizard herself: email, magic link from her inbox, then parent's name,
-   WhatsApp number, the family number that receives cards, language, session time.
+   WhatsApp number, what the parent calls her (Katha's welcome uses it), the family number
+   that receives cards, language, session time.
 2. **Seeds context in the free-text field.** This is the highest-value step in the whole
    setup — it primes Layer 3 *and* it is where she emotionally commits. Push past one-liners:
    "What's one thing about your father most people don't know?" beats "Dad was a
@@ -69,6 +70,9 @@ much as they are.
    actually does it rather than forwarding the link cold.
 5. Adds one line in her own words with the link — "Amma, I set this up for you, please say
    hello to Katha." Not a forwarded blurb.
+6. **Confirms her own number** with the second link on the done screen (or the dashboard
+   prompt), from her own phone. Until she does, memory cards are kept on the dashboard and
+   not sent on WhatsApp. A wrong digit would send her parent's words to a stranger.
 
 **Conversation cards (families with cards on, `docs/specs/CONVERSATION_CARDS.md`).** Ask
 the child, and write down for the script below:
@@ -110,11 +114,19 @@ first card can come after that.)*
 1. Taps the `wa.me` link, sends anything ("hi" is enough).
 2. Receives the welcome — voice note + text, in her language, stating plainly that Katha
    is an AI and that her child set this up.
-3. Gives or declines consent in her own words.
+3. Gives or declines consent in her own words. A yes is read by a classifier, and Katha
+   then repeats what she is agreeing to and asks once more; only the second yes is
+   recorded. A question back ("who are you?") is not a yes. If she is still unclear after
+   one re-ask, Katha stops and the dashboard says so: phone her.
 
 **System guarantee (asserted by the rehearsal, steps 5–6):** no session opens before a
-`ConsentRecord` with `principal="parent"` and a populated `evidence_ref` exists. A declined
-or absent consent means Katha stays silent. This is the DPDP position and the ethical one.
+`ConsentRecord` with `principal="parent"` and a populated `evidence_ref` exists, given from
+her current number. A declined or absent consent means Katha stays silent. This is the
+DPDP position and the ethical one.
+
+**Changing her number after she has agreed** is an operator task, never the setup form
+(it returns 409): `python -m scripts.change_parent_number --user-id … --new … --by …`,
+dry run first, then `--apply`. Her new number gets the welcome and the question again.
 
 **PO — same day:**
 

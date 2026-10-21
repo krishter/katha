@@ -15,12 +15,15 @@ that were 403 for every recipient. Re-run this before every pilot family.
 What it drives, in order:
 
      1. Create a family account and complete onboarding
-     2. Produce the wa.me link the child forwards
+     2. Produce the wa.me link the child forwards, and have the child
+        confirm their own number with the code from the second link
      3. Simulate the parent's first inbound message
-     4. Assert the welcome is sent, says plainly that Katha is an AI, and
-        is spoken in the parent's language
+     4. Assert the welcome is sent, says plainly that Katha is an AI, names
+        the child, and is spoken in the parent's language
      5. Assert no domain session opens before consent is recorded
-     6. Give consent; assert a parent-principal ConsentRecord with evidence
+     6. Say yes; assert Katha asks her to confirm and records nothing. Say
+        yes again; assert one parent-principal ConsentRecord with evidence,
+        bound to her number
      7. Run two sessions, a day apart
      8. Assert session 2's Layer 3 carries facts, significant people and
         open threads from session 1
@@ -35,9 +38,10 @@ so the assertions here go to Postgres and S3 directly and never read the
 endpoint's own account of itself.
 
 Paid and outbound edges are stubbed: Sarvam STT/TTS, Anthropic, and the
-WhatsApp send (via the stub adapter). verify_whatsapp_sender.py covers the
-real send separately; this must be runnable without spending money or
-touching a live number.
+WhatsApp send (via the stub adapter). The consent classifier's model call
+is stubbed too; its judgement is measured by `evals/run_eval.py consent`.
+verify_whatsapp_sender.py covers the real send separately; this must be
+runnable without spending money or touching a live number.
 
 S3 is NOT stubbed. Real objects are written to the real bucket and the
 deletion sweep is verified against it, because the stranded objects gate
@@ -93,6 +97,10 @@ _EMAIL = f"rehearsal-{_RUN}@katha.life"
 # own small proof that the onboarding validator works.
 _PARENT_NUMBER = f"+9199{uuid.uuid4().int % 10**8:08d}"
 _FAMILY_NUMBER = "+919000000112"
+_CHILD_NAME = "Priya"
+# Her two answers. The stubbed classifier calls exactly these a yes.
+_FIRST_YES = "Yes, that sounds lovely"
+_SECOND_YES = "Yes, that's right."
 _PARENT_NAME = "Subramaniam"
 _LANGUAGE = "ta-IN"
 # Where the Tamil welcome says "I am not a person" and where it asks.
@@ -249,6 +257,20 @@ class _LlmScript:
         self.dialogue_prompts: list[str] = []
 
     async def __call__(self, messages, system=None, max_tokens=500, **_kwargs):
+        if _kwargs.get("purpose") == "parent_answer_classify":
+            # The consent classifier: yes, quoting her, for the two answers
+            # this rehearsal gives; anything else is unclear.
+            prompt = messages[0].content
+            reply = prompt.split("HER REPLY\n", 1)[1].split("\n\n", 1)[0]
+            label = "yes" if reply in (_FIRST_YES, _SECOND_YES) else "unclear"
+            span = reply if label == "yes" else ""
+            return SimpleNamespace(
+                content=json.dumps({"label": label, "span": span}),
+                input_tokens=20,
+                output_tokens=10,
+                stop_reason="end_turn",
+            )
+
         if system is not None:
             self.dialogue_prompts.append(system)
             return SimpleNamespace(
@@ -365,9 +387,11 @@ def _override_db():
     return _dep
 
 
-async def _post_inbound(client, body: str = "", with_audio: bool = False) -> int:
+async def _post_inbound(
+    client, body: str = "", with_audio: bool = False, number: str = _PARENT_NUMBER
+) -> int:
     data = {
-        "From": f"whatsapp:{_PARENT_NUMBER}",
+        "From": f"whatsapp:{number}",
         "MessageSid": f"SM{uuid.uuid4().hex[:12]}",
         "Body": body,
     }
@@ -486,6 +510,7 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                     "preferred_language": _LANGUAGE,
                     "session_time": "10:30",
                     "onboarding_context": "Grew up in Madurai.",
+                    "child_name": _CHILD_NAME,
                 },
             )
             report.require(
@@ -554,6 +579,27 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 "until the parent taps this."
             )
 
+            # The child's own number: proven by sending the code from it,
+            # before any card of hers goes there on WhatsApp (P3, D3).
+            confirm_link = consent_body.get("family_confirm_link", "")
+            report.check(
+                confirm_link.startswith("https://wa.me/") and "CONFIRM" in confirm_link,
+                "onboarding returns the link the child confirms their number with",
+                confirm_link,
+            )
+            code = confirm_link.rsplit("CONFIRM%20", 1)[-1]
+            await _post_inbound(client, body=f"CONFIRM {code}", number=_FAMILY_NUMBER)
+            db.expire_all()
+            family_profile = (
+                await db.execute(
+                    select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+                )
+            ).scalar_one()
+            report.check(
+                family_profile.family_number_confirmed_at is not None,
+                "the child's CONFIRM message from their own number confirms it",
+            )
+
             # ── 3. The parent's first inbound message ────────────────────
             report.step("Simulate the parent's first inbound WhatsApp message")
             spoken.clear()
@@ -570,12 +616,16 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
             # ta-IN while the words were English (M-14), and checking the
             # code alone is how that passed this rehearsal.
             expected = parent_consent.build_welcome_text(
-                _PARENT_NAME, language=_LANGUAGE
+                _PARENT_NAME, _CHILD_NAME, language=_LANGUAGE
             )
             report.check(
                 welcome_text == expected,
                 "the welcome is the Tamil text from the catalogue, word for word",
                 welcome_text[:160],
+            )
+            report.check(
+                _CHILD_NAME in welcome_text,
+                "the welcome names the child who set it up",
             )
             report.check(
                 "not a person" not in welcome_text.lower(),
@@ -617,18 +667,37 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 str(state.status),
             )
 
-            # ── 6. She says yes ──────────────────────────────────────────
+            # ── 6. She says yes, and confirms it ─────────────────────────
             report.step("Record the parent's consent")
-            with patch(
-                "api.routes.webhook.sarvam_stt.transcribe",
-                new=AsyncMock(
-                    return_value=SimpleNamespace(
-                        transcript="Yes, that sounds lovely",
-                        language_code=_LANGUAGE,
-                    )
+
+            async def say(transcript: str) -> int:
+                with patch(
+                    "api.routes.webhook.sarvam_stt.transcribe",
+                    new=AsyncMock(
+                        return_value=SimpleNamespace(
+                            transcript=transcript, language_code=_LANGUAGE
+                        )
+                    ),
+                ):
+                    return await _post_inbound(client, with_audio=True)
+
+            spoken.clear()
+            status = await say(_FIRST_YES)
+            report.require(status == 200, "webhook accepts her answer", str(status))
+            db.expire_all()
+            report.check(
+                (await parent_consent.get_status(user_id, db)).status
+                is parent_consent.ConsentStatus.CONFIRMING,
+                "a first yes asks her to confirm (CONFIRMING), recording nothing",
+            )
+            report.check(
+                any(
+                    text == parent_consent.confirm_text(_LANGUAGE) for text, _ in spoken
                 ),
-            ):
-                status = await _post_inbound(client, with_audio=True)
+                "Katha repeats what she is agreeing to, in Tamil, and asks again",
+            )
+
+            status = await say(_SECOND_YES)
             report.require(status == 200, "webhook accepts her answer", str(status))
 
             db.expire_all()
@@ -656,6 +725,10 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
                 parent_records[0].evidence_ref is not None,
                 "the parent's consent record points at the turn that carries it",
                 "a consent record pointing at nothing proves nothing",
+            )
+            report.check(
+                parent_records[0].whatsapp_number == _PARENT_NUMBER,
+                "the consent is bound to the number she gave it from",
             )
             report.check(
                 (await parent_consent.get_status(user_id, db)).status
@@ -1106,6 +1179,10 @@ async def run(report: Report, use_s3: bool, state: dict) -> None:
             report.check(
                 all(c.ip_address is None and c.user_agent is None for c in retained),
                 "retained consent records have ip_address and user_agent cleared",
+            )
+            report.check(
+                all(c.whatsapp_number is None for c in retained),
+                "retained consent records no longer carry her number",
             )
 
             survivors = [key for key in tracked_keys if exists(key)]

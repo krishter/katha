@@ -8,6 +8,9 @@ export interface DomainBreakdownEntry {
 export type ParentConsentStatus =
   | "not_asked"
   | "awaiting"
+  // She said yes once and Katha asked her to confirm; only a second yes
+  // is recorded.
+  | "confirming"
   | "granted"
   | "declined"
   | "halted";
@@ -18,6 +21,10 @@ export interface Stats {
   parent_consented_at: string | null;
   parent_whatsapp_link: string;
   user_name: string;
+  // Memory cards wait on WhatsApp until the child sends Katha a code from
+  // this number, proving it is theirs.
+  family_whatsapp_number: string | null;
+  family_number_confirmed: boolean;
   total_sessions: number;
   total_story_atoms: number;
   total_memory_cards: number;
@@ -125,6 +132,8 @@ export interface OnboardingProfilePayload {
   // avoids gendered wording rather than inferring any.
   pronouns: string;
   onboarding_context: string;
+  // What the parent calls the child. Katha's welcome names them.
+  child_name: string;
 }
 
 export interface OnboardingConsentResponse {
@@ -132,6 +141,19 @@ export interface OnboardingConsentResponse {
   parent_name: string;
   session_time: string;
   parent_whatsapp_link: string;
+  // Tapped by the child, from their own WhatsApp, to confirm the number
+  // memory cards go to.
+  family_confirm_link: string;
+}
+
+// A non-2xx answer, with the backend's own words when it gave any.
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public detail: string | null,
+  ) {
+    super(`API error: ${status}`);
+  }
 }
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -147,7 +169,16 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     }
     throw new Error("Unauthorized");
   }
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let detail: string | null = null;
+    try {
+      const body = await res.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // Not JSON; the status is all there is.
+    }
+    throw new ApiError(res.status, detail);
+  }
   return res.json();
 }
 
@@ -231,6 +262,13 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(payload),
+    }),
+
+  // A fresh confirm link. The code is stored hashed, so an earlier one
+  // cannot be shown again; this replaces it.
+  getFamilyConfirmLink: () =>
+    apiFetch<{ link: string }>("/family/family-number/confirm-link", {
+      method: "POST",
     }),
 
   submitConsent: (consentGiven: boolean) =>

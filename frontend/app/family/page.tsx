@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
 import { DomainProgress } from "@/components/DomainProgress";
+import { FamilyNumberPrompt } from "@/components/FamilyNumberPrompt";
 import { ParentConsentBanner } from "@/components/ParentConsentBanner";
 import { api } from "@/lib/api";
 
@@ -51,6 +52,12 @@ export default function FamilyDashboard() {
           consentedAt={stats.parent_consented_at}
         />
       </div>
+
+      {stats.family_whatsapp_number && !stats.family_number_confirmed && (
+        <div className="mt-6">
+          <FamilyNumberPrompt number={stats.family_whatsapp_number} />
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-border bg-surface p-4">

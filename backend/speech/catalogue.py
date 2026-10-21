@@ -44,6 +44,7 @@ MESSAGE_IDS: tuple[str, ...] = (
     "consent_welcome_no_child",
     "consent_reask",
     "consent_granted",
+    "consent_confirm",
     "consent_declined",
     "fallback_stt",
     "fallback_llm",

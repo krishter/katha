@@ -63,6 +63,8 @@ async def _seed_consented_parent(db) -> str:
             consent_version="1.1-parent",
             principal="parent",
             consented_at=datetime.now(timezone.utc),
+            # A grant counts from the number it was given from (P3, M-03).
+            whatsapp_number=_NUMBER,
         )
     )
     await db.commit()

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 type Step = "checking" | "email" | "verify" | "profile" | "consent" | "done";
 
@@ -35,6 +35,9 @@ export default function OnboardingPage() {
   const [email, setEmail] = useState("");
 
   const [parentName, setParentName] = useState("");
+  // What the parent calls the child: Katha's welcome names them, and a
+  // name she knows is why she keeps listening.
+  const [childName, setChildName] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [familyWhatsappNumber, setFamilyWhatsappNumber] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState("hi-IN");
@@ -58,6 +61,7 @@ export default function OnboardingPage() {
     parentName: string;
     sessionTime: string;
     whatsappLink: string;
+    familyConfirmLink: string;
   } | null>(null);
 
   // A magic-link click is a full page reload landing back on this same
@@ -110,9 +114,16 @@ export default function OnboardingPage() {
               ? ""
               : pronouns,
         onboarding_context: onboardingContext,
+        child_name: childName,
       });
       setStep("consent");
-    } catch {
+    } catch (err) {
+      // 409: the number is someone else's, or consent was given from the
+      // old one. The backend's words say which.
+      if (err instanceof ApiError && err.status === 409 && err.detail) {
+        setError(err.detail);
+        return;
+      }
       setError(
         "Couldn't save that. Double-check the WhatsApp numbers are in " +
           "+91XXXXXXXXXX format."
@@ -131,6 +142,7 @@ export default function OnboardingPage() {
         parentName: result.parent_name,
         sessionTime: result.session_time,
         whatsappLink: result.parent_whatsapp_link,
+        familyConfirmLink: result.family_confirm_link,
       });
       setStep("done");
     } catch {
@@ -217,6 +229,22 @@ export default function OnboardingPage() {
                 placeholder="+91 98765 43210"
                 className={INPUT_CLASS}
               />
+            </div>
+            <div>
+              <label htmlFor="child_name" className={LABEL_CLASS}>
+                What does your parent call you?
+              </label>
+              <input
+                id="child_name"
+                required
+                value={childName}
+                onChange={(e) => setChildName(e.target.value)}
+                placeholder="Priya"
+                className={INPUT_CLASS}
+              />
+              <p className="mt-1 text-meta text-ink-muted">
+                Katha will say you set this up, by this name.
+              </p>
             </div>
             <div>
               <label htmlFor="family_whatsapp_number" className={LABEL_CLASS}>
@@ -523,6 +551,27 @@ export default function OnboardingPage() {
                 Or copy this link: {doneInfo.whatsappLink}
               </p>
             </>
+          )}
+
+          {doneInfo.familyConfirmLink && (
+            <div className="mt-6 rounded-lg border border-border p-4">
+              <p className="text-sm font-medium text-ink">
+                And one for you: confirm your WhatsApp number
+              </p>
+              <p className="mt-1 text-sm text-ink-mid">
+                Memory cards carry {doneInfo.parentName}&apos;s own words, so
+                Katha sends them only to a number you&apos;ve confirmed. Open
+                this on your phone and send the message it fills in.
+              </p>
+              <a
+                href={doneInfo.familyConfirmLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-ink no-underline hover:border-saffron-ink"
+              >
+                Confirm my number on WhatsApp
+              </a>
+            </div>
           )}
 
           <p className="mt-5 text-meta text-ink-muted">

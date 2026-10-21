@@ -6,11 +6,21 @@ The unit tests cover interpretation and wording in isolation. This covers
 the thing that actually has to work: an inbound WhatsApp message from a
 parent who has never agreed produces the welcome rather than a domain
 session, her answer is read and recorded against her own principal with
-the turn that carries it, and nothing advances until she says yes.
+the turn that carries it, and nothing advances until she says yes twice.
+
+Her answers are read by the real classifier path (core/parent_answers.py)
+with the model's replies replayed from
+tests/fixtures/consent_classifier_replay.json, recorded by
+`run_eval.py consent` with EVAL_RECORD_CONSENT=1. So the parsing, the
+quoted-span rule and the decision order all run for real; only the model
+call itself is replayed. A transcript with no recorded reply fails the
+test rather than quietly reading as unclear.
 """
 
 from __future__ import annotations
 
+import json
+import pathlib
 import uuid
 from datetime import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -31,13 +41,34 @@ pytestmark = pytest.mark.integration
 
 _NUMBER = "+919000000777"
 
+_REPLAY = json.loads(
+    (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "fixtures/consent_classifier_replay.json"
+    ).read_text()
+)["replies"]
 
-async def _seed_parent(db, user_id: str) -> UserProfileModel:
+# M-01: each was, or could have been, recorded as consent by the old word
+# list. All have recorded classifier replies.
+_NOT_CONSENT = [
+    "Kaun ho aap?",
+    "Tum kaun ho beta?",
+    "I am fine, who is this?",
+    "Ok, what is this about?",
+    "Where do we start?",
+    "Hello, kya ho raha hai?",
+    "Theek hai, par yeh kya hai?",
+]
+
+
+async def _seed_parent(
+    db, user_id: str, language: str = "ta-IN", number: str = _NUMBER
+) -> UserProfileModel:
     profile = UserProfileModel(
         user_id=user_id,
         name="Lakshmi",
-        whatsapp_number=_NUMBER,
-        preferred_language="ta-IN",
+        whatsapp_number=number,
+        preferred_language=language,
         onboarding_context="",
         family_whatsapp_number="+919000000888",
         scheduled_time=time(10, 30),
@@ -59,9 +90,11 @@ def _stub_adapter():
     return adapter
 
 
-async def _post_inbound(client, body: str = "", with_audio: bool = False) -> None:
+async def _post_inbound(
+    client, body: str = "", with_audio: bool = False, number: str = _NUMBER
+) -> None:
     data = {
-        "From": f"whatsapp:{_NUMBER}",
+        "From": f"whatsapp:{number}",
         "MessageSid": f"SM{uuid.uuid4().hex[:12]}",
         "Body": body,
     }
@@ -84,10 +117,12 @@ class _Harness:
     """Drives the real webhook with a per-request session, patching only
     the network edges — Twilio, Sarvam STT and Sarvam TTS."""
 
-    def __init__(self, transcript: str = ""):
+    def __init__(self, transcript: str = "", classifier_down: bool = False):
         self.adapter = _stub_adapter()
         self.transcript = transcript
+        self.classifier_down = classifier_down
         self.spoken: list[str] = []
+        self.unrecorded: list[str] = []
 
     async def __aenter__(self):
         async def _override_get_db():
@@ -105,6 +140,21 @@ class _Harness:
             self.spoken.append(text)
             return b"wav"
 
+        async def _replay_classifier(messages, **_kwargs):
+            if self.classifier_down:
+                raise RuntimeError("classifier unavailable")
+            prompt = messages[0].content
+            reply = prompt.split("HER REPLY\n", 1)[1].split("\n\nRespond with", 1)[0]
+            if reply not in _REPLAY:
+                self.unrecorded.append(reply)
+                raise KeyError(reply)
+            return MagicMock(
+                content=_REPLAY[reply],
+                input_tokens=1,
+                output_tokens=1,
+                stop_reason="end_turn",
+            )
+
         self._patches = [
             patch(
                 "api.routes.webhook.sarvam_stt.transcribe",
@@ -114,6 +164,8 @@ class _Harness:
                     )
                 ),
             ),
+            # The classifier's model call, replayed (see module docstring).
+            patch("adapters.llm.chat", new=_replay_classifier),
             # Both vendors: a new parent is pinned to Gemini by default.
             patch("adapters.sarvam_tts.synthesize", new=_capture_tts),
             patch("adapters.gemini_tts.synthesize", new=_capture_tts),
@@ -141,6 +193,10 @@ class _Harness:
                 app.dependency_overrides[key] = prev
             else:
                 app.dependency_overrides.pop(key, None)
+        assert not self.unrecorded, (
+            f"no recorded classifier reply for {self.unrecorded}; add them to "
+            "evals/fixtures/consent_answers.json and re-record"
+        )
 
     def everything_said(self) -> str:
         return " ".join(self.spoken) + " " + _spoken(self.adapter)
@@ -185,6 +241,8 @@ async def test_a_spoken_yes_is_recorded_with_the_turn_that_carries_it(real_db):
         await _post_inbound(h.client, body="Namaste")  # welcome
     async with _Harness(transcript="Yes, that sounds lovely") as h2:
         await _post_inbound(h2.client, with_audio=True)  # her answer, spoken
+    async with _Harness(transcript="Yes, that's right.") as h3:
+        await _post_inbound(h3.client, with_audio=True)  # and confirmed
 
     real_db.expire_all()
     records = (
@@ -202,6 +260,8 @@ async def test_a_spoken_yes_is_recorded_with_the_turn_that_carries_it(real_db):
     assert record.evidence_ref is not None, (
         "a consent record pointing at nothing proves nothing"
     )
+    # Bound to the number she said it from (M-03).
+    assert record.whatsapp_number == _NUMBER
 
     state = await parent_consent.get_status(user_id, real_db)
     assert state.status is ConsentStatus.GRANTED
@@ -236,32 +296,273 @@ async def test_a_refusal_is_recorded_and_stops_everything(real_db):
 
 async def test_ambiguity_reasks_once_then_halts(real_db):
     """Pestering someone who does not understand what is being asked is its
-    own harm. One clarification, then a human looks at it."""
+    own harm. One clarification, her answer to it read, then a human looks
+    at it."""
     user_id = f"pc-{uuid.uuid4().hex[:8]}"
     await _seed_parent(real_db, user_id)
 
     async with _Harness() as h:
         await _post_inbound(h.client, body="Namaste")  # ask 1: welcome
-    async with _Harness(transcript="hmm, who is this") as h2:
+    async with _Harness(transcript="Hmm.") as h2:
         await _post_inbound(h2.client, with_audio=True)  # ask 2: re-ask
+    assert parent_consent.build_reask_text("Lakshmi", language="ta-IN") in (
+        h2.everything_said()
+    )
 
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.AWAITING
+    ), "her answer to the re-ask must still be read"
+
+    async with _Harness(transcript="I am fine, who is this?") as h3:
+        await _post_inbound(h3.client, with_audio=True)
+    assert h3.everything_said().strip() == "", "halted means silent, not louder"
     real_db.expire_all()
     assert (await parent_consent.get_status(user_id, real_db)).status is (
         ConsentStatus.HALTED
     )
 
-    # A third message must not produce a third ask.
-    async with _Harness(transcript="what is happening") as h3:
-        await _post_inbound(h3.client, with_audio=True)
-    assert h3.everything_said().strip() == "", "halted means silent, not louder"
+    # A further message must not produce a third ask.
+    async with _Harness(transcript="Yes, that sounds lovely") as h4:
+        await _post_inbound(h4.client, with_audio=True)
+    assert h4.everything_said().strip() == ""
 
-    records = (
+    assert await _records(real_db, user_id) == [], "an unclear answer is not an answer"
+
+
+async def test_her_answer_to_the_re_ask_is_read(real_db):
+    """The re-ask used to halt her on sending, so even a clear yes to it
+    went unheard."""
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id)
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(transcript="Hmm.") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+    async with _Harness(transcript="Yes, that sounds lovely") as h3:
+        await _post_inbound(h3.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.CONFIRMING
+    )
+    assert parent_consent.confirm_text("ta-IN") in h3.everything_said()
+
+
+async def _records(db, user_id) -> list[ConsentRecord]:
+    db.expire_all()
+    return list(
         (
-            await real_db.execute(
+            await db.execute(
                 select(ConsentRecord).where(ConsentRecord.user_id == user_id)
             )
         )
         .scalars()
         .all()
     )
-    assert records == [], "an unclear answer is not an answer"
+
+
+# ── P3: no false yeses, and a yes is confirmed before it counts ──────────────
+
+
+@pytest.mark.parametrize("said", _NOT_CONSENT)
+async def test_a_question_back_is_never_consent(real_db, said):
+    """M-01: "Kaun ho aap?" was recorded as consent. None of these may move
+    her towards a recording, through the real classifier path."""
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id, language="hi-IN")
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(transcript=said) as h2:
+        await _post_inbound(h2.client, with_audio=True)
+
+    real_db.expire_all()
+    state = await parent_consent.get_status(user_id, real_db)
+    assert state.status is ConsentStatus.AWAITING, f"{said!r} -> {state.status}"
+    assert await _records(real_db, user_id) == []
+    # She hears the re-ask, not the confirmation.
+    assert parent_consent.confirm_text("hi-IN") not in h2.everything_said()
+
+
+async def test_a_clear_yes_is_confirmed_then_recorded_once(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id, language="hi-IN")
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(transcript="Haan, theek hai, aap record kar sakte ho") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.CONFIRMING
+    )
+    assert parent_consent.confirm_text("hi-IN") in h2.everything_said()
+    assert await _records(real_db, user_id) == [], "a first yes records nothing"
+
+    async with _Harness(transcript="haan") as h3:
+        await _post_inbound(h3.client, with_audio=True)
+
+    records = await _records(real_db, user_id)
+    assert len(records) == 1
+    assert records[0].consent_version == "parent-1.0"
+    assert records[0].whatsapp_number == _NUMBER
+    assert parent_consent.granted_text("hi-IN") in h3.everything_said()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.GRANTED
+    )
+
+
+async def test_nahi_declines_at_once_without_the_classifier(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id, language="hi-IN")
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(transcript="Nahi", classifier_down=True) as h2:
+        # The classifier is down: a refusal must not need it.
+        await _post_inbound(h2.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.DECLINED
+    )
+
+
+async def test_with_the_classifier_down_nothing_is_a_yes(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id)
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(
+        transcript="Yes, that sounds lovely", classifier_down=True
+    ) as h2:
+        await _post_inbound(h2.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.AWAITING
+    )
+    assert parent_consent.build_reask_text("Lakshmi", language="ta-IN") in (
+        h2.everything_said()
+    )
+    assert await _records(real_db, user_id) == []
+
+
+async def test_anything_but_a_second_yes_goes_back_to_asking(real_db):
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id)
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(transcript="Yes, that sounds lovely") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+    async with _Harness(transcript="Enna solreenga?") as h3:
+        await _post_inbound(h3.client, with_audio=True)
+
+    real_db.expire_all()
+    assert (await parent_consent.get_status(user_id, real_db)).status is (
+        ConsentStatus.AWAITING
+    )
+    assert parent_consent.build_reask_text("Lakshmi", language="ta-IN") in (
+        h3.everything_said()
+    )
+    assert await _records(real_db, user_id) == []
+
+
+async def test_the_welcome_names_the_child_who_set_it_up(real_db):
+    from models.family_account import FamilyAccount
+
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id)
+    real_db.add(
+        FamilyAccount(
+            email=f"{user_id}@example.test",
+            user_id=user_id,
+            plan="free",
+            onboarding_complete=True,
+            child_name="Priya",
+        )
+    )
+    await real_db.commit()
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+
+    expected = parent_consent.build_welcome_text("Lakshmi", "Priya", language="ta-IN")
+    assert expected in h.everything_said()
+
+
+# ── M-03: consent belongs to the number ──────────────────────────────────────
+
+
+async def _granted_parent(db, user_id: str) -> None:
+    await _seed_parent(db, user_id)
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste")
+    async with _Harness(transcript="Yes, that sounds lovely") as h2:
+        await _post_inbound(h2.client, with_audio=True)
+    async with _Harness(transcript="Yes, that's right.") as h3:
+        await _post_inbound(h3.client, with_audio=True)
+    db.expire_all()
+    assert await parent_consent.has_granted(user_id, db)
+
+
+async def test_a_new_number_starts_from_the_welcome(real_db):
+    from scripts.change_parent_number import change_number
+
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _granted_parent(real_db, user_id)
+    new_number = "+919000000779"
+
+    outcome = await change_number(user_id, new_number, "test", real_db, apply=True)
+    assert outcome.startswith("CHANGED")
+
+    real_db.expire_all()
+    assert not await parent_consent.has_granted(user_id, real_db)
+
+    async with _Harness() as h:
+        await _post_inbound(h.client, body="Namaste", number=new_number)
+    assert parent_consent.build_welcome_text("Lakshmi", language="ta-IN") in (
+        h.everything_said()
+    ), "whoever holds the new number has agreed to nothing yet"
+    real_db.expire_all()
+    sessions = (
+        (await real_db.execute(select(Session).where(Session.user_id == user_id)))
+        .scalars()
+        .all()
+    )
+    assert all(s.status == "consent" for s in sessions)
+
+    # The old number is nobody's now.
+    async with _Harness() as h2:
+        await _post_inbound(h2.client, body="Namaste")
+    assert "isn't scheduled" in h2.everything_said()
+
+
+async def test_the_change_script_refuses_a_number_in_use(real_db):
+    from scripts.change_parent_number import ChangeRefused, change_number
+
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _seed_parent(real_db, user_id)
+    await _seed_parent(real_db, f"pc-{uuid.uuid4().hex[:8]}", number="+919000000780")
+
+    with pytest.raises(ChangeRefused):
+        await change_number(user_id, "+919000000780", "test", real_db, apply=True)
+
+
+async def test_a_dry_run_changes_nothing(real_db):
+    from scripts.change_parent_number import change_number
+
+    user_id = f"pc-{uuid.uuid4().hex[:8]}"
+    await _granted_parent(real_db, user_id)
+
+    outcome = await change_number(
+        user_id, "+919000000781", "test", real_db, apply=False
+    )
+    assert outcome.startswith("DRY RUN")
+    real_db.expire_all()
+    assert await parent_consent.has_granted(user_id, real_db)

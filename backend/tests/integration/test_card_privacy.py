@@ -165,12 +165,20 @@ async def test_never_share_withdraws_everything_unsent_and_keeps_her_recording(
     real_db,
 ):
     user_id, session_id, turns = await _setup(real_db)
+    number = (
+        await real_db.execute(
+            select(UserProfileModel.whatsapp_number).where(
+                UserProfileModel.user_id == user_id
+            )
+        )
+    ).scalar_one()
     real_db.add(
         ConsentRecord(
             user_id=user_id,
             email_hash="",
             consent_version=parent_consent.PARENT_CONSENT_VERSION,
             principal=parent_consent.PRINCIPAL_PARENT,
+            whatsapp_number=number,
         )
     )
     await real_db.commit()
