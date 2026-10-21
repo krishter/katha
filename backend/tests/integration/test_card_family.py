@@ -457,6 +457,9 @@ async def _atoms(db, user_id):
                 transcript="…",
                 response_text="…",
                 is_private=private,
+                # Its privacy has been read (P5); a pending turn is hidden
+                # whatever it says.
+                extraction_status="done",
             )
         )
         await db.flush()

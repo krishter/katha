@@ -1259,6 +1259,36 @@ async def run_extraction_for_turn(
         )
 
 
+async def _alert_extraction_failed(turn_id: uuid.UUID, user_id: str) -> None:
+    """Never raises. Names the turn, not what she said (P7)."""
+    from core.email import send_operator_alert
+
+    await send_operator_alert(
+        "A turn's extraction failed",
+        f"Turn {turn_id} for {user_id}: its extraction, or the check for a "
+        "privacy request in it, did not complete. Its stories stay hidden "
+        "from the family until it is re-run.",
+    )
+
+
+async def _mark_extraction_failed(turn_id: uuid.UUID, user_id: str, db) -> None:
+    """A turn whose extraction did not finish stays hidden (fail closed,
+    P5). Leaves a turn already marked done alone: its privacy was read."""
+    try:
+        await db.rollback()
+        turn = (
+            await db.execute(select(Turn).where(Turn.id == turn_id))
+        ).scalar_one_or_none()
+        if turn is None or turn.extraction_status != "pending":
+            return
+        turn.extraction_status = "failed"
+        await db.commit()
+    except Exception:
+        logger.exception("Could not mark turn %s failed", turn_id)
+        return
+    await _alert_extraction_failed(turn_id, user_id)
+
+
 async def _run_extraction_for_turn(
     turn_id: uuid.UUID,
     session_id: str,
@@ -1299,11 +1329,14 @@ async def _run_extraction_for_turn(
             session_domain=session_state.domain,
         )
 
-        if user_profile.cards is not None:
-            # "Keep this between us", and her sharing preference said in
-            # passing (CONVERSATION_CARDS.md §5). Its own try: a failure
-            # here must not cost the turn's atoms or the session close.
-            try:
+        # "Keep this between us", for every family (P5, D5), and with cards
+        # her sharing preference said in passing (CONVERSATION_CARDS.md §5).
+        # Its own try: a failure here must not cost the turn's atoms or the
+        # session close. It does cost their visibility: the turn is marked
+        # failed, and its atoms stay hidden from the family.
+        privacy_read = True
+        try:
+            if user_profile.cards is not None:
                 await card_privacy.apply_share_signals(
                     extraction_json,
                     turn_id=turn_id,
@@ -1311,8 +1344,18 @@ async def _run_extraction_for_turn(
                     user_id=session_state.user_id,
                     db=db,
                 )
-            except Exception:
-                logger.exception("Share signals failed for turn %s", turn_id)
+            else:
+                await card_privacy.apply_private_request(
+                    extraction_json,
+                    turn_id=turn_id,
+                    user_id=session_state.user_id,
+                    db=db,
+                    cards_on=False,
+                )
+        except Exception:
+            logger.exception("Privacy step failed for turn %s", turn_id)
+            await db.rollback()
+            privacy_read = False
 
         turn_result = await db.execute(select(Turn).where(Turn.id == turn_id))
         turn = turn_result.scalar_one_or_none()
@@ -1320,8 +1363,12 @@ async def _run_extraction_for_turn(
             turn.extraction_json = extraction_json
             turn.input_tokens = (turn.input_tokens or 0) + input_tokens
             turn.output_tokens = (turn.output_tokens or 0) + output_tokens
+            # Only now may its atoms reach the family (not_private_atom).
+            turn.extraction_status = "done" if privacy_read else "failed"
             db.add(turn)
             await db.commit()
+        if not privacy_read:
+            await _alert_extraction_failed(turn_id, session_state.user_id)
 
         new_state = await session_manager.apply_extraction(
             session_id, extraction_json, db
@@ -1330,6 +1377,7 @@ async def _run_extraction_for_turn(
         logger.exception(
             "Extraction failed for turn %s (session %s)", turn_id, session_id
         )
+        await _mark_extraction_failed(turn_id, session_state.user_id, db)
         return
 
     should_close = session_manager.should_end_session(

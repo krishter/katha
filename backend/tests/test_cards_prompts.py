@@ -1,6 +1,10 @@
 """
 What conversation cards add to the prompts (CONVERSATION_CARDS.md §9.1),
-and that with cards off for her, nothing is added at all.
+and that with cards off for her, nothing card-specific is added.
+
+"Keep this between us" is not card-specific any more (P5, D5): the rule
+and the share_restriction fields are there for every family, and only the
+sharing preference and the child's questions come with cards.
 """
 
 from __future__ import annotations
@@ -17,10 +21,8 @@ from prompts.system_prompt import (
 )
 
 CARD_WORDS = (
-    "share_restriction",
-    "topic_label",
     "share_preference_change",
-    "between us",
+    "QUESTIONS FROM",
 )
 
 _PROFILE = UserProfile(
@@ -72,8 +74,20 @@ def test_with_cards_on_extraction_asks_for_the_share_fields():
     assert extraction.rstrip().endswith("no other text.")
 
 
+def test_with_cards_off_privacy_is_still_read():
+    """M-04: a cards-off family's "don't tell my son" was never read."""
+    extraction = build_extraction_prompt(
+        _PROFILE, _state(), PriorContext(), "Don't tell my son this", "Of course."
+    )
+    for field in ("share_restriction", "topic_label"):
+        assert f'"{field}"' in extraction
+    dialogue = build_system_prompt(_PROFILE, _state(), PriorContext())
+    assert "This stays between us." in dialogue
+
+
 def test_cards_on_changes_only_what_it_adds():
-    """Removing the added block gives back today's extraction prompt."""
+    """Removing the sharing-preference field and its paragraph gives back
+    the cards-off extraction prompt."""
     on = build_extraction_prompt(
         dataclasses.replace(_PROFILE, cards=_CARDS),
         _state(),
@@ -82,9 +96,10 @@ def test_cards_on_changes_only_what_it_adds():
         "r",
     )
     off = build_extraction_prompt(_PROFILE, _state(), PriorContext(), "t", "r")
-    start = on.index("\n\nThe JSON object must also include")
+    field = ',\n  "share_preference_change": "none" | "share" | "never"'
+    start = on.index("\n\nshare_preference_change:")
     end = on.index("share_restriction, not this.") + len("share_restriction, not this.")
-    assert on[:start] + on[end:] == off
+    assert on.replace(field, "", 1)[: start - len(field)] + on[end:] == off
 
 
 # ── dialogue (§9.1) ──────────────────────────────────────────────────────────

@@ -79,6 +79,7 @@ async def _seed_full_user(
         response_text="Tell me about the street.",
         extraction_json={},
         response_audio_s3_key=f"audio/{user_id}-turn1.ogg",
+        extraction_status="done",
     )
     db.add(turn)
     await db.commit()

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cards.privacy import not_private_atom
+from cards.privacy import not_private_atom, not_private_memory_card
 from config import settings
 from core import family_number, freemium, parent_consent
 from core.auth import get_current_user
@@ -181,6 +181,7 @@ async def get_stats(
     card_result = await db.execute(
         select(MemoryCard.image_s3_key)
         .where(MemoryCard.user_id == user_id)
+        .where(not_private_memory_card())
         .order_by(MemoryCard.created_at.desc())
         .limit(1)
     )
@@ -385,14 +386,19 @@ async def list_cards(
 ) -> dict:
     user_id = current_user["user_id"]
 
+    # A card made from something she later asked to keep private is not
+    # shown again (P5), even though it may already have been sent.
     total_result = await db.execute(
-        select(func.count(MemoryCard.id)).where(MemoryCard.user_id == user_id)
+        select(func.count(MemoryCard.id))
+        .where(MemoryCard.user_id == user_id)
+        .where(not_private_memory_card())
     )
     total = total_result.scalar_one()
 
     rows_result = await db.execute(
         select(MemoryCard)
         .where(MemoryCard.user_id == user_id)
+        .where(not_private_memory_card())
         .order_by(MemoryCard.created_at.desc())
         .offset((page - 1) * limit)
         .limit(limit)
@@ -493,6 +499,7 @@ async def export_data(
     cards_result = await db.execute(
         select(MemoryCard)
         .where(MemoryCard.user_id == user_id)
+        .where(not_private_memory_card())
         .order_by(MemoryCard.created_at)
     )
     cards = cards_result.scalars().all()
