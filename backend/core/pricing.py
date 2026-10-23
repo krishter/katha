@@ -104,6 +104,19 @@ _GEMINI_TTS_USD_PER_MTOK: dict[str, list[tuple[date, dict[str, Decimal]]]] = {
 }
 
 # ---------------------------------------------------------------------------
+# Vertex AI embeddings (SEMANTIC_RETRIEVAL.md §5.1) — USD per million input
+# tokens, from the token_count Google returns with each vector. Vertex list
+# price for gemini-embedding-001; the asia-south1 (Mumbai) price has not
+# been confirmed, so this may be off for where Katha actually calls it.
+# A query that fell back to recency (embed_query_fallback) made no billed
+# call and prices at zero.
+# ---------------------------------------------------------------------------
+_GOOGLE_EMBEDDINGS_USD_PER_MTOK: dict[str, Decimal] = {
+    "gemini-embedding-001@1536": Decimal("0.15"),
+}
+_GOOGLE_EMBEDDINGS_PRICED_OPERATIONS = ("embed_document", "embed_query")
+
+# ---------------------------------------------------------------------------
 # Twilio — USD per WhatsApp message, inbound or outbound, on top of Meta's
 # fee. Source: https://www.twilio.com/en-us/whatsapp/pricing (2026-10-16).
 # ---------------------------------------------------------------------------
@@ -152,6 +165,7 @@ COMPONENTS = (
     "sarvam_stt",
     "sarvam_tts",
     "google_tts",
+    "google_embeddings",
     "twilio",
     "meta",
     "ses",
@@ -276,6 +290,16 @@ def cost_breakdown(row: Any) -> dict[str, Decimal] | None:
             return None
         return {"google_tts": usd * fx}
 
+    if vendor == "google_embeddings":
+        if operation not in _GOOGLE_EMBEDDINGS_PRICED_OPERATIONS:
+            # embed_query_fallback: no call was billed.
+            return {}
+        per_mtok = _GOOGLE_EMBEDDINGS_USD_PER_MTOK.get(model or "")
+        tokens = _n(units, "tokens")
+        if per_mtok is None or tokens is None:
+            return None
+        return {"google_embeddings": tokens * per_mtok / _MTOK * fx}
+
     if vendor == "twilio":
         messages = _n(units, "messages") or Decimal(1)
         out = {"twilio": messages * _TWILIO_USD_PER_MESSAGE * fx}
@@ -312,4 +336,6 @@ def is_priced(vendor: str, model: str | None) -> bool:
         )
     if vendor == "google":
         return model in _GEMINI_TTS_USD_PER_MTOK
+    if vendor == "google_embeddings":
+        return model in _GOOGLE_EMBEDDINGS_USD_PER_MTOK
     return vendor in ("twilio", "ses")

@@ -12,7 +12,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy import select, update
 
 import cards
-from adapters import llm, sarvam_stt
+from adapters import gemini_embeddings, llm, sarvam_stt
 from adapters.llm import Message
 from adapters.whatsapp_stub import get_whatsapp_adapter
 from cards import asks as card_asks
@@ -184,7 +184,89 @@ def _extract_open_threads(recent_atoms: list) -> list[str]:
     return threads
 
 
-async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
+# Below this many words, a first reply ("haan", an STT failure) says nothing
+# about what the parent wants to talk about, and the query is the session's
+# domain alone (SEMANTIC_RETRIEVAL.md §5.2).
+_MIN_QUERY_WORDS = 3
+
+
+def retrieval_query(domain: str, transcript: Optional[str]) -> str:
+    """
+    The text embedded to find atoms for Layer 3: the parent's first reply
+    (§5.2 shape 2). In round 2 (docs/proposals/embedding-eval-results.md)
+    it tied with domain name + reply at 100% Recall@5, and the decision
+    rule gives a tie to the simpler shape. The domain name when the reply
+    is empty or too short to mean anything.
+    """
+    reply = (transcript or "").strip()
+    if len(reply.split()) < _MIN_QUERY_WORDS:
+        return domain_label(domain)
+    return reply
+
+
+def _hybrid_open_threads(semantic_atoms: list, recent_atoms: list) -> list[str]:
+    """
+    Semantic hits first, then today's breadth-first fill (D2).
+
+    Up to SEMANTIC_THREADS_FIRST threads from the atoms nearest to what the
+    parent said, in similarity order, then _extract_open_threads over the
+    newest atoms, less any thread already taken. Deduplicated by thread
+    only: a semantic atom whose threads did not fit the first block still
+    takes part in the fill. The fill keeps S2.5's breadth across domains
+    and covers atoms with no vector yet.
+    """
+    first: list[str] = []
+    seen: set[str] = set()
+    for atom in semantic_atoms:
+        for thread in getattr(atom, "open_threads", None) or []:
+            if len(first) >= settings.SEMANTIC_THREADS_FIRST:
+                break
+            if thread not in seen:
+                seen.add(thread)
+                first.append(thread)
+    rest = _extract_open_threads(recent_atoms)
+    return first + [t for t in rest if t not in seen]
+
+
+async def _semantic_atoms(
+    user_id: str, domain: str, query_text: Optional[str], db
+) -> list:
+    """
+    The atoms nearest to this session's query, or [] when embeddings are
+    off or the query could not be embedded. A failure writes the
+    embed_query_fallback ledger row and Layer 3 is recency exactly as it
+    was before semantic retrieval existed: degrade, never fail.
+    """
+    if not settings.EMBEDDINGS_ENABLED:
+        return []
+    try:
+        query_vec = await gemini_embeddings.embed(
+            retrieval_query(domain, query_text), kind="query"
+        )
+    except gemini_embeddings.EmbeddingUnavailable as e:
+        logger.warning(
+            "Query embedding unavailable for user %s (%s) — Layer 3 uses recency",
+            user_id,
+            e.reason,
+        )
+        await gemini_embeddings.record_query_fallback(e.reason)
+        return []
+    except Exception:
+        logger.warning(
+            "Query embedding failed for user %s — Layer 3 uses recency",
+            user_id,
+            exc_info=True,
+        )
+        await gemini_embeddings.record_query_fallback("error")
+        return []
+    return await vector_store.retrieve_semantic(
+        user_id, query_vec, k=settings.SEMANTIC_TOP_K, db=db
+    )
+
+
+async def build_prior_context(
+    user_id: str, domain: str, db, query_text: Optional[str] = None
+) -> PriorContext:
     """
     Assemble what Katha already knows about this user, for Layer 3.
 
@@ -197,17 +279,38 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
     remembers the user's sister but forgets which threads were left open
     is coherent, whereas a raised exception here costs the user their
     whole reply. This held when retrieval was an OpenAI embedding call
-    and it holds for the SQL query that replaced it (S1.5).
+    and it holds for the SQL query that replaced it (S1.5), and for the
+    semantic retrieval behind EMBEDDINGS_ENABLED.
+
+    `query_text` is the parent's first reply of the session; with
+    embeddings on it becomes the retrieval query (retrieval_query).
     """
     facts = await fact_store.get_facts(user_id, db)
     significant_people = await fact_store.get_significant_people(user_id, db)
 
     open_threads: list[str] = []
     try:
+        # Semantic first when enabled; recency always, as the fill and as
+        # the whole of retrieval when embeddings are off or down.
+        try:
+            semantic_atoms = await _semantic_atoms(user_id, domain, query_text, db)
+        except Exception:
+            # The semantic SQL failed. Roll the aborted transaction back so
+            # the recency query below can still run.
+            logger.warning(
+                "Semantic retrieval failed for user %s — Layer 3 uses recency",
+                user_id,
+                exc_info=True,
+            )
+            await db.rollback()
+            semantic_atoms = []
         recent_atoms = await vector_store.retrieve_relevant(
             user_id, domain, top_k=_RETRIEVAL_TOP_K, db=db
         )
-        open_threads = _extract_open_threads(recent_atoms)
+        if semantic_atoms:
+            open_threads = _hybrid_open_threads(semantic_atoms, recent_atoms)
+        else:
+            open_threads = _extract_open_threads(recent_atoms)
     except Exception:
         logger.warning(
             "Story-atom retrieval failed for user %s (domain %s) — continuing "
@@ -225,7 +328,7 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
 
 
 async def prior_context_for_session(
-    session_id: str, user_id: str, domain: str, db
+    session_id: str, user_id: str, domain: str, db, query_text: Optional[str] = None
 ) -> PriorContext:
     """
     Layer 3 for this turn: built on the session's first turn and reused for
@@ -242,7 +345,7 @@ async def prior_context_for_session(
     goes ahead on a freshly built Layer 3, exactly as before.
     """
     if not settings.LAYER3_FREEZE_PER_SESSION:
-        return await build_prior_context(user_id, domain, db)
+        return await build_prior_context(user_id, domain, db, query_text)
 
     try:
         stored = (
@@ -266,7 +369,7 @@ async def prior_context_for_session(
         )
         await db.rollback()
 
-    prior_context = await build_prior_context(user_id, domain, db)
+    prior_context = await build_prior_context(user_id, domain, db, query_text)
     try:
         # Only where none exists yet, so two turns racing on a new session
         # cannot leave it with two different snapshots over its lifetime.
@@ -1058,7 +1161,7 @@ async def process_addendum_turn(
     # 4. Its atoms and her privacy, read like any turn's.
     if background_tasks is not None:
         prior_context = await prior_context_for_session(
-            session_id, state.user_id, state.domain, db
+            session_id, state.user_id, state.domain, db, stt_result.transcript
         )
         background_tasks.add_task(
             run_extraction_for_turn,
@@ -1218,7 +1321,7 @@ async def process_voice_turn(
 
     # 4. Build real prior context from fact store + vector store
     prior_context = await prior_context_for_session(
-        session_id, state.user_id, state.domain, db
+        session_id, state.user_id, state.domain, db, stt_result.transcript
     )
 
     # 5. Build dialogue prompt and call the dialogue LLM. The immediately

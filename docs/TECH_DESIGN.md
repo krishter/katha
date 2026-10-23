@@ -72,7 +72,7 @@
 - Per-user vector store of all session content
 - Structured fact store (JSON): names, relationships, dates, places, events
 - Retrieval at session start: inject relevant prior context into LLM system prompt
-- Technology: Pinecone / pgvector + embedding model (OpenAI text-embedding-3-small)
+- Technology: pgvector in Postgres (`story_atoms.embedding`) + Vertex AI `gemini-embedding-001` at 1536 dimensions in `asia-south1`, behind `EMBEDDINGS_ENABLED` (off by default; recency retrieval while off). *(Changed 2026-10-23; see `docs/specs/SEMANTIC_RETRIEVAL.md`. This said Pinecone / pgvector + OpenAI text-embedding-3-small, removed in Sprint 1.)*
 
 **Story Database**
 - Structured storage of extracted story atoms

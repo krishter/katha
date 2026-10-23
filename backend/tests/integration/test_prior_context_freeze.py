@@ -131,3 +131,75 @@ async def test_a_failed_snapshot_read_still_gives_the_turn_a_layer_3(
         session_id, user_id, "childhood", real_db
     )
     assert context.facts == {"places": ["Madurai"]}
+
+
+# ── Semantic retrieval (SEMANTIC_RETRIEVAL.md §5.2, §5.4) ────────────────────
+
+
+def _unit(i: int) -> list[float]:
+    v = [0.0] * 1536
+    v[i] = 1.0
+    return v
+
+
+async def test_frozen_layer3_embeds_the_query_once_per_session(real_db, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    monkeypatch.setattr(settings, "LAYER3_FREEZE_PER_SESSION", True)
+    embed = AsyncMock(return_value=_unit(0))
+    monkeypatch.setattr(orchestrator.gemini_embeddings, "embed", embed)
+    user_id = f"freeze-sem-{uuid.uuid4().hex[:8]}"
+    session_id = await _user_and_session(real_db, user_id)
+
+    for reply in ("Appa's shop near the temple, you know", "and the brass vessels"):
+        await orchestrator.prior_context_for_session(
+            session_id, user_id, "childhood", real_db, reply
+        )
+
+    embed.assert_awaited_once()
+    assert embed.call_args.args[0] == "Appa's shop near the temple, you know"
+
+
+async def test_retrieve_semantic_against_pgvector(real_db):
+    """Nearest first; another user, another model and unembedded atoms are
+    never returned."""
+    from memory import vector_store
+    from models.story_atom import StoryAtom
+
+    user_id = f"sem-{uuid.uuid4().hex[:8]}"
+    other = f"sem-{uuid.uuid4().hex[:8]}"
+    session_id = uuid.UUID(await _user_and_session(real_db, user_id))
+    other_session = uuid.UUID(await _user_and_session(real_db, other))
+    tag = "gemini-embedding-001@1536"
+    rows = [
+        (user_id, session_id, "near", _unit(0), tag),
+        (user_id, session_id, "middle", [0.7] + [0.0] * 1534 + [0.7], tag),
+        (user_id, session_id, "far", _unit(5), tag),
+        (user_id, session_id, "old model", _unit(0), "text-embedding-3-small"),
+        (user_id, session_id, "no vector", None, None),
+        (other, other_session, "other user", _unit(0), tag),
+    ]
+    for uid, sid, title, vec, model in rows:
+        real_db.add(
+            StoryAtom(
+                session_id=sid,
+                user_id=uid,
+                domain="childhood",
+                title=title,
+                narrative=title,
+                embedding=vec,
+                embedding_model=model,
+            )
+        )
+    await real_db.commit()
+
+    found = await vector_store.retrieve_semantic(user_id, _unit(0), k=8, db=real_db)
+    assert [a.title for a in found] == ["near", "middle", "far"]
+
+    found = await vector_store.retrieve_semantic(
+        user_id, _unit(0), k=8, db=real_db, current_session_id=str(session_id)
+    )
+    assert found == []

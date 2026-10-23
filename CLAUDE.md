@@ -20,7 +20,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 - **TTS:** Gemini 3.8 Flash-Lite TTS for new families (decided 2026-10-18, `docs/specs/GEMINI_TTS.md`); Sarvam Bulbul v4 Flash / v3 for Urdu, for families pinned before the switch, and as the fallback when Gemini fails. Each parent's voice is pinned on her profile (`media/tts.py`)
 - **LLM:** Claude Sonnet 4.6 (`claude-sonnet-4-6`) for MVP (evaluate Sarvam native LLM in Phase 2)
 - **Messaging:** WhatsApp Business API (via Meta or Twilio/360Dialog intermediary)
-- **Memory:** Postgres fact store + story-atom recency retrieval. **No embedding vendor** — the OpenAI dependency was removed in Sprint 1 for DPDP residency and single-point-of-failure reasons; pgvector is retained unwritten for Phase 2. See @docs/proposals/embedding-strategy.md
+- **Memory:** Postgres fact store + story-atom retrieval for Layer 3. Recency today; hybrid semantic retrieval (Vertex AI `gemini-embedding-001` at 1536 dimensions, `asia-south1`, vectors in `story_atoms.embedding`) is built behind `EMBEDDINGS_ENABLED`, off by default. While it is off no text goes to an embedding vendor. See `docs/specs/SEMANTIC_RETRIEVAL.md`; the history is in @docs/proposals/embedding-strategy.md
 - **Frontend:** Next.js (family dashboard at katha.life/family)
 - **Storage:** AWS Mumbai / Azure India (DPDP Act data residency requirement)
 

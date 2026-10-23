@@ -165,6 +165,7 @@ small, a rate without its denominator misleads.
 | `completeness_distribution` | All-time counts for scores 0,1,2,3,4,5 |
 | `share_completeness_3_plus` | Share with score ≥ 3 |
 | `median_atoms_per_storyteller_30d` | Over storytellers with ≥1 conversation in last 30 days. PRD target 20+/month. |
+| `embeddings` | All-time counts over storytellers' atoms: `atoms_total`, `atoms_embedded` (has a vector), `atoms_failed` (`embedding_failed`), `atoms_pending` (neither), `share_embedded`. Never the vector itself. All zero while `EMBEDDINGS_ENABLED` is false. `docs/specs/SEMANTIC_RETRIEVAL.md` §5.8. |
 | `domain_coverage` | Per storyteller, distinct `story_atoms.domain` values out of the 8 in `prompts/domains.py` (count them from that module; don't hardcode 8). Report the histogram `{0..8: n}` and `storytellers_6_plus` (PRD target 50% by month 3). |
 
 ### 6.5 Memory cards
@@ -225,8 +226,8 @@ Computed at read time from `api_usage` units multiplied by `core/pricing.py`. Pr
 |---|---|
 | `inr_total` | Sum over rows `{all_time, last_7d, last_30d}`, fixed hosting excluded |
 | `inr_per_conversation` | ÷ conversations (§5.1 predicate), same window |
-| `by_component` | `{claude_dialogue, claude_extraction, claude_entities, claude_other, sarvam_stt, sarvam_tts, twilio, meta}`, each `{inr, share}` |
-| `units` | Claude tokens by operation (including cache read and write), `stt_minutes_received`, `stt_minutes_billed`, `tts_characters`, `tts_gemini_clips`, `tts_gemini_audio_minutes`, `tts_vendor_fallbacks`, `tts_vendor_fallback_rate`, `messages_in`, `messages_out` |
+| `by_component` | `{claude_dialogue, claude_extraction, claude_entities, claude_other, sarvam_stt, sarvam_tts, google_embeddings, twilio, meta}`, each `{inr, share}` |
+| `units` | Claude tokens by operation (including cache read and write), `stt_minutes_received`, `stt_minutes_billed`, `tts_characters`, `tts_gemini_clips`, `tts_gemini_audio_minutes`, `tts_vendor_fallbacks`, `tts_vendor_fallback_rate`, `embedding_tokens`, `embedding_document_calls`, `embedding_query_calls`, `embedding_query_fallbacks`, `embedding_query_fallback_rate` (ledger vendor `google_embeddings`), `messages_in`, `messages_out` |
 | `dialogue_cache_hit_rate` | `cache_read / (cache_read + cache_creation + uncached input)` over dialogue rows, last 7 days. Target > 0.6. |
 | `dialogue_input_tokens_by_tenure` | Median dialogue input tokens per call, bucketed by session number (1–10, 11–30, 31–100, 100+). After C2 this should stay flat. |
 | `wasted_outbound` | Outbound rows with status `failed` or `undelivered`: `{count, inr}` by `error_code`, last 30 days |

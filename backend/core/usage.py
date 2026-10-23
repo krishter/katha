@@ -36,7 +36,9 @@ logger = logging.getLogger(__name__)
 
 # Keys whose values may be short strings. Everything else in `units` must be
 # a number. These are labels from a fixed vocabulary, never free text.
-_LABEL_KEYS = frozenset({"cache_ttl", "stop_reason", "meta_category"})
+# "reason" labels an embedding query that fell back to recency: timeout,
+# error or empty (SEMANTIC_RETRIEVAL.md §5.1).
+_LABEL_KEYS = frozenset({"cache_ttl", "stop_reason", "meta_category", "reason"})
 _MAX_LABEL_LENGTH = 32
 
 _scope: ContextVar[Mapping[str, Any]] = ContextVar("usage_scope", default={})

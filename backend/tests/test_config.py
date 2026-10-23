@@ -28,6 +28,11 @@ _SAFE_KWARGS = dict(
     TTS_VENDOR="gemini",
     GEMINI_API_KEY="AIza-real",
     OPERATOR_EMAIL="ops@katha.life",
+    # Semantic retrieval ships dark (SEMANTIC_RETRIEVAL.md D1): off needs no
+    # Google project or key.
+    EMBEDDINGS_ENABLED=False,
+    GOOGLE_CLOUD_PROJECT="",
+    GOOGLE_APPLICATION_CREDENTIALS="",
 )
 
 
@@ -218,5 +223,53 @@ def test_conversation_card_template_needs_the_media_host():
         _settings(
             TWILIO_TEMPLATE_CONVERSATION_CARD="HXcard",
             TWILIO_TEMPLATE_MEDIA_HOST="katha-media.s3.ap-south-1.amazonaws.com",
+        )
+    )
+
+
+# --- Semantic retrieval (SEMANTIC_RETRIEVAL.md §5.6) -----------------------
+
+
+def test_embeddings_off_need_no_google_credentials():
+    validate_production_config(_settings())
+
+
+def test_embeddings_on_without_a_project_refuses_to_boot(tmp_path):
+    key = tmp_path / "key.json"
+    key.write_text("{}")
+    with pytest.raises(RuntimeError, match="GOOGLE_CLOUD_PROJECT"):
+        validate_production_config(
+            _settings(EMBEDDINGS_ENABLED=True, GOOGLE_APPLICATION_CREDENTIALS=str(key))
+        )
+
+
+def test_embeddings_on_without_a_credentials_path_refuses_to_boot():
+    with pytest.raises(RuntimeError, match="GOOGLE_APPLICATION_CREDENTIALS is empty"):
+        validate_production_config(
+            _settings(EMBEDDINGS_ENABLED=True, GOOGLE_CLOUD_PROJECT="kathadotlife")
+        )
+
+
+def test_embeddings_on_with_a_missing_key_file_refuses_to_boot(tmp_path):
+    """A missing key must fail the deploy, not turn every query into a
+    recency fallback."""
+    with pytest.raises(RuntimeError, match="does not exist"):
+        validate_production_config(
+            _settings(
+                EMBEDDINGS_ENABLED=True,
+                GOOGLE_CLOUD_PROJECT="kathadotlife",
+                GOOGLE_APPLICATION_CREDENTIALS=str(tmp_path / "missing.json"),
+            )
+        )
+
+
+def test_embeddings_on_with_project_and_key_file_boots(tmp_path):
+    key = tmp_path / "key.json"
+    key.write_text("{}")
+    validate_production_config(
+        _settings(
+            EMBEDDINGS_ENABLED=True,
+            GOOGLE_CLOUD_PROJECT="kathadotlife",
+            GOOGLE_APPLICATION_CREDENTIALS=str(key),
         )
     )

@@ -206,7 +206,17 @@ def _atoms(a: dict) -> str:
         f"(target 20+): <b>{_e(a['median_atoms_per_storyteller_30d'])}</b></p>"
         + f"<p>Life chapters covered, storytellers per count of {_e(cov['domains'])} "
         f"— {hist}. Six or more: <b>{_e(cov['storytellers_6_plus'])}</b> "
-        "(target: half by month 3).</p>"
+        "(target: half by month 3).</p>" + _embeddings(a["embeddings"])
+    )
+
+
+def _embeddings(e: dict) -> str:
+    """SEMANTIC_RETRIEVAL.md §7 stage 5: pending should trend to zero."""
+    return (
+        f"<p>Embedded for Layer 3, all time: <b>{_e(e['atoms_embedded'])}</b> of "
+        f"{_e(e['atoms_total'])} ({_pct(e['share_embedded'])}). Pending "
+        f"<b>{_e(e['atoms_pending'])}</b>, failed <b>{_e(e['atoms_failed'])}</b> "
+        "(the hourly sweep retries both).</p>"
     )
 
 
@@ -305,6 +315,7 @@ def _cost(c: dict) -> str:
         "sarvam_stt": "Sarvam · speech to text",
         "sarvam_tts": "Sarvam · text to speech",
         "google_tts": "Google · text to speech",
+        "google_embeddings": "Google · embeddings (Mumbai)",
         "twilio": "Twilio",
         "meta": "Meta templates",
         "ses": "AWS SES · card emails",
@@ -348,6 +359,7 @@ def _cost(c: dict) -> str:
         + f"<p>Median dialogue prompt tokens by session number — {tenure}. "
         "Should stay flat as relationships lengthen.</p>"
         + _gemini_tts(c["units"]["last_30d"])
+        + _embedding_queries(c["units"]["last_30d"])
         + f"<p>Wasted outbound, 30 days: <b>{_e(wasted['count'])}</b> messages, "
         f"{_inr(wasted['inr'])} — {codes}</p>"
         + f"<p class=note>Unpriced: {unpriced}. Prices as of "
@@ -363,6 +375,17 @@ def _gemini_tts(u: dict) -> str:
         f"{_e(u['tts_gemini_audio_minutes'])} min. Said by Sarvam instead "
         f"because Gemini failed: <b>{_e(u['tts_vendor_fallbacks'])}</b> "
         f"({_pct(u['tts_vendor_fallback_rate'])}; keep under 1%).</p>"
+    )
+
+
+def _embedding_queries(u: dict) -> str:
+    """SEMANTIC_RETRIEVAL.md §7 stage 5: query fallbacks under 1% of sessions."""
+    return (
+        f"<p>Retrieval queries, 30 days: <b>{_e(u['embedding_query_calls'])}</b> "
+        f"embedded, <b>{_e(u['embedding_query_fallbacks'])}</b> fell back to "
+        f"recency ({_pct(u['embedding_query_fallback_rate'])}; keep under 1%). "
+        f"Atoms embedded: {_e(u['embedding_document_calls'])}; "
+        f"{_e(u['embedding_tokens'])} tokens.</p>"
     )
 
 

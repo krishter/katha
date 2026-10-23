@@ -326,6 +326,25 @@ async def delete_twilio_messages() -> None:
         logger.exception("Scheduler: deleting Twilio messages failed")
 
 
+async def sweep_embeddings(db_session_factory) -> None:
+    """
+    The hourly embedding retry (SEMANTIC_RETRIEVAL.md D5): up to 50 atoms
+    with no vector, or whose embedding failed. Does nothing while
+    EMBEDDINGS_ENABLED is false, and never takes the scheduler down.
+    """
+    from memory import vector_store
+
+    if not settings.EMBEDDINGS_ENABLED:
+        return
+    try:
+        async with db_session_factory() as db:
+            done = await vector_store.sweep_unembedded(db)
+        if done:
+            logger.info("Scheduler: embedded %d story atom(s)", done)
+    except Exception:
+        logger.exception("Scheduler: embedding sweep failed")
+
+
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
@@ -362,6 +381,15 @@ def create_scheduler(db_session_factory) -> AsyncIOScheduler:
         id="erase_withdrawn",
         replace_existing=True,
         misfire_grace_time=600,
+    )
+    scheduler.add_job(
+        sweep_embeddings,
+        trigger="cron",
+        minute=37,
+        kwargs={"db_session_factory": db_session_factory},
+        id="sweep_embeddings",
+        replace_existing=True,
+        misfire_grace_time=1800,
     )
     scheduler.add_job(
         initiate_sessions,

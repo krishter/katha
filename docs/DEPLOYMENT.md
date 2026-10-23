@@ -153,6 +153,36 @@ and its cost to serve (`docs/specs/ADMIN_METRICS.md`). With no token set, both a
 No Caddy change is needed: `api.katha.life` already proxies to FastAPI, and the token is the
 gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
 
+### 3b — Semantic retrieval *(off; leave it off until P2–P4 are done)*
+
+`EMBEDDINGS_ENABLED` is `false` by default, and while it is false nothing is sent to Google
+for embeddings (`docs/specs/SEMANTIC_RETRIEVAL.md`). To turn it on later:
+
+1. In Google Cloud project `kathadotlife`, create a service account with **only**
+   `roles/aiplatform.user` and download one JSON key. Never use the Gemini Developer API key
+   (`GEMINI_API_KEY`) for this, and never the global Vertex host: the code is pinned to
+   `asia-south1` and refuses any other host.
+2. Copy the key to the box **outside the repo and outside the image**, e.g.
+   `/opt/katha/secrets/vertex-embeddings.json`, `chmod 600`, owned by the deploy user. Mount
+   it into the backend container read-only at the same path. Keep a sealed copy with the
+   `.env` backup.
+3. In **`backend/.env`**:
+   ```
+   EMBEDDINGS_ENABLED=true
+   GOOGLE_CLOUD_PROJECT=kathadotlife
+   GOOGLE_APPLICATION_CREDENTIALS=/opt/katha/secrets/vertex-embeddings.json   # path inside the container
+   ```
+   Production refuses to boot with the flag on and either value empty, or with a path to a
+   file that does not exist.
+4. Run `alembic upgrade head` (adds `story_atoms.embedding_model` and an index on `user_id`),
+   restart, then `python -m scripts.backfill_embeddings --dry-run` and, once the count looks
+   right, without `--dry-run`. The hourly `sweep_embeddings` job retries anything that failed.
+5. Check `/admin/metrics/view`: atoms embedded should climb to the total, and the query
+   fallback rate should stay low.
+
+Rollback: `EMBEDDINGS_ENABLED=false` and restart. Layer 3 goes back to recency; the stored
+vectors are harmless and go with the atom on deletion.
+
 ## Step 4 — SES out of the sandbox *(start this first — it has a queue)*
 
 1. Verify the `katha.life` domain in SES **ap-south-1** (`core/auth.py` builds its client from
