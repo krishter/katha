@@ -1,0 +1,296 @@
+[
+ {
+  "id": "qK01",
+  "user_id": "synth-kamala",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "Today's topic is her own wedding day"
+ },
+ {
+  "id": "qK02",
+  "user_id": "synth-kamala",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "Her daughter's wedding and the preparations"
+ },
+ {
+  "id": "qK03",
+  "user_id": "synth-kamala",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Her father's brass shop in Madurai"
+ },
+ {
+  "id": "qK04",
+  "user_id": "synth-kamala",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "How she began learning Carnatic music as a little girl"
+ },
+ {
+  "id": "qK05",
+  "user_id": "synth-kamala",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "The schoolteacher who first noticed she could sing"
+ },
+ {
+  "id": "qK06",
+  "user_id": "synth-kamala",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Bedtime stories from her grandmother"
+ },
+ {
+  "id": "qK07",
+  "user_id": "synth-kamala",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "When heavy rains trapped the family upstairs for days"
+ },
+ {
+  "id": "qK08",
+  "user_id": "synth-kamala",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "Floods in her childhood town by the river"
+ },
+ {
+  "id": "qK09",
+  "user_id": "synth-kamala",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Teaching music to girls from the neighbourhood"
+ },
+ {
+  "id": "qK10",
+  "user_id": "synth-kamala",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "The house she grew up in"
+ },
+ {
+  "id": "qK11",
+  "user_id": "synth-kamala",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "How she coped after becoming a widow"
+ },
+ {
+  "id": "qK12",
+  "user_id": "synth-kamala",
+  "type": "cross_language",
+  "query_lang": "ta",
+  "text": "அவருடைய கணவரின் வேலை"
+ },
+ {
+  "id": "qS01",
+  "user_id": "synth-shanti",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "Today's topic is her own wedding"
+ },
+ {
+  "id": "qS02",
+  "user_id": "synth-shanti",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "Organising her daughter's wedding"
+ },
+ {
+  "id": "qS03",
+  "user_id": "synth-shanti",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "Holi at her childhood home"
+ },
+ {
+  "id": "qS04",
+  "user_id": "synth-shanti",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "The great religious gathering where the rivers meet"
+ },
+ {
+  "id": "qS05",
+  "user_id": "synth-shanti",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "Her years at university"
+ },
+ {
+  "id": "qS06",
+  "user_id": "synth-shanti",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Her father, the lawyer"
+ },
+ {
+  "id": "qS07",
+  "user_id": "synth-shanti",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "The year the family gave its gold to help the army"
+ },
+ {
+  "id": "qS08",
+  "user_id": "synth-shanti",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "The embroidery she learned from a neighbour"
+ },
+ {
+  "id": "qS09",
+  "user_id": "synth-shanti",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "Her very first teaching job"
+ },
+ {
+  "id": "qS10",
+  "user_id": "synth-shanti",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "A former pupil who rose high in government and came back to thank her"
+ },
+ {
+  "id": "qS11",
+  "user_id": "synth-shanti",
+  "type": "cross_language",
+  "query_lang": "hi",
+  "text": "शादी के बाद ससुराल के पहले दिन"
+ },
+ {
+  "id": "qS12",
+  "user_id": "synth-shanti",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "The television epic the whole lane gathered to watch"
+ },
+ {
+  "id": "qP01",
+  "user_id": "synth-prakash",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "How he first met his wife"
+ },
+ {
+  "id": "qP02",
+  "user_id": "synth-prakash",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "His own wedding day"
+ },
+ {
+  "id": "qP03",
+  "user_id": "synth-prakash",
+  "type": "look_alike",
+  "query_lang": "en",
+  "text": "His daughter's wedding"
+ },
+ {
+  "id": "qP04",
+  "user_id": "synth-prakash",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "When the trains stopped running because of the workers' protest"
+ },
+ {
+  "id": "qP05",
+  "user_id": "synth-prakash",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "His engineering college years"
+ },
+ {
+  "id": "qP06",
+  "user_id": "synth-prakash",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "Starting his railway career and his first posting"
+ },
+ {
+  "id": "qP07",
+  "user_id": "synth-prakash",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Learning Hindi from a track worker"
+ },
+ {
+  "id": "qP08",
+  "user_id": "synth-prakash",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Picking up Tamil while posted in Madras"
+ },
+ {
+  "id": "qP09",
+  "user_id": "synth-prakash",
+  "type": "cross_language",
+  "query_lang": "en",
+  "text": "Running extra trains for the pilgrim crowds at the river fair"
+ },
+ {
+  "id": "qP10",
+  "user_id": "synth-prakash",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "His hobby of capturing moments through a lens"
+ },
+ {
+  "id": "qP11",
+  "user_id": "synth-prakash",
+  "type": "paraphrase",
+  "query_lang": "en",
+  "text": "The evening the country won its first big sporting trophy"
+ },
+ {
+  "id": "qP12",
+  "user_id": "synth-prakash",
+  "type": "old_relevant",
+  "query_lang": "en",
+  "text": "What his grandfather did in the village"
+ },
+ {
+  "id": "qK13",
+  "user_id": "synth-kamala",
+  "type": "recent_control",
+  "query_lang": "en",
+  "text": "The veena her husband gave her"
+ },
+ {
+  "id": "qK14",
+  "user_id": "synth-kamala",
+  "type": "recent_control",
+  "query_lang": "en",
+  "text": "Grandchildren visiting from America"
+ },
+ {
+  "id": "qS13",
+  "user_id": "synth-shanti",
+  "type": "recent_control",
+  "query_lang": "en",
+  "text": "Her guava tree and little garden"
+ },
+ {
+  "id": "qS14",
+  "user_id": "synth-shanti",
+  "type": "recent_control",
+  "query_lang": "en",
+  "text": "Her favourite Premchand story"
+ },
+ {
+  "id": "qP13",
+  "user_id": "synth-prakash",
+  "type": "recent_control",
+  "query_lang": "en",
+  "text": "The photography club he joined after retiring"
+ },
+ {
+  "id": "qP14",
+  "user_id": "synth-prakash",
+  "type": "recent_control",
+  "query_lang": "en",
+  "text": "Meeting all his brothers and sisters at the old farm"
+ }
+]
