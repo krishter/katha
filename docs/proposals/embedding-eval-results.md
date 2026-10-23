@@ -141,3 +141,56 @@ Route A (Azure OpenAI) was not tested here; the brief didn't list it. If it stay
 - **Trigger section:** add that the old-target failure is now measured. `recency15` reached 0% of old-but-relevant targets on synthetic six-week histories, so the trigger is the domain spread, not the atom count. Also note that S2.5's top-25 and round-robin threads only surface atoms that carry open threads.
 - **Steps:** add a step: a quota check plus a rate-limited re-embedding job. Bedrock embeddings are limited by requests per minute, and Titan's default is 60.
 - **Open questions:** add the Gemini TTS endpoint question above.
+
+---
+
+## Round 2 — the query (P2, 2026-10-23)
+
+`docs/specs/SEMANTIC_RETRIEVAL.md` §3.1. Same model and call as round 1 (Vertex `gemini-embedding-001`, `asia-south1`, 1536 dimensions, L2-normalised). Runner: `scripts/embedding_eval/run_round2.py`; raw output in `scripts/embedding_eval/results/round2-20261023T171236Z.json`.
+
+### Step 0 — what real atoms look like
+
+Read-only against production (`BEGIN TRANSACTION READ ONLY`, counts only; no atom text was read out or written down):
+
+- 27 atoms from 2 profiles: one `ml-IN` storyteller (25 atoms over 6 sessions) and one `en-IN` (2).
+- `title` and `narrative` are English (Latin script) in 27 of 27. `verbatim_quote` is in the parent's own script: Malayalam in 25 of 25 for the `ml-IN` storyteller.
+- Open threads per atom: 2 to 5 (2: 4 atoms, 3: 10, 4: 10, 5: 3), about 3.4 on average. About 3.9 atoms per session, at most 6. 6 distinct domains.
+
+So the text that gets embedded (`title`, `narrative`, quote) is mostly English, and the parent's first reply is in her language. The **English-summary corpus** therefore carries the decision; the native corpus is reported alongside.
+
+### Data
+
+- **Corpus:** 138 synthetic atoms. The 108 from round 1, each with an English-summary version, plus 12 romanised code-mixed look-alikes and an 18-atom Malayalam storyteller, added because the real data is Malayalam.
+- **Queries:** 44 first replies, written by a second author (a separate agent that saw only a terse fact sheet of the targets, not the atoms). 12 drift off the session's domain, 25 have a look-alike distractor, 13 target an atom that recency would not surface. The relevance labels are machine-written and still need the owner's review.
+
+### Results (Recall@5 / MRR over 44 queries)
+
+| Shape | English corpus | Native corpus |
+|---|---|---|
+| 1 Domain name only (today's input; control) | 50% / 0.29 | 43% / 0.24 |
+| **2 First reply only** | **100% / 1.00** | **100% / 1.00** |
+| 3 Domain name + first reply | 100% / 0.96 | 100% / 0.97 |
+| 4 Domain name + opener + first reply | 98% / 0.90 | 98% / 0.93 |
+
+### Decision
+
+The rule (§3.1): highest Recall@5 wins, ties go to the simpler shape, and the bar is 80%. Shapes 2 and 3 tie at 100% on both corpora, so **shape 2, the first reply alone, wins**. It also has the higher MRR: adding the domain name pulls the ranking toward the session's domain, which is exactly what a drifting reply escapes. `core/orchestrator.py:retrieval_query` uses it. A reply of fewer than 3 words (for example "haan ji") falls back to the domain name, the only text there is; round 2 did not test that case.
+
+The domain name alone, today's query, reaches 43–50%. That confirms the round-1 finding from the other direction: the domain is a poor query.
+
+### Limits
+
+- Synthetic data, with machine-written labels. 44 queries, so one miss is 2.3 points.
+- 100% means this set does not separate shapes 2 and 3 on recall; MRR does.
+
+## Vertex AI terms (step 4 / P4, read 2026-10-23)
+
+**Training: supported.** Google Cloud Service Specific Terms, "AI / ML Services", **Section 18 (Training Restriction)**: "Google will not use Customer Data to train or fine-tune any AI/ML models without Customer's prior permission or instruction." It is not limited to generative models, so it covers embedding requests. Google's Vertex data-governance page says the same and adds that it "applies to all managed models … including GA and pre-GA models".
+
+**Retention:**
+- Section 20(h): absent instruction, Google will not store prompted Customer Data "for longer than is reasonably necessary to create the Generated Output". This applies only if the embedding model is a "Generative AI Service" on Google's list; I did not confirm that.
+- The data-governance page says Gemini models cache Customer Data in memory for at most 24 hours, and "may log prompts to detect potential abuse".
+- Section 34 lets "Google Frontier Models" keep prompts for up to 30 days for automated safety review. Which models carry that designation is not on a fixed list, and I did not find `gemini-embedding-001` described as one. That is unconfirmed rather than ruled out.
+- Embedding requests have no `store: false` switch.
+
+**Residency: not covered.** Google's data-residency table (`docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/data-residency`, last updated 2026-10-22) marks `gemini-embedding-001` as supported for ML processing only in the **US and EU multi-regions**, and not in **India (asia-south1)**. Of the embedding models, only `text-embedding-005`, which is English-only, is marked for India; Gemini 2.5 Flash, for comparison, is. So the `asia-south1` endpoint is where the request goes, but Google does not commit that this model's processing stays in India. Stored vectors are in Katha's own Postgres in Mumbai either way. This is the P1 question; per the spec it does not block, but it does change what the privacy page may claim.

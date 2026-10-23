@@ -211,3 +211,50 @@ def test_a_conversation_card_send_is_priced_like_a_template():
         None,
     )
     assert set(pricing.cost_breakdown(row)) == {"twilio", "meta"}
+
+
+# ── Vertex AI embeddings (SEMANTIC_RETRIEVAL.md §5.1) ──────────────────────
+
+
+def test_google_embeddings_price_at_15_cents_per_million_tokens():
+    row = _row(
+        "google_embeddings",
+        "embed_document",
+        {"tokens": 1_000_000},
+        model="gemini-embedding-001@1536",
+    )
+    parts = pricing.cost_breakdown(row)
+    assert parts == {"google_embeddings": Decimal("0.15") * pricing.usd_inr_rate()}
+
+
+def test_google_embeddings_query_is_priced_the_same():
+    row = _row(
+        "google_embeddings",
+        "embed_query",
+        {"tokens": 40},
+        model="gemini-embedding-001@1536",
+    )
+    usd = Decimal(40) * Decimal("0.15") / Decimal(1_000_000)
+    assert pricing.cost_inr(row) == usd * pricing.usd_inr_rate()
+
+
+def test_a_query_fallback_prices_at_zero_not_unpriced():
+    row = _row(
+        "google_embeddings",
+        "embed_query_fallback",
+        {"reason": "timeout"},
+        model="gemini-embedding-001@1536",
+    )
+    assert pricing.cost_breakdown(row) == {}
+    assert pricing.cost_inr(row) == Decimal(0)
+
+
+def test_an_unknown_embedding_model_is_unpriced():
+    row = _row("google_embeddings", "embed_query", {"tokens": 40}, model="other@768")
+    assert pricing.cost_breakdown(row) is None
+    assert pricing.is_priced("google_embeddings", "gemini-embedding-001@1536")
+    assert not pricing.is_priced("google_embeddings", "other@768")
+
+
+def test_google_embeddings_is_a_component():
+    assert "google_embeddings" in pricing.COMPONENTS

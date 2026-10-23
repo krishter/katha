@@ -45,6 +45,8 @@ NOW = datetime(2026, 10, 16, 12, 0, tzinfo=timezone.utc)
 EXCLUDED = frozenset({"user_excl", "user_not_present"})
 TOKEN = "a" * 40
 
+VECTOR_MARKER = 0.0123456789
+
 PII_MARKERS = [
     "Kamala Zz-Marker",
     "+910000000001",
@@ -197,9 +199,19 @@ async def _seed(db) -> dict[str, uuid.UUID]:
         ("user_c", "c_consent", "childhood", 3, utc(10, 10, 5)),
         ("user_excl", "x1", "wisdom", 5, utc(10, 15, 5)),
     ]
+    # Semantic retrieval (SEMANTIC_RETRIEVAL.md §5.8): a1 and a2 embedded,
+    # b1 failed, the rest pending. The vector carries a marker value that
+    # must never reach the page.
+    embedded = {"a1", "a2"}
+    failed = {"b1"}
     atom_ids = []
     for user, session, domain, score, created in atoms:
         atom = StoryAtom(
+            embedding=[VECTOR_MARKER] * 1536 if session in embedded else None,
+            embedding_model=(
+                "gemini-embedding-001@1536" if session in embedded else None
+            ),
+            embedding_failed=session in failed,
             session_id=ids[session],
             user_id=user,
             domain=domain,
@@ -610,6 +622,14 @@ async def test_story_atoms(world):
         "histogram": {0: 0, 1: 2, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 0, 8: 0},
         "storytellers_6_plus": 1,
     }
+    # Counts only: never a vector, title or narrative.
+    assert a["embeddings"] == {
+        "atoms_total": 10,
+        "atoms_embedded": 2,
+        "atoms_failed": 1,
+        "atoms_pending": 7,
+        "share_embedded": 0.2,
+    }
 
 
 async def test_memory_cards(world):
@@ -666,6 +686,8 @@ async def test_cost(world):
         "sarvam_tts": 4.50,
         # Gemini TTS; none in this fixture (see tests/test_metrics_tts.py).
         "google_tts": 0.0,
+        # Embeddings; flag off, so no ledger rows.
+        "google_embeddings": 0.0,
         "twilio": 1.43,
         "meta": 0.12,
         "ses": 0.0,
@@ -691,6 +713,15 @@ async def test_cost(world):
     assert units["tts_vendor_fallback_rate"] is None
     assert units["messages_in"] == 1
     assert units["messages_out"] == 2
+    # Present and zero with the flag off.
+    for key in (
+        "embedding_tokens",
+        "embedding_document_calls",
+        "embedding_query_calls",
+        "embedding_query_fallbacks",
+    ):
+        assert units[key] == 0, key
+    assert units["embedding_query_fallback_rate"] is None
 
     # 2000 read / (2000 + 0 written + 4300 uncached)
     assert cost["dialogue_cache_hit_rate"] == 0.317
@@ -838,6 +869,9 @@ async def test_no_personal_data_in_json_or_html(real_db, monkeypatch):
     body = json.dumps(as_json.json()) + as_html.text
     for marker in PII_MARKERS:
         assert marker not in body, marker
+    # No embedding vector, in any form.
+    assert str(VECTOR_MARKER) not in body
+    assert "0.01234" not in body
     # Nor any phone number, email hash, or Twilio message SID from the ledger.
     for leaked in ("+9100000", "hdeleted", "SMin1", "SMout1", "SMcard1", "203.0.113.7"):
         assert leaked not in body, leaked

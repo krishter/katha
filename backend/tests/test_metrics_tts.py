@@ -67,3 +67,56 @@ def test_the_page_shows_the_fallback_rate_against_its_target():
     html = _gemini_tts(metrics._units(ROWS))
     assert "<b>3</b> clips" in html
     assert "<b>1</b>" in html and "keep under 1%" in html
+
+
+# ── Embeddings never count as TTS (SEMANTIC_RETRIEVAL.md §5.1, §5.8) ──────
+
+_TAG = "gemini-embedding-001@1536"
+EMBEDDING_ROWS = [
+    row("google_embeddings", "embed_document", _TAG, {"tokens": 60}),
+    row("google_embeddings", "embed_document", _TAG, {"tokens": 80}),
+    row("google_embeddings", "embed_query", _TAG, {"tokens": 40}),
+    row(
+        "google_embeddings",
+        "embed_query_fallback",
+        "gemini-embedding-001@1536",
+        {"reason": "timeout"},
+    ),
+]
+
+
+def test_embedding_rows_leave_the_tts_figures_unchanged():
+    tts_only = metrics._units(ROWS)
+    mixed = metrics._units(ROWS + EMBEDDING_ROWS)
+    for key in (
+        "tts_gemini_clips",
+        "tts_gemini_audio_minutes",
+        "tts_vendor_fallbacks",
+        "tts_vendor_fallback_rate",
+        "tts_characters",
+    ):
+        assert mixed[key] == tts_only[key], key
+
+
+def test_embedding_units_are_counted():
+    u = metrics._units(ROWS + EMBEDDING_ROWS)
+    assert u["embedding_tokens"] == 180
+    assert u["embedding_document_calls"] == 2
+    assert u["embedding_query_calls"] == 1
+    assert u["embedding_query_fallbacks"] == 1
+    assert u["embedding_query_fallback_rate"] == 0.5
+
+
+def test_embedding_units_are_zero_with_no_rows():
+    u = metrics._units(ROWS)
+    assert u["embedding_tokens"] == 0
+    assert u["embedding_document_calls"] == 0
+    assert u["embedding_query_calls"] == 0
+    assert u["embedding_query_fallbacks"] == 0
+    assert u["embedding_query_fallback_rate"] is None
+
+
+def test_embeddings_have_their_own_cost_component():
+    parts = pricing.cost_breakdown(EMBEDDING_ROWS[0])
+    assert set(parts) == {"google_embeddings"}
+    assert "google_tts" not in parts

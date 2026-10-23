@@ -38,7 +38,7 @@ class StoryAtom(Base):
         ForeignKey("turns.id", ondelete="SET NULL"),
         nullable=True,
     )
-    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     domain: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     narrative: Mapped[str] = mapped_column(Text, nullable=False)
@@ -57,6 +57,11 @@ class StoryAtom(Base):
     embedding: Mapped[Optional[List[float]]] = mapped_column(
         Vector(1536), nullable=True
     )
+    # Which model and size made `embedding` (adapters/gemini_embeddings.py
+    # MODEL_TAG). Retrieval filters on it: vectors from two models are not
+    # comparable, and mixing them is silently wrong rather than an error.
+    embedding_model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Set when embedding this atom failed; the hourly sweep retries it.
     embedding_failed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )

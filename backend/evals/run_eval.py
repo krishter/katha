@@ -4361,6 +4361,236 @@ STORY_CASES = {
 }
 
 
+# ── Semantic retrieval, end to end (SEMANTIC_RETRIEVAL.md §6) ──────────────
+#
+# The history the strategy doc's probe used: six domains, childhood told
+# first. Shaped like the self-trial's real atoms (step 0 of §3.1): three to
+# four atoms a session, every atom carrying open threads. By session 13 the
+# newest 25 atoms hold no childhood at all, so recency renders none of it.
+# The adapter is a stub (word overlap, hashed into 1536 dimensions): this
+# case tests the plumbing and the ordering, and sets SEMANTIC_TOP_K and
+# SEMANTIC_THREADS_FIRST. The offline evaluation tested the model.
+
+_RETRIEVAL_HISTORY = [
+    # (session, domain, title, narrative, threads)
+    (
+        1,
+        "childhood",
+        "Father's brass shop",
+        "Her father kept a brass shop near the temple in Madurai; after school she polished the vessels.",
+        ["name of the shop", "the boy who worked there", "what sold best at Deepavali"],
+    ),
+    (
+        1,
+        "childhood",
+        "The courtyard swing",
+        "The house had an open courtyard and a wooden swing where her mother sang.",
+        ["the songs her mother sang", "where the swing went", "the tulsi stand"],
+    ),
+    (
+        1,
+        "childhood",
+        "Chithirai festival",
+        "Her father carried her on his shoulders at the Chithirai festival.",
+        ["what they bought at the fair", "the paper fan", "the crowd"],
+    ),
+    (
+        2,
+        "childhood",
+        "Flood in the street",
+        "When she was ten the river flooded the street and she floated paper boats.",
+        ["her brother's name", "where they slept that night", "the neighbours"],
+    ),
+    (
+        2,
+        "childhood",
+        "Pallanguzhi summers",
+        "Summers at her grandmother's village playing pallanguzhi with cousins.",
+        ["the cousins' names", "the village", "grandmother's cooking"],
+    ),
+]
+_RETRIEVAL_OTHER = {
+    "family_ancestors": [
+        "grandmother's stories",
+        "the uncle in Colombo",
+        "the family deity",
+        "her mother's village",
+        "the Colombo letters",
+        "the ancestral house",
+    ],
+    "education": [
+        "the singing teacher",
+        "the walk to school",
+        "stopping after tenth",
+        "the school prize",
+        "the headmistress",
+        "the exam results",
+    ],
+    "career": [
+        "the first music students",
+        "the radio audition",
+        "the temple cassette",
+        "the forty students",
+        "the first concert",
+        "the sabha invitation",
+    ],
+    "love_marriage": [
+        "the wedding night music",
+        "the move to Madras",
+        "Sunday coffee",
+        "the anniversary veena",
+        "the first quarrel",
+        "the silver jubilee",
+    ],
+    "hobbies": [
+        "the kolam contest",
+        "the jasmine terrace",
+        "the December season",
+        "the veena practice",
+        "the rangoli colours",
+        "the bhajan group",
+    ],
+}
+
+
+def _bag_vector(text: str) -> list[float]:
+    import hashlib as _h
+    import math as _m
+
+    v = [0.0] * 1536
+    for word in re.findall(r"[a-z]+", text.lower()):
+        if len(word) > 3:
+            v[int(_h.sha1(word.encode()).hexdigest(), 16) % 1536] += 1.0
+    norm = _m.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+
+async def retrieval(db):
+    from memory import vector_store
+    from prompts.system_prompt import _MAX_RENDERED_THREADS
+
+    uid = "eval-retrieval"
+    await cleanup(db, uid)
+    await seed_profile(db, uid)
+    rows = list(_RETRIEVAL_HISTORY)
+    session = 3
+    for i, (domain, topics) in enumerate(_RETRIEVAL_OTHER.items()):
+        for j, topic in enumerate(topics):
+            # Two sessions per domain, three atoms a session.
+            s_no = 3 + i * 2 + j // 3
+            rows.append(
+                (
+                    s_no,
+                    domain,
+                    topic.title(),
+                    f"She told of {topic}.",
+                    [
+                        f"{topic}: who was there",
+                        f"{topic}: when",
+                        f"{topic}: why it mattered",
+                    ],
+                )
+            )
+            session = max(session, s_no)
+    sessions = {}
+    for s_no in sorted({r[0] for r in rows}):
+        sid = uuid.uuid4()
+        db.add(
+            Session(
+                id=sid,
+                user_id=uid,
+                session_number=s_no,
+                domain="childhood",
+                status="closed",
+            )
+        )
+        sessions[s_no] = sid
+    await db.commit()
+    domain_of: dict[str, str] = {}
+    atoms = []
+    base = datetime(2026, 9, 1, 5, 0, tzinfo=timezone.utc)
+    for n, (s_no, domain, title, narrative, threads) in enumerate(rows):
+        atom = StoryAtom(
+            session_id=sessions[s_no],
+            user_id=uid,
+            domain=domain,
+            title=title,
+            narrative=narrative,
+            open_threads=threads,
+            completeness_score=3,
+            created_at=base.replace(day=s_no, minute=n % 60),
+        )
+        db.add(atom)
+        atoms.append(atom)
+        for t in threads:
+            domain_of[t] = domain
+    await db.commit()
+    target = set(_RETRIEVAL_HISTORY[0][4])
+
+    async def stub(text, *, kind):
+        return _bag_vector(text)
+
+    saved = (
+        settings.EMBEDDINGS_ENABLED,
+        settings.SEMANTIC_TOP_K,
+        settings.SEMANTIC_THREADS_FIRST,
+    )
+    real_embed = orchestrator.gemini_embeddings.embed
+    orchestrator.gemini_embeddings.embed = stub
+    vector_store.gemini_embeddings.embed = stub
+    reply = "Appa had a brass shop near the temple, I sat there after school polishing vessels"
+    evidence, passed = [], False
+    try:
+        settings.EMBEDDINGS_ENABLED = True
+        await vector_store.embed_atoms(atoms, db)
+
+        def shape(threads):
+            shown = threads[:_MAX_RENDERED_THREADS]
+            return (
+                len(target & set(shown)),
+                sum(1 for t in shown if domain_of.get(t) == "childhood"),
+                len({domain_of.get(t) for t in shown}),
+            )
+
+        settings.EMBEDDINGS_ENABLED = False
+        off = await orchestrator.build_prior_context(
+            uid, "childhood", db, query_text=reply
+        )
+        t, c, d = shape(off.open_threads)
+        evidence.append(
+            f"flag off (recency): shop threads {t}/3, childhood threads {c}, domains {d}"
+        )
+        settings.EMBEDDINGS_ENABLED = True
+        grid = {}
+        for k in (2, 4, 8, 12):
+            for first in (2, 4, 6, 8, 12):
+                settings.SEMANTIC_TOP_K, settings.SEMANTIC_THREADS_FIRST = k, first
+                on = await orchestrator.build_prior_context(
+                    uid, "childhood", db, query_text=reply
+                )
+                grid[(k, first)] = shape(on.open_threads)
+        evidence.append("k  first  shop/3  childhood  domains (of the 12 rendered)")
+        for (k, first), (t, c, d) in grid.items():
+            evidence.append(f"{k:<3}{first:<7}{t:<8}{c:<11}{d}")
+        t, c, d = grid[(8, 6)]
+        # The spec's bar: childhood threads appear when the session talks
+        # about childhood. Breadth kept: at least four of six domains.
+        passed = t >= 1 and c >= 1 and d >= 4
+        evidence.append(
+            f"at 8/6: shop threads {t}/3, childhood {c}, domains {d} -> {'PASS' if passed else 'FAIL'}"
+        )
+    finally:
+        (
+            settings.EMBEDDINGS_ENABLED,
+            settings.SEMANTIC_TOP_K,
+            settings.SEMANTIC_THREADS_FIRST,
+        ) = saved
+        orchestrator.gemini_embeddings.embed = real_embed
+        vector_store.gemini_embeddings.embed = real_embed
+        await cleanup(db, uid)
+    record("RETRIEVAL", "objective", passed, "\n".join(evidence))
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -4426,6 +4656,7 @@ async def main():
         "consent": consent,
         "withdraw": withdraw,
         "privacy": privacy,
+        "retrieval": retrieval,
     }
     global SAMPLE
     runs = [

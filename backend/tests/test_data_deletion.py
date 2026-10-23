@@ -289,3 +289,18 @@ def test_delete_removes_conversation_card_images(db):
         "cards/conv/a-1.png",
         "cards/conv/b-2.png",
     }
+
+
+def test_delete_removes_story_atoms_and_so_their_embeddings(db):
+    """SEMANTIC_RETRIEVAL.md §5.7: a vector lives in its story_atoms row,
+    so the DELETE of her atoms is what removes her embeddings. Checked
+    against real Postgres in tests/integration/test_deletion_e2e.py."""
+    db.execute = AsyncMock(side_effect=_default_execute_results())
+
+    with patch("core.erasure.storage.delete_media", new=AsyncMock()):
+        client.request("DELETE", f"/user/{_USER_ID}")
+
+    statements = [str(c.args[0]).upper() for c in db.execute.await_args_list]
+    assert any(
+        s.startswith("DELETE FROM STORY_ATOMS") and "USER_ID" in s for s in statements
+    )
