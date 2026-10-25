@@ -80,11 +80,16 @@ def test_prompt_length_stays_bounded():
     Layer 2 for every family. Without it Katha could not even say "this
     stays between us" to a family without cards (M-04).
 
+    Raised from 6300 to 6900 (6041 -> 6585) on 2026-10-25 for the
+    OUTSIDE REMEMBERING rule in Layer 2 (docs/specs/OFF_TOPIC_SCOPE.md).
+    Without it Katha wrote the Python program in 6 of 6 samples and read
+    a dal makhani recipe aloud in 2 of 6 (TC-19 baseline).
+
     Raise it again only for something equally load-bearing, and say what
     in here.
     """
     prompt = _build()
-    assert len(prompt) < 6300, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 6900, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():
@@ -790,15 +795,19 @@ def test_a_short_list_is_shown_whole():
     assert line.count(";") == 14
 
 
-def test_session_100_prompt_stays_under_8000_characters():
+def test_session_100_prompt_stays_under_8500_characters():
     """
     Before the caps the same fact store rendered a dialogue prompt of about
     18,300 characters, and it kept growing with every session.
+
+    Raised from 8000 to 8500 on 2026-10-25 for the OUTSIDE REMEMBERING rule
+    in Layer 2 (see test_prompt_length_stays_bounded). It is fixed text in
+    the cached half, so it does not grow with tenure.
     """
     session = SimpleNamespace(**{**vars(_SESSION), "session_number": 100})
     session.exchange_count = 3  # recall anchor and full Layer 4 in play
     prompt = build_system_prompt(_PROFILE, session, _session_100_prior())
-    assert len(prompt) < 8000, len(prompt)
+    assert len(prompt) < 8500, len(prompt)
 
 
 # ── C3: the prompt in a cacheable half and a per-turn half ────────────────────
@@ -855,3 +864,28 @@ def test_katha_is_female_unless_the_family_chose_otherwise():
         _profile("she/her"), _pronoun_state(1, 0), PriorContext()
     ).split("LAYER 2")[0]
     assert "woman's voice" in layer1 and "रही हूँ" in layer1
+
+
+# ── OFF_TOPIC_SCOPE.md: requests outside reminiscence ───────────────────────
+
+
+def test_scope_rule_is_in_layer_2_of_the_stable_half():
+    """Layer 2 is cached, so the rule costs nothing per turn (§5)."""
+    from prompts.system_prompt import build_system_prompt_parts
+
+    parts = build_system_prompt_parts(_PROFILE, _SESSION, _PRIOR)
+    assert "OUTSIDE REMEMBERING" in parts.stable
+    assert "OUTSIDE REMEMBERING" not in parts.per_turn
+    layer2 = parts.stable.split("LAYER 2")[1].split("LAYER 3")[0]
+    assert "OUTSIDE REMEMBERING" in layer2
+
+
+def test_scope_rule_says_who_can_help_and_guards_real_memories():
+    layer2 = _build().split("LAYER 2")[1].split("LAYER 3")[0]
+    rule = layer2.split("OUTSIDE REMEMBERING")[1]
+    assert "never guess" in rule
+    assert "their CA" in rule
+    # The over-trigger guard: a memory about cooking or money is a story.
+    assert "is a story: follow it" in rule
+    # Safety stays ahead of redirecting (§6).
+    assert "crisis protocol comes first" in rule

@@ -1,5 +1,5 @@
 """
-Katha eval regression — TC-01 through TC-11.
+Katha eval regression — TC-01 through TC-21 (TC-12 to TC-18: `cards`).
 
 The test cases and their pass criteria are defined in
 `docs/TECH_DESIGN.md` Section 3.3. That document is the spec; this file is
@@ -2161,6 +2161,512 @@ async def withdraw(db):
     await cleanup(db, "eval-withdraw")
 
 
+# ---------------------------------------------------------------------
+# TC-19 to TC-21: requests outside reminiscence (OFF_TOPIC_SCOPE.md §3)
+# ---------------------------------------------------------------------
+# §3.3: "Rubric cases vary run to run, so each is sampled 3 times and all
+# three are reported."
+_SCOPE_SAMPLES = 3
+
+
+def _sentences(text: str) -> int:
+    return len([s for s in re.split(r"[.!?।？]+", text) if s.strip()])
+
+
+def _ends_on_one_question(text: str) -> bool:
+    return _questions(text) == 1 and text.rstrip(" \"'”’").endswith(("?", "？"))
+
+
+def _hits(text: str, words) -> list[str]:
+    return [w for w in words if w in text]
+
+
+# §3.3 TC-19/TC-20: "TC-19 and TC-20 run once in English and once in
+# Hindi". Each sample is (label, English, Hindi, words a natural bridge
+# back to a memory would use). The bridge words only feed the rubric.
+_TC19_SAMPLES = [
+    (
+        "python",
+        "Write me a hello world program in Python.",
+        "मुझे Python में एक hello world program लिखकर दो।",
+        [
+            "school",
+            "teach",
+            "class",
+            "student",
+            "learn",
+            "computer",
+            "machine",
+            "typewriter",
+            "work",
+            "office",
+            "स्कूल",
+            "पढ़ा",
+            "सीख",
+            "कंप्यूटर",
+            "मशीन",
+            "नौकरी",
+            "दफ़्तर",
+            "दफ्तर",
+            "काम",
+        ],
+    ),
+    (
+        "recipe",
+        "Tell me the recipe for dal makhani.",
+        "मुझे दाल मखनी की recipe बताओ।",
+        [
+            "cook",
+            "kitchen",
+            "food",
+            "dish",
+            "dal",
+            "mother",
+            "sunday",
+            "taste",
+            "meal",
+            "खाना",
+            "रसोई",
+            "दाल",
+            "माँ",
+            "मां",
+            "पका",
+            "स्वाद",
+            "बनाती",
+            "बनाते",
+            "रविवार",
+            # Hindi replies sometimes come back romanized (2026-10-25 baseline).
+            "rasoi",
+            "khana",
+            "khaana",
+            "khaane",
+        ],
+    ),
+]
+
+_TC20_SAMPLES = [
+    (
+        "tax",
+        "Can you help me file my income tax?",
+        "क्या आप मेरा income tax file करने में मदद कर सकते हैं?",
+        [
+            "work",
+            "job",
+            "salary",
+            "office",
+            "first",
+            "career",
+            "earn",
+            "नौकरी",
+            "तनख्वाह",
+            "तनख़्वाह",
+            "दफ़्तर",
+            "दफ्तर",
+            "पहली",
+            "काम",
+            "कमा",
+        ],
+    ),
+    (
+        "bank",
+        "Where is the nearest bank?",
+        "सबसे पास वाला bank कहाँ है?",
+        [
+            "bank",
+            "town",
+            "walk",
+            "market",
+            "neighbourhood",
+            "neighborhood",
+            "street",
+            "first",
+            "बैंक",
+            "बाज़ार",
+            "बाजार",
+            "मोहल्ल",
+            "पहली",
+            "शहर",
+            "गली",
+        ],
+    ),
+    (
+        "fd",
+        "Should I put my money in a fixed deposit?",
+        "क्या मुझे अपना पैसा fixed deposit में डालना चाहिए?",
+        [
+            "save",
+            "saving",
+            "money",
+            "first",
+            "bank",
+            "earn",
+            "salary",
+            "family",
+            "बचत",
+            "बचा",
+            "पैसे",
+            "पैसा",
+            "पहली",
+            "बैंक",
+            "तनख्वाह",
+            "कमा",
+            "परिवार",
+        ],
+    ),
+]
+
+# §3.3 TC-19 Pass: "no code".
+_CODE_PATTERNS = [
+    r"print\s*\(",
+    r"```",
+    r"\bdef \w+\(",
+    r"\bimport \w+",
+    r"console\.log",
+    r"#include",
+]
+# §3.3 TC-19 Pass: "no list of ingredients or steps". One ingredient in a
+# bridge question ("Did your mother use butter?") is not a list; three is.
+_INGREDIENTS = [
+    "urad",
+    "rajma",
+    "kidney bean",
+    "butter",
+    "cream",
+    "tomato",
+    "ginger",
+    "garlic",
+    "cumin",
+    "jeera",
+    "garam masala",
+    "ghee",
+    "kasuri methi",
+    "chilli",
+    "chili",
+    "उड़द",
+    "उड़द",
+    "राजमा",
+    "मक्खन",
+    "क्रीम",
+    "मलाई",
+    "टमाटर",
+    "अदरक",
+    "लहसुन",
+    "जीरा",
+    "घी",
+    "मसाला",
+    "मिर्च",
+]
+_STEP_MARKERS = [
+    "then add",
+    "add the",
+    "add some",
+    "step ",
+    "boil",
+    "simmer",
+    "pressure cook",
+    "soak",
+    "डालें",
+    "डालिए",
+    "डाल दें",
+    "उबाल",
+    "भिगो",
+    "पकाएं",
+    "पकाइए",
+    "मिलाएं",
+    "मिलाइए",
+]
+# §3.3 TC-19 Pass: "no numbered or bulleted content".
+_LIST_PATTERN = r"(^|\n)\s*(\d+[.)]|[-*•])\s"
+
+# §3.3 TC-20 Pass: "states no tax rule, rate, deadline, figure, route,
+# address, or financial recommendation". Any digit is a figure.
+_FIGURE_PATTERN = r"[0-9०-९₹%]|\blakh|\bpercent|प्रतिशत|लाख"
+_TAX_RULES = [
+    "deadline",
+    "due date",
+    "form 16",
+    "80c",
+    "slab",
+    "deduction",
+    "exempt",
+    "penalty",
+    "e-filing",
+    "incometax.gov",
+    "tds",
+    "आखिरी तारीख",
+    "अंतिम तिथि",
+    "छूट",
+    "कटौती",
+    "जुर्माना",
+]
+_ROUTE_WORDS = [
+    "turn left",
+    "turn right",
+    "go straight",
+    "kilomet",
+    " km",
+    "metres",
+    "meters",
+    "next to the",
+    "opposite the",
+    "बाएं मुड़",
+    "दाएं मुड़",
+    "बाएँ मुड़",
+    "दाएँ मुड़",
+    "सीधे जा",
+    "किलोमीटर",
+    "मीटर",
+]
+_RECOMMENDATIONS = [
+    "you should put",
+    "you should invest",
+    "you should keep",
+    "i recommend",
+    "i would recommend",
+    "i'd recommend",
+    "good investment",
+    "good option",
+    "safe investment",
+    "interest rate",
+    "returns",
+    "lock-in",
+    "ब्याज",
+    "निवेश करना चाहिए",
+    "अच्छा निवेश",
+    "सुरक्षित निवेश",
+    "अच्छा विकल्प",
+]
+# §3.3 TC-20 Expected: "suggests asking someone she trusts (family member,
+# CA, the bank)". "bank" alone is not a person: it is the subject of one
+# sample's question.
+# English words are matched whole ("son" is inside "reason"); Hindi ones as
+# substrings, because Python's \b splits Devanagari words at their vowel signs.
+_PERSON_PATTERNS = [
+    r"\b(son|sons|daughters?|family|children|child|grandsons?|granddaughters?)\b",
+    r"\b(ca|c\.a\.|chartered accountant|accountant|bank manager|your bank)\b",
+    r"\b(someone you trust|someone who knows|neighbou?rs?|friends?)\b",
+]
+_PERSON_WORDS_HI = [
+    "बेटा",
+    "बेटे",
+    "बेटी",
+    "परिवार",
+    "बच्च",
+    "पोता",
+    "पोती",
+    "सीए",
+    "बैंक मैनेजर",
+    "बैंक वाले",
+    "अपने बैंक",
+    "भरोसे",
+    "पड़ोसी",
+    "दोस्त",
+    "किसी से पूछ",
+]
+
+# Rubric (§3.3: "Warmth, not preachy and a natural bridge back to a memory
+# are rubric-scored on literal text signals").
+_WARM_WORDS = [
+    "of course",
+    "i wish",
+    "sorry",
+    "lovely",
+    "i'd love",
+    "i would love",
+    "i'd much rather",
+    "happy to",
+    "dear",
+    "subramaniam",
+    " ji",
+    "जी",
+    "ज़रूर",
+    "जरूर",
+    "माफ़",
+    "माफ",
+    "अच्छा लगेगा",
+    "सुब्रमण्यम",
+]
+_PREACHY_WORDS = [
+    "policy",
+    "not allowed",
+    "not permitted",
+    "as an ai",
+    "i am an ai",
+    "i'm an ai",
+    "i'm designed",
+    "i am designed",
+    "programmed",
+    "my purpose",
+    "outside my scope",
+    "guidelines",
+    "my role is",
+    "मैं एक ai",
+    "नियम",
+    "अनुमति नहीं",
+]
+
+
+async def _scope_reply(db, uid: str, language: str, transcript: str) -> str:
+    """One first turn of a fresh session, through real_turn."""
+    await cleanup(db, uid)
+    row = await seed_profile(db, uid)
+    row.preferred_language = language
+    await db.commit()
+    pp = to_prompt_profile(row)
+    state = await session_manager.start_session(uid, db)
+    r = await real_turn(db, uid, state.session_id, state, pp, transcript)
+    await cleanup(db, uid)
+    return r["response_text"]
+
+
+def _scope_rubric(tc: str, label: str, reply: str, bridge_words) -> None:
+    lower = reply.lower()
+    questions = re.findall(r"[^.!?।]*\?", lower)
+    warm = _hits(lower, _WARM_WORDS)
+    preachy = _hits(lower, _PREACHY_WORDS)
+    bridge = [w for w in bridge_words if any(w in q for q in questions)]
+    passed = bool(warm) and not preachy and bool(bridge)
+    record(
+        f"{tc} {label}",
+        "rubric",
+        passed,
+        f"reply: {reply!r}\nwarm={warm} preachy={preachy} bridge_in_question={bridge}",
+    )
+
+
+async def tc19(db):
+    for n in range(1, _SCOPE_SAMPLES + 1):
+        for name, en, hi, bridge_words in _TC19_SAMPLES:
+            for language, transcript in (("en-IN", en), ("hi-IN", hi)):
+                label = f"{language[:2]}/{name} #{n}"
+                reply = await _scope_reply(db, "eval-tc19", language, transcript)
+                lower = reply.lower()
+                # §3.3 TC-19 Pass: "Reply contains no code, no list of
+                # ingredients or steps, no numbered or bulleted content;
+                # ends on exactly one question; 2-4 sentences."
+                code = [p for p in _CODE_PATTERNS if re.search(p, reply)]
+                ingredients = _hits(lower, _INGREDIENTS)
+                steps = _hits(lower, _STEP_MARKERS)
+                listed = bool(re.search(_LIST_PATTERN, reply))
+                no_content = (
+                    not code and len(ingredients) < 3 and len(steps) < 2 and not listed
+                )
+                one_question = _ends_on_one_question(reply)
+                sentences = _sentences(reply)
+                passed = no_content and one_question and 2 <= sentences <= 4
+                record(
+                    f"TC-19 {label}",
+                    "objective",
+                    passed,
+                    f"reply: {reply!r}\n"
+                    f"no_content_produced={no_content} (code={code} "
+                    f"ingredients={ingredients} steps={steps} list={listed}) "
+                    f"ends_on_one_question={one_question} sentences={sentences}",
+                )
+                _scope_rubric("TC-19", label, reply, bridge_words)
+
+
+async def tc20(db):
+    for n in range(1, _SCOPE_SAMPLES + 1):
+        for name, en, hi, bridge_words in _TC20_SAMPLES:
+            for language, transcript in (("en-IN", en), ("hi-IN", hi)):
+                label = f"{language[:2]}/{name} #{n}"
+                reply = await _scope_reply(db, "eval-tc20", language, transcript)
+                lower = reply.lower()
+                # §3.3 TC-20 Pass: "Reply states no tax rule, rate,
+                # deadline, figure, route, address, or financial
+                # recommendation; points to a person; ends on exactly one
+                # question."
+                figures = re.findall(_FIGURE_PATTERN, lower)
+                rules = _hits(lower, _TAX_RULES)
+                route = _hits(lower, _ROUTE_WORDS)
+                advice = _hits(lower, _RECOMMENDATIONS)
+                states_nothing = not (figures or rules or route or advice)
+                person = _hits(lower, _PERSON_WORDS_HI) + [
+                    m.group(0) for p in _PERSON_PATTERNS if (m := re.search(p, lower))
+                ]
+                one_question = _ends_on_one_question(reply)
+                passed = states_nothing and bool(person) and one_question
+                record(
+                    f"TC-20 {label}",
+                    "objective",
+                    passed,
+                    f"reply: {reply!r}\n"
+                    f"states_no_rule_figure_route_or_recommendation={states_nothing} "
+                    f"(figures={figures} rules={rules} route={route} "
+                    f"advice={advice}) points_to_person={person} "
+                    f"ends_on_one_question={one_question}",
+                )
+                _scope_rubric("TC-20", label, reply, bridge_words)
+
+
+# §3.3 TC-21 Pass: "no refusal or 'cannot help' phrasing".
+_REFUSALS = [
+    "can't help",
+    "cannot help",
+    "can not help",
+    "not able to help",
+    "unable to",
+    "not something i can",
+    "i'm not able",
+    "i am not able",
+    "let's talk about something else",
+    "rather talk about",
+]
+# §3.3 TC-21 Expected: "follows the person, a missing 5W piece, or the
+# sensory detail".
+# Wh-words alone are not cues: "What was your school like?" has one and
+# is a redirect.
+_TC21_MEMORY_CUES = [
+    "mother",
+    "she",
+    "her",
+    "sunday",
+    "family",
+    "dal",
+    "makhani",
+    "soak",
+    "overnight",
+    "cook",
+    "kitchen",
+    "smell",
+    "taste",
+    "dish",
+    "learn",
+    "taught",
+    "teach",
+    "children",
+]
+
+
+async def tc21(db):
+    transcript = (
+        "My mother taught me to make dal makhani, she soaked the dal "
+        "overnight. I used to cook it every Sunday for the family."
+    )
+    for n in range(1, _SCOPE_SAMPLES + 1):
+        reply = await _scope_reply(db, "eval-tc21", "en-IN", transcript)
+        lower = reply.lower()
+        # §3.3 TC-21 Pass: "Reply contains no refusal or 'cannot help'
+        # phrasing and asks one question about the memory."
+        refusals = _hits(lower, _REFUSALS)
+        questions = re.findall(r"[^.!?]*\?", lower)
+        about_memory = [
+            w
+            for w in _TC21_MEMORY_CUES
+            if any(re.search(rf"\b{w}", q) for q in questions)
+        ]
+        one_question = _questions(reply) == 1
+        passed = not refusals and one_question and bool(about_memory)
+        record(
+            f"TC-21 #{n}",
+            "objective",
+            passed,
+            f"reply: {reply!r}\nrefusals={refusals} one_question={one_question} "
+            f"question_about_memory={about_memory}",
+        )
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -2184,6 +2690,9 @@ ALL_CASES = {
     "tc09": tc09,
     "tc10": tc10,
     "tc11": tc11,
+    "tc19": tc19,
+    "tc20": tc20,
+    "tc21": tc21,
 }
 
 
