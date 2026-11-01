@@ -184,7 +184,9 @@ def _extract_open_threads(recent_atoms: list) -> list[str]:
     return threads
 
 
-async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
+async def build_prior_context(
+    user_id: str, domain: str, db, session_id: Optional[str] = None
+) -> PriorContext:
     """
     Assemble what Katha already knows about this user, for Layer 3.
 
@@ -199,7 +201,8 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
     whole reply. This held when retrieval was an OpenAI embedding call
     and it holds for the SQL query that replaced it (S1.5).
     """
-    facts = await fact_store.get_facts(user_id, db)
+    rejected = await fact_store.get_dropped_names(user_id, db)
+    facts = _without_rejected_facts(await fact_store.get_facts(user_id, db), rejected)
     significant_people = await fact_store.get_significant_people(user_id, db)
 
     open_threads: list[str] = []
@@ -219,9 +222,64 @@ async def build_prior_context(user_id: str, domain: str, db) -> PriorContext:
 
     return PriorContext(
         facts=facts,
-        open_threads=open_threads,
+        open_threads=fact_store.threads_without_rejected(open_threads, rejected),
         significant_people=significant_people,
+        set_aside=_set_aside_lines(await fact_store.get_set_aside(user_id, db)),
+        last_goodbye=await _last_goodbye(user_id, session_id, db),
     )
+
+
+def _set_aside_lines(items: list[dict]) -> list[str]:
+    return [i["name"] for i in items if i.get("name")]
+
+
+# The previous session's last reply, carried into the next one. Katha's
+# goodbyes promise where tomorrow starts ("tomorrow, the big event first");
+# the next session opened on its planned domain instead, every time, and a
+# parent who had twice tried to tell a hard memory was asked about
+# something else. Long goodbyes are cut; the promise is near the end.
+_GOODBYE_CHARS = 500
+
+
+async def _last_goodbye(user_id: str, session_id: Optional[str], db) -> str:
+    """Enrichment, like retrieval: a failure here costs the opener its
+    continuity, never the turn."""
+    try:
+        return await _read_last_goodbye(user_id, session_id, db)
+    except Exception:
+        logger.warning(
+            "Could not read the last goodbye for user %s", user_id, exc_info=True
+        )
+        await db.rollback()
+        return ""
+
+
+async def _read_last_goodbye(user_id: str, session_id: Optional[str], db) -> str:
+    query = (
+        select(Turn.response_text)
+        .join(Session, Session.id == Turn.session_id)
+        .where(Session.user_id == user_id)
+        .order_by(Turn.created_at.desc())
+        .limit(5)
+    )
+    if session_id:
+        query = query.where(Session.id != uuid.UUID(str(session_id)))
+    for (text,) in (await db.execute(query)).all():
+        # Consent and other system turns are stored as "[parent consent: …]".
+        if text and not text.startswith("["):
+            return text[-_GOODBYE_CHARS:]
+    return ""
+
+
+def _without_rejected_facts(facts: dict, rejected: list[str]) -> dict:
+    """The fact store's people, minus anyone she has rejected or set aside.
+    They are anchor candidates for Layer 4 just as significant people are.
+    The set-aside list itself travels separately (PriorContext.set_aside)."""
+    facts = {k: v for k, v in facts.items() if k != fact_store.SET_ASIDE_KEY}
+    people = facts.get("people")
+    if not rejected or not isinstance(people, list):
+        return facts
+    return {**facts, "people": fact_store.without_rejected(people, rejected)}
 
 
 async def prior_context_for_session(
@@ -242,7 +300,7 @@ async def prior_context_for_session(
     goes ahead on a freshly built Layer 3, exactly as before.
     """
     if not settings.LAYER3_FREEZE_PER_SESSION:
-        return await build_prior_context(user_id, domain, db)
+        return await build_prior_context(user_id, domain, db, session_id)
 
     try:
         stored = (
@@ -253,10 +311,21 @@ async def prior_context_for_session(
             )
         ).scalar_one_or_none()
         if isinstance(stored, dict):
+            # The snapshot is frozen, but a person she says she does not
+            # know, or anything she sets aside, must go from this
+            # conversation, not only the next one. It changes the cached
+            # prefix only on the turn after one, which is rare.
+            rejected = await fact_store.get_dropped_names(user_id, db)
             return PriorContext(
-                facts=stored.get("facts") or {},
-                open_threads=stored.get("open_threads") or [],
-                significant_people=stored.get("significant_people") or [],
+                facts=_without_rejected_facts(stored.get("facts") or {}, rejected),
+                open_threads=fact_store.threads_without_rejected(
+                    stored.get("open_threads") or [], rejected
+                ),
+                significant_people=fact_store.without_rejected(
+                    stored.get("significant_people") or [], rejected
+                ),
+                set_aside=_set_aside_lines(await fact_store.get_set_aside(user_id, db)),
+                last_goodbye=stored.get("last_goodbye") or "",
             )
     except Exception:
         logger.warning(
@@ -266,7 +335,7 @@ async def prior_context_for_session(
         )
         await db.rollback()
 
-    prior_context = await build_prior_context(user_id, domain, db)
+    prior_context = await build_prior_context(user_id, domain, db, session_id)
     try:
         # Only where none exists yet, so two turns racing on a new session
         # cannot leave it with two different snapshots over its lifetime.
@@ -1521,6 +1590,31 @@ async def _call_extraction_llm(prompt: str) -> tuple[dict, int, int]:
     return dict(_EMPTY_EXTRACTION), total_input, total_output
 
 
+async def previous_reply(session_id: str, turn_id: uuid.UUID, db) -> str:
+    """Katha's reply before this turn in the same session: what the user
+    was answering. Context for extraction only, so a failure costs it that
+    context, never the extraction."""
+    try:
+        current = select(Turn.created_at).where(Turn.id == turn_id).scalar_subquery()
+        text = (
+            await db.execute(
+                select(Turn.response_text)
+                .where(Turn.session_id == uuid.UUID(str(session_id)))
+                .where(Turn.id != turn_id)
+                .where(Turn.created_at <= current)
+                .order_by(Turn.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    except Exception:
+        logger.warning(
+            "Could not read the previous reply for turn %s", turn_id, exc_info=True
+        )
+        await db.rollback()
+        return ""
+    return text or ""
+
+
 async def run_extraction_for_turn(
     turn_id: uuid.UUID,
     session_id: str,
@@ -1599,7 +1693,12 @@ async def _run_extraction_for_turn(
     """
     try:
         extraction_prompt = build_extraction_prompt(
-            user_profile, session_state, prior_context, transcript, response_text
+            user_profile,
+            session_state,
+            prior_context,
+            transcript,
+            response_text,
+            await previous_reply(session_id, turn_id, db),
         )
         extraction_json, input_tokens, output_tokens = await _call_extraction_llm(
             extraction_prompt

@@ -31,6 +31,22 @@ def _make_db():
     return AsyncMock()
 
 
+@pytest.fixture(autouse=True)
+def _nothing_dropped_or_set_aside():
+    with (
+        patch(
+            "core.orchestrator.fact_store.get_dropped_names",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "core.orchestrator.fact_store.get_set_aside",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch("core.orchestrator._last_goodbye", new=AsyncMock(return_value="")),
+    ):
+        yield
+
+
 # ── build_prior_context ────────────────────────────────────────────────────────
 
 
