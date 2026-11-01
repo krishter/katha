@@ -344,3 +344,91 @@ def test_everything_unusable_still_returns_a_string():
     exception costs the whole turn's atoms."""
     assert coerce_domain("nonsense", None) == "nonsense"
     assert coerce_domain(None, None) == "unknown"
+
+
+# ── Rejection ──────────────────────────────────────────────────────────────────
+
+
+async def test_a_rejected_person_is_marked_and_not_flagged_again():
+    """The extractor names Divya in rejected_people and, in the same pass,
+    re-flags her under another spelling. The rejection must win."""
+    db = _make_db()
+    extraction = {
+        "story_atoms": [],
+        "significant_people": [
+            {"name": "ദിവ്യ (Divya)", "relationship": "unclear"},
+            {"name": "Neha", "relationship": "former student"},
+        ],
+        "rejected_people": ["Divya", "", 7],
+    }
+
+    with (
+        patch(
+            "extraction.story_extractor.fact_store.get_significant_people",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "extraction.story_extractor.fact_store.mark_rejected", new=AsyncMock()
+        ) as mock_reject,
+        patch(
+            "extraction.story_extractor.fact_store.get_dropped_names",
+            new=AsyncMock(return_value=["Divya"]),
+        ),
+        patch(
+            "extraction.story_extractor.fact_store.upsert_significant_person",
+            new=AsyncMock(),
+        ) as mock_upsert,
+    ):
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_reject.assert_awaited_once_with(_USER_ID, "Divya", db)
+    assert [c.args[1]["name"] for c in mock_upsert.await_args_list] == ["Neha"]
+    assert result.rejected_people == ["Divya"]
+
+
+async def test_no_rejected_people_field_changes_nothing():
+    db = _make_db()
+    extraction = {"story_atoms": [], "significant_people": [_IYER]}
+    with (
+        patch(
+            "extraction.story_extractor.fact_store.mark_rejected", new=AsyncMock()
+        ) as mock_reject,
+        patch(
+            "extraction.story_extractor.fact_store.upsert_significant_person",
+            new=AsyncMock(),
+        ) as mock_upsert,
+    ):
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_reject.assert_not_called()
+    mock_upsert.assert_awaited_once()
+    assert result.rejected_people == []
+
+
+async def test_set_aside_is_recorded_and_its_people_are_not_flagged():
+    db = _make_db()
+    extraction = {
+        "story_atoms": [],
+        "significant_people": [{"name": "Rani"}, {"name": "Uma"}],
+        "set_aside": [{"kind": "person", "name": "Rani"}, "not a dict"],
+    }
+    with (
+        patch(
+            "extraction.story_extractor.fact_store.add_set_aside", new=AsyncMock()
+        ) as mock_set_aside,
+        patch(
+            "extraction.story_extractor.fact_store.get_dropped_names",
+            new=AsyncMock(return_value=["Rani"]),
+        ),
+        patch(
+            "extraction.story_extractor.fact_store.upsert_significant_person",
+            new=AsyncMock(),
+        ) as mock_upsert,
+    ):
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    mock_set_aside.assert_awaited_once_with(
+        _USER_ID, [{"kind": "person", "name": "Rani"}], db
+    )
+    assert [c.args[1]["name"] for c in mock_upsert.await_args_list] == ["Uma"]
+    assert result.set_aside == [{"kind": "person", "name": "Rani"}]

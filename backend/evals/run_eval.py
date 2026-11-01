@@ -321,8 +321,14 @@ async def _real_turn(
 
     from prompts.system_prompt import build_extraction_prompt
 
+    # As run_extraction_for_turn: with the reply the user was answering.
     extraction_prompt = build_extraction_prompt(
-        prompt_profile, state, prior_context, transcript, response_text
+        prompt_profile,
+        state,
+        prior_context,
+        transcript,
+        response_text,
+        await orchestrator.previous_reply(session_id, turn.id, db),
     )
     extraction_json, in_tok, out_tok = await orchestrator._call_extraction_llm(
         extraction_prompt
@@ -1079,6 +1085,31 @@ async def tc10(db):
 # ---------------------------------------------------------------------
 # TC-11: Unforgettable person detection & resurfacing (Mr. Iyer)
 # ---------------------------------------------------------------------
+# §3.3 TC-11 Expected: "The reference is aimed at unexplored emotional
+# significance ('What was it about him that stayed with you?') — not a
+# generic fact check". Asking what of him the parent carries is that.
+# Widened 2026-11-01 with the owner's approval: "did you ever find yourself
+# teaching the way he did" and "did Mr. Iyer come to mind at all" failed
+# the original seven phrases.
+_TC11_SIGNIFICANCE = [
+    "stayed with you",
+    "meant to you",
+    "what was it about",
+    "changed your life",
+    "think about",
+    "still",
+    "impact",
+    "the way he",
+    "come to mind",
+    "back to you",
+    "learned from him",
+    "carry",
+    "influence",
+    "inspired",
+    "shaped",
+]
+
+
 async def tc11(db):
     uid = "eval-tc11"
     await cleanup(db, uid)
@@ -1169,7 +1200,13 @@ async def tc11(db):
         s6.session_id,
         s6,
         pp,
-        "I got my first job not long after finishing college.",
+        # Session 6 is about his first job as a teacher, where the teacher
+        # who changed his life connects. It was an office job until
+        # 2026-11-01; once recall was limited to connected people
+        # (TECH_DESIGN TC-25), raising a school teacher during office
+        # filing became exactly the pivot the pilot review asked to stop.
+        "I got my first job not long after finishing college, teaching at a "
+        "small school.",
         prior_context=prior6,
     )
     r6b = await real_turn(
@@ -1178,7 +1215,7 @@ async def tc11(db):
         s6.session_id,
         r6a["state"],
         pp,
-        "It was an office job, nothing too exciting at first.",
+        "I taught mathematics to the younger classes. I was nervous at first.",
     )
     resp1, resp2 = r6a["response_text"], r6b["response_text"]
     # §3.3 TC-11 Expected: "Katha references Mr. Iyer at an appropriate
@@ -1195,18 +1232,7 @@ async def tc11(db):
     # turn where the user has not themselves raised him.
     combined_lower = (resp1 + " " + resp2).lower()
     mentions_iyer = "iyer" in combined_lower
-    qualitative_signal = any(
-        w in combined_lower
-        for w in [
-            "stayed with you",
-            "meant to you",
-            "what was it about",
-            "changed your life",
-            "think about",
-            "still",
-            "impact",
-        ]
-    )
+    qualitative_signal = any(w in combined_lower for w in _TC11_SIGNIFICANCE)
 
     # Turn 3: the recall instruction can finally fire. The user has NOT
     # mentioned Iyer yet, so anything Katha says here is still proactive.
@@ -1216,23 +1242,12 @@ async def tc11(db):
         s6.session_id,
         r6b["state"],
         pp,
-        "We mostly did paperwork, filing, that sort of thing.",
+        "There were about forty children in each class, and it was always noisy.",
     )
     resp3 = r6_proactive["response_text"]
     combined_lower = (resp1 + " " + resp2 + " " + resp3).lower()
     mentions_iyer = "iyer" in combined_lower
-    qualitative_signal = any(
-        w in combined_lower
-        for w in [
-            "stayed with you",
-            "meant to you",
-            "what was it about",
-            "changed your life",
-            "think about",
-            "still",
-            "impact",
-        ]
-    )
+    qualitative_signal = any(w in combined_lower for w in _TC11_SIGNIFICANCE)
 
     # Elaborate about Iyer with a complete answer to test resolution.
     r6c = await real_turn(
@@ -2667,6 +2682,407 @@ async def tc21(db):
         )
 
 
+# ---------------------------------------------------------------------
+# TC-22: A person the parent says she does not know
+# ---------------------------------------------------------------------
+_TC22_SAMPLES = 3
+
+
+async def _tc22_once(db, n: int) -> None:
+    from sqlalchemy import update as sa_update
+
+    uid = "eval-tc22"
+    await cleanup(db, uid)
+    profile = await seed_profile(db, uid, name="Saroja")
+    pp = to_prompt_profile(profile)
+
+    # Session 1: where Divya was named once, with the thread the extractor
+    # left about her (the live atom, 2026-10-15).
+    s1 = await session_manager.start_session(uid, db)
+    await seed_filler_atoms(
+        db, uid, s1.session_id, s1.domain, get_domain(s1.domain).target_story_atoms
+    )
+    db.add(
+        StoryAtom(
+            session_id=uuid.UUID(s1.session_id),
+            user_id=uid,
+            domain="career",
+            title="Students' tearful farewell",
+            narrative="Two tuition students, Divya and Neha, cried when classes ended.",
+            who=["Divya", "Neha"],
+            what="Farewell at the end of tuition",
+            completeness_score=2,
+            open_threads=["What happened to Divya and Neha after the classes ended?"],
+        )
+    )
+    await db.commit()
+    await fact_store.update_facts(
+        uid,
+        {"people": [{"name": "ദിവ്യ (Divya)", "relationship": "former student"}]},
+        db,
+    )
+    await fact_store.upsert_significant_person(
+        uid,
+        {
+            "name": "Divya",
+            "relationship": "Tuition student",
+            "why_significant": "Both cried when the classes ended",
+        },
+        db,
+        session_number=1,
+    )
+    await session_manager.close_session(s1.session_id, "goal_met", db)
+
+    # Session 2: she is telling another story, and Katha's last reply
+    # asked about Divya, as it did on 2026-10-28.
+    s2 = await session_manager.start_session(uid, db)
+    await orchestrator.prior_context_for_session(s2.session_id, uid, s2.domain, db)
+    state = await session_manager.record_turn(s2.session_id, db)
+    await orchestrator._persist_turn(
+        session_id=s2.session_id,
+        user_id=uid,
+        turn_number=state.exchange_count,
+        inbound_message_sid=None,
+        transcript="A classmate of mine in college was the first to tell me "
+        "whom I was going to marry.",
+        detected_language="en-IN",
+        response_text="Hearing it from a classmate, what went through your mind? "
+        "And while we're here, what made Divya so dear to you?",
+        extraction_json={},
+        input_tokens=0,
+        output_tokens=0,
+        db=db,
+    )
+
+    r = await real_turn(
+        db,
+        uid,
+        s2.session_id,
+        state,
+        pp,
+        "I never said Divya. Who are you talking about? I said a classmate of mine.",
+    )
+    rejected = [str(x) for x in r["extraction_json"].get("rejected_people") or []]
+    recorded = any("divya" in x.lower() or "ദിവ്യ" in x for x in rejected)
+
+    await db.execute(
+        sa_update(Session)
+        .where(Session.id == uuid.UUID(s2.session_id))
+        .values(goal_met=True)
+    )
+    await db.commit()
+    state = await session_manager.get_session(s2.session_id, db)
+    close = await real_turn(
+        db, uid, s2.session_id, state, pp, "That's all I have for today."
+    )
+    await session_manager.close_session(s2.session_id, "goal_met", db)
+
+    def names_divya(text: str) -> bool:
+        return "divya" in text.lower() or "ദിവ്യ" in text
+
+    # "Apologises" may say her name once; it must not ask about her.
+    asks_again = any(
+        names_divya(q) for q in re.findall(r"[^.!?]*\?", r["response_text"])
+    )
+    in_goodbye = names_divya(close["response_text"])
+
+    s3 = await session_manager.start_session(uid, db)
+    nxt = await orchestrator.build_prior_context(uid, s3.domain, db)
+    in_next = names_divya(
+        json.dumps(
+            {
+                "sig": nxt.significant_people,
+                "people": nxt.facts.get("people", []),
+                "threads": nxt.open_threads,
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    evidence = (
+        f"correction reply: {r['response_text']!r}\n"
+        f"closing reply: {close['response_text']!r}\n"
+        f"rejected_people={rejected} recorded={recorded} asks_again={asks_again} "
+        f"in_goodbye={in_goodbye} in_next_session={in_next}"
+    )
+    # §3.3 TC-22a (target 100%) and TC-22b (target 50%+), split 2026-11-01.
+    record(f"TC-22a #{n}", "objective", not asks_again and not in_goodbye, evidence)
+    record(f"TC-22b #{n}", "objective", recorded and not in_next, evidence)
+    await cleanup(db, uid)
+
+
+async def tc22(db):
+    for n in range(1, _TC22_SAMPLES + 1):
+        await _tc22_once(db, n)
+
+
+# ---------------------------------------------------------------------
+# TC-23: Something the parent has set aside
+# TC-24: The goodbye's promise is kept
+# ---------------------------------------------------------------------
+# Synthetic lines, not any parent's words: names and places are invented.
+_TC23_SET_ASIDE = {
+    "en-IN": "Honestly I barely remember Bangalore, or Meena. That time does not "
+    "mean much to me. My real world was Tripunithura, with my grandmother.",
+    "ml-IN": "സത്യം പറഞ്ഞാൽ ബാംഗ്ലൂരിലെ കാലം എനിക്ക് അത്ര ഓർമ്മയില്ല, മീനയെയും "
+    "ചെറുതായിട്ടേ ഓർമ്മയുള്ളൂ. ആ കാലം എനിക്ക് അത്ര പ്രധാനമല്ല. എന്റെ ലോകം "
+    "തൃപ്പൂണിത്തുറയിൽ അമ്മൂമ്മയുടെ കൂടെ ആയിരുന്നു.",
+}
+_TC23_FOLLOW_UPS = {
+    "en-IN": [
+        "My grandmother made us breakfast every morning, puttu and banana.",
+        "She told me stories of the temple festival when she was a girl.",
+    ],
+    "ml-IN": [
+        "അമ്മൂമ്മ എല്ലാ ദിവസവും രാവിലെ ഞങ്ങൾക്ക് പുട്ടും പഴവും ഉണ്ടാക്കി തരുമായിരുന്നു.",
+        "അമ്മൂമ്മ ചെറുപ്പത്തിലെ അമ്പലത്തിലെ ഉത്സവത്തിന്റെ കഥകൾ പറഞ്ഞു തരുമായിരുന്നു.",
+    ],
+}
+_TC23_CLOSE = {"en-IN": "That's all for today.", "ml-IN": "ഇന്നത്തേക്ക് ഇത്രയും മതി."}
+_TC23_SAMPLES = 3
+
+
+def _names_meena(text: str) -> bool:
+    return "meena" in (text or "").lower() or "മീന" in (text or "")
+
+
+async def _tc23_once(db, language: str, n: int) -> None:
+    from sqlalchemy import update as sa_update
+
+    uid = "eval-tc23"
+    await cleanup(db, uid)
+    profile = await seed_profile(db, uid, name="Lalitha")
+    profile.preferred_language = language
+    await db.commit()
+    pp = to_prompt_profile(profile)
+
+    s1 = await session_manager.start_session(uid, db)
+    await seed_filler_atoms(
+        db, uid, s1.session_id, s1.domain, get_domain(s1.domain).target_story_atoms
+    )
+    db.add(
+        StoryAtom(
+            session_id=uuid.UUID(s1.session_id),
+            user_id=uid,
+            domain="childhood",
+            title="Neighbours in Bangalore",
+            narrative="As a small girl in Bangalore she played with a neighbour, Meena.",
+            who=["Meena"],
+            what="Childhood games",
+            completeness_score=2,
+            open_threads=["What games did she play with Meena in Bangalore?"],
+        )
+    )
+    await db.commit()
+    await fact_store.update_facts(
+        uid,
+        {
+            "people": [
+                {"name": "Meena", "relationship": "childhood friend in Bangalore"}
+            ]
+        },
+        db,
+    )
+    await fact_store.upsert_significant_person(
+        uid,
+        {
+            "name": "Meena",
+            "relationship": "childhood friend",
+            "why_significant": "They played together every day",
+        },
+        db,
+        session_number=1,
+    )
+    await session_manager.close_session(s1.session_id, "goal_met", db)
+
+    s2 = await session_manager.start_session(uid, db)
+    r = await real_turn(db, uid, s2.session_id, s2, pp, _TC23_SET_ASIDE[language])
+    items = r["extraction_json"].get("set_aside") or []
+    recorded = any(
+        isinstance(i, dict)
+        and i.get("kind") == "person"
+        and _names_meena(i.get("name"))
+        for i in items
+    )
+    replies = []
+    state = r["state"]
+    for line in _TC23_FOLLOW_UPS[language]:
+        t = await real_turn(db, uid, s2.session_id, state, pp, line)
+        replies.append(t["response_text"])
+        state = t["state"]
+    await db.execute(
+        sa_update(Session)
+        .where(Session.id == uuid.UUID(s2.session_id))
+        .values(goal_met=True)
+    )
+    await db.commit()
+    state = await session_manager.get_session(s2.session_id, db)
+    close = await real_turn(db, uid, s2.session_id, state, pp, _TC23_CLOSE[language])
+    replies.append(close["response_text"])
+    await session_manager.close_session(s2.session_id, "goal_met", db)
+
+    raised_again = [x for x in replies if _names_meena(x)]
+    s3 = await session_manager.start_session(uid, db)
+    nxt = await orchestrator.build_prior_context(uid, s3.domain, db, s3.session_id)
+    remembered = _names_meena(
+        json.dumps(
+            {
+                "sig": nxt.significant_people,
+                "people": nxt.facts.get("people", []),
+                "threads": nxt.open_threads,
+            },
+            ensure_ascii=False,
+        )
+    )
+    listed = any(_names_meena(x) for x in nxt.set_aside)
+
+    passed = recorded and not raised_again and not remembered and listed
+    record(
+        f"TC-23 {language[:2]} #{n}",
+        "objective",
+        passed,
+        f"set-aside reply: {r['response_text']!r}\n"
+        + "".join(f"later reply: {x!r}\n" for x in replies)
+        + f"set_aside={items} recorded={recorded} raised_again={len(raised_again)} "
+        f"in_next_memory={remembered} in_next_set_aside={listed}",
+    )
+    await cleanup(db, uid)
+
+
+async def tc23(db):
+    for n in range(1, _TC23_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            await _tc23_once(db, language, n)
+
+
+_TC24_GOODBYE = {
+    "en-IN": "Thank you for today. Tomorrow I'd love to start with the big event "
+    "you mentioned, the day everything changed.",
+    "ml-IN": "ഇന്നത്തേക്ക് നന്ദി. നാളെ ചേച്ചി പറഞ്ഞ ആ വലിയ സംഭവം കൊണ്ട് തുടങ്ങാം.",
+}
+_TC24_GREETING = {"en-IN": "Hello, I'm here.", "ml-IN": "ഹലോ, ഞാൻ ഇവിടെ ഉണ്ട്."}
+_TC24_PROMISE_WORDS = {
+    "en-IN": ["big event", "everything changed", "the day"],
+    # The stem: Malayalam inflects the noun (സംഭവത്തിൽ, സംഭവത്തെ), and the
+    # nominative form alone failed openers that kept the promise word for word.
+    "ml-IN": ["സംഭവ"],
+}
+
+
+async def _tc24_once(db, language: str, n: int) -> None:
+    uid = "eval-tc24"
+    await cleanup(db, uid)
+    profile = await seed_profile(db, uid, name="Lalitha")
+    profile.preferred_language = language
+    await db.commit()
+    pp = to_prompt_profile(profile)
+
+    s1 = await session_manager.start_session(uid, db)
+    await seed_filler_atoms(
+        db, uid, s1.session_id, s1.domain, get_domain(s1.domain).target_story_atoms
+    )
+    state = await session_manager.record_turn(s1.session_id, db)
+    await orchestrator._persist_turn(
+        session_id=s1.session_id,
+        user_id=uid,
+        turn_number=state.exchange_count,
+        inbound_message_sid=None,
+        transcript="But I told you, a big event happened after that.",
+        detected_language=language,
+        response_text=_TC24_GOODBYE[language],
+        extraction_json={},
+        input_tokens=0,
+        output_tokens=0,
+        db=db,
+    )
+    await session_manager.close_session(s1.session_id, "goal_met", db)
+
+    s2 = await session_manager.start_session(uid, db)
+    r = await real_turn(db, uid, s2.session_id, s2, pp, _TC24_GREETING[language])
+    reply = r["response_text"]
+    keeps = any(w in reply.lower() for w in _TC24_PROMISE_WORDS[language])
+    record(
+        f"TC-24 {language[:2]} #{n}",
+        "objective",
+        keeps,
+        f"today's domain: {s2.domain}\nopener: {reply!r}\nrefers_to_promise={keeps}",
+    )
+    await cleanup(db, uid)
+
+
+async def tc24(db):
+    for n in range(1, _TC23_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            await _tc24_once(db, language, n)
+
+
+# ---------------------------------------------------------------------
+# TC-25: An unconnected person is not dragged in
+# ---------------------------------------------------------------------
+_TC25_TURNS = {
+    "en-IN": [
+        "I remember the 1965 war a little. I was about seven.",
+        "When the siren went, we covered the windows with black paper.",
+        "We hid under the beds, my father under one, my mother under the next.",
+    ],
+    "ml-IN": [
+        "1965-ലെ യുദ്ധം എനിക്ക് ചെറുതായി ഓർമ്മയുണ്ട്. അന്ന് എനിക്ക് ഏഴ് വയസ്സായിരുന്നു.",
+        "സൈറൺ കേൾക്കുമ്പോൾ ഞങ്ങൾ ജനലുകൾ കറുത്ത പേപ്പർ കൊണ്ട് മൂടുമായിരുന്നു.",
+        "ഞങ്ങൾ കട്ടിലിന്റെ അടിയിൽ ഒളിക്കും, അച്ഛൻ ഒന്നിന്റെ അടിയിൽ, അമ്മ അടുത്തതിന്റെ അടിയിൽ.",
+    ],
+}
+
+
+def _names_neha(text: str) -> bool:
+    return "neha" in (text or "").lower() or "നേഹ" in (text or "")
+
+
+async def _tc25_once(db, language: str, n: int) -> None:
+    uid = "eval-tc25"
+    await cleanup(db, uid)
+    profile = await seed_profile(db, uid, name="Lalitha")
+    profile.preferred_language = language
+    await db.commit()
+    pp = to_prompt_profile(profile)
+
+    s1 = await session_manager.start_session(uid, db)
+    await seed_filler_atoms(
+        db, uid, s1.session_id, s1.domain, get_domain(s1.domain).target_story_atoms
+    )
+    await fact_store.upsert_significant_person(
+        uid,
+        {
+            "name": "Neha",
+            "relationship": "tuition student in the 1990s",
+            "why_significant": "Still messages her years later; very attached",
+        },
+        db,
+        session_number=1,
+    )
+    await session_manager.close_session(s1.session_id, "goal_met", db)
+
+    s2 = await session_manager.start_session(uid, db)
+    state, replies = s2, []
+    for line in _TC25_TURNS[language]:
+        t = await real_turn(db, uid, s2.session_id, state, pp, line)
+        replies.append(t["response_text"])
+        state = t["state"]
+    dragged = [x for x in replies if _names_neha(x)]
+    record(
+        f"TC-25 {language[:2]} #{n}",
+        "objective",
+        not dragged,
+        "".join(f"reply: {x!r}\n" for x in replies) + f"names_neha={len(dragged)}",
+    )
+    await cleanup(db, uid)
+
+
+async def tc25(db):
+    for n in range(1, _TC23_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            await _tc25_once(db, language, n)
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -2693,6 +3109,10 @@ ALL_CASES = {
     "tc19": tc19,
     "tc20": tc20,
     "tc21": tc21,
+    "tc22": tc22,
+    "tc23": tc23,
+    "tc24": tc24,
+    "tc25": tc25,
 }
 
 

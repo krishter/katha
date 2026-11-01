@@ -119,6 +119,10 @@ class PriorContext:
     facts: dict = field(default_factory=dict)
     open_threads: list[str] = field(default_factory=list)
     significant_people: list[dict] = field(default_factory=list)
+    # People, periods and subjects she has played down (fact_store.add_set_aside).
+    set_aside: list[str] = field(default_factory=list)
+    # Katha's last reply in the previous session, to keep its promise.
+    last_goodbye: str = ""
 
 
 def _language_name(bcp47: str) -> str:
@@ -323,6 +327,8 @@ def render_facts(facts: dict) -> list[str]:
     """
     lines: list[str] = []
     for key, value in facts.items():
+        if key == "set_aside":  # its own Layer 3 block, never a fact line
+            continue
         label = _FACT_LABELS.get(key, str(key).replace("_", " ").capitalize())
         if isinstance(value, list):
             values = _dedupe(value)
@@ -424,8 +430,30 @@ def _layer3_life_context(
     if session_state.exchange_count == 0:
         entry_line = f"\nDomain entry question: {domain.entry_prompt}"
 
+    # What she has played down. Listed after everything that might tempt
+    # the model back to it, so the last word on those people is this one.
+    set_aside_block = ""
+    if prior_context.set_aside:
+        lines = "\n".join(f"  - {s}" for s in prior_context.set_aside)
+        set_aside_block = (
+            f"\nThings {user_profile.name} has said matter little to them, "
+            f"they barely remember, or were never part of their life. Do not "
+            f"steer back to them or promise them for another day; if they "
+            f"raise one themselves, follow them:\n{lines}"
+        )
+
+    # Only for the opener: after that the conversation itself carries on.
+    goodbye_block = ""
+    if prior_context.last_goodbye and session_state.exchange_count == 0:
+        goodbye_block = (
+            f"\nHow you ended your last conversation: "
+            f'"{prior_context.last_goodbye}"\n'
+            f"If that promised where today would start, start there, before "
+            f"today's focus domain, unless it is something set aside above."
+        )
+
     return f"""LAYER 3 — LIFE CONTEXT
-{context_block}{family_block}{threads}{significant_block}
+{context_block}{family_block}{threads}{significant_block}{set_aside_block}{goodbye_block}
 
 Today's focus domain: {domain.name}{entry_line}"""
 
@@ -640,7 +668,8 @@ def _layer4_session_state(
         closing_instruction = (
             "\nThis domain's goal is already met as of your last reply — treat "
             "this turn as your closing exchange: wrap up warmly and let them "
-            "know what you'd love to hear about tomorrow."
+            "know what you'd love to hear about tomorrow: something they "
+            "started telling, never anything set aside."
         )
     recall_instruction = ""
     anchor = (
@@ -650,14 +679,15 @@ def _layer4_session_state(
     )
     if anchor and session_state.exchange_count >= 2:
         recall_instruction = (
-            f"\nYou know about {anchor} from a past session. If you haven't "
-            f"already brought them/it up so far in this conversation, pivot "
-            f"one sentence to ask about {anchor} now — even if the connection "
-            f"to what the user just said is only loose (family, feelings, "
-            f"people, and place all count as a bridge). Do this before the "
-            f"conversation moves further away from the opening. Ask what "
-            f"made them matter so much to the user — the feeling, not a fact "
-            f"about them or the part they played in events."
+            f"\nYou know about {anchor} from a past session. Bring them up "
+            f"once, as soon as what they tell you shares something: "
+            f"the same family, home or place, "
+            f"the same years, or a part of their life this person shaped. "
+            f"Ask if someone from the same home was there too. "
+            f"Weave them in as your one question, not a change of subject, "
+            f"and ask what made them matter so much: the feeling, "
+            f"not a fact. If nothing is shared today, leave them for another "
+            f"day. If they say they don't know who you mean, drop them for good."
         )
     return f"""LAYER 4 — SESSION STATE & CONSTRAINTS
 Session number: {session_state.session_number}
@@ -695,6 +725,9 @@ Vary how you begin. Do not open with an exclamation of delight ("Wow", "वा�
 "अरे वाह") or by praising the picture they painted, and never begin two replies \
 in a session the same way — check your earlier replies above. Often the best \
 start is the detail they just gave you.
+
+Never repeat a question from this conversation or ask one already \
+answered; if they passed over it, let it go.
 
 No emoji: every word is spoken aloud.
 
@@ -821,6 +854,7 @@ def build_extraction_prompt(
     prior_context: PriorContext,
     user_transcript: str,
     assistant_response: str,
+    previous_reply: str = "",
 ) -> str:
     """
     Builds the standalone extraction-only prompt for the second, off-critical-
@@ -839,6 +873,11 @@ def build_extraction_prompt(
             f"new emotional signal beyond what's already known: {names}"
         )
 
+    # What the user was answering. Without it "I never said Divya" read as
+    # a mix-up, not a rejection, whenever Katha's apology added "you told
+    # me about her before" (TC-22 passed 3 of 9).
+    asked_line = f"Katha had just said: {previous_reply}\n" if previous_reply else ""
+
     goal_met_note = ""
     if session_state.goal_met:
         goal_met_note = (
@@ -850,7 +889,7 @@ def build_extraction_prompt(
 
     return f"""You are Katha's extraction engine. You are given one exchange from \
 a reminiscence conversation with {user_profile.name}. Extract structured data \
-from the USER's statement — do not extract from Katha's own reply, which is \
+from the USER's statement — do not extract from Katha's replies, which are \
 included only for context.
 
 Today's focus domain: {domain.name} ({domain.id}).{known_people_block}{goal_met_note}
@@ -860,7 +899,7 @@ character for character. A story often belongs to a different chapter than \
 today's focus — use whichever fits what they actually described:
 {_DOMAIN_ID_LIST}
 
-User said: {user_transcript}
+{asked_line}User said: {user_transcript}
 Katha replied: {assistant_response}
 
 Respond in exactly this format and no other:
@@ -913,6 +952,33 @@ describe them with unusual emotional detail, or say something explicit like \
 NOT by itself a signal: in a conversation like this almost every person is \
 volunteered unprompted. If the only reason you can give for why someone matters \
 is that they came up, leave them out — they are already captured as a named \
-entity. Most turns should add nobody at all.
+entity. A moving moment is not the same as a person who matters: if the feeling \
+belongs to the occasion (a farewell, a wedding, a loss) and the person was one \
+of several there, leave them out. So too when the user had to search for the \
+name. Most turns should add nobody at all.
+
+The JSON object must also include:
+
+  "rejected_people": ["string", "..."]
+
+rejected_people: anyone Katha asked about whom the user says they do not know, \
+never mentioned, or do not want to talk about ("I never mentioned Ravi", "who \
+is that?", "I don't want to talk about him"). Record them even if they came \
+up in an earlier session, and even if Katha's reply says so: the pushback is \
+what counts. Write the name as Katha said it, with the English spelling in \
+brackets if it is in another script, e.g. "രവി (Ravi)". Correcting a detail \
+about someone (a date, a place, how they are related) is not rejecting them; \
+telling Katha they are not who the user meant is. Usually empty.
+
+  "set_aside": [{{"kind": "person" | "topic", "name": "string"}}]
+
+set_aside: anything the user plays down: a person they barely remember or \
+say mattered little ("I hardly remember Rani"), a period or place that was \
+not important or happy for them ("Nagpur was a faint time, my world was \
+Kottayam"), or something Katha assumed that was never part of their life \
+("I never went to work, I was a housewife"). kind "person" for a named \
+person, written as for rejected_people; "topic" otherwise, in a few plain \
+English words ("childhood years in Nagpur", "a job outside the home"). Not for \
+painful memories they are telling: grief is not setting aside. Usually empty.
 
 Return only the <extraction> block above — no other text."""

@@ -363,8 +363,12 @@ def test_every_prior_context_field_is_rendered():
                 "why_significant": "mentioned with unusual warmth",
             }
         ],
+        set_aside=["SET-ASIDE-SENTINEL years in Nagpur"],
+        last_goodbye="GOODBYE-SENTINEL: tomorrow, the big event first.",
     )
 
+    # last_goodbye is rendered for the opener only; _SESSION is the opener.
+    assert _SESSION.exchange_count == 0
     prompt = build_system_prompt(_PROFILE, _SESSION, populated)
 
     # Every field must be non-empty in the fixture, or this proves nothing.
@@ -382,6 +386,10 @@ def test_every_prior_context_field_is_rendered():
         missing.append("open_threads")
     if "PERSON-SENTINEL" not in prompt:
         missing.append("significant_people")
+    if "SET-ASIDE-SENTINEL" not in prompt:
+        missing.append("set_aside")
+    if "GOODBYE-SENTINEL" not in prompt:
+        missing.append("last_goodbye")
 
     assert not missing, (
         f"PriorContext fields populated but never rendered into the prompt: "
@@ -397,7 +405,13 @@ def test_render_coverage_test_knows_about_every_field():
     passing a test that silently checks less than it claims."""
     import dataclasses
 
-    covered = {"facts", "open_threads", "significant_people"}
+    covered = {
+        "facts",
+        "open_threads",
+        "significant_people",
+        "set_aside",
+        "last_goodbye",
+    }
     actual = {f.name for f in dataclasses.fields(PriorContext)}
     assert actual == covered, (
         f"PriorContext fields changed: {actual ^ covered}. Update "
@@ -889,3 +903,81 @@ def test_scope_rule_says_who_can_help_and_guards_real_memories():
     assert "is a story: follow it" in rule
     # Safety stays ahead of redirecting (§6).
     assert "crisis protocol comes first" in rule
+
+
+# ── Set aside and the last goodbye ───────────────────────────────────────────
+
+
+def test_set_aside_is_never_rendered_as_a_fact():
+    from prompts.system_prompt import render_facts
+
+    lines = render_facts(
+        {"places": ["Nagpur"], "set_aside": [{"kind": "topic", "name": "Nagpur"}]}
+    )
+    assert lines == render_facts({"places": ["Nagpur"]})
+
+
+def test_set_aside_tells_the_model_not_to_steer_back():
+    prompt = build_system_prompt(
+        _PROFILE,
+        _SESSION,
+        PriorContext(set_aside=["റാണി (Rani)", "childhood years in Nagpur"]),
+    )
+    assert "Do not steer back to them" in prompt
+    assert "റാണി (Rani)" in prompt
+    assert "childhood years in Nagpur" in prompt
+
+
+def test_the_last_goodbye_shapes_the_opener_only():
+    import types
+
+    context = PriorContext(last_goodbye="Tomorrow, let's start with the big event.")
+    opener = build_system_prompt(_PROFILE, _SESSION, context)
+    later = build_system_prompt(
+        _PROFILE,
+        types.SimpleNamespace(**{**vars(_SESSION), "exchange_count": 3}),
+        context,
+    )
+    assert "start with the big event" in opener
+    assert "start there" in opener
+    assert "start with the big event" not in later
+
+
+def test_recall_needs_a_real_connection():
+    """The 'only loose' bridge is what pulled a tuition student into a
+    marriage story and another into a war memory (error review, 2026-11-01)."""
+    import types
+
+    prompt = build_system_prompt(
+        _PROFILE,
+        types.SimpleNamespace(**{**vars(_SESSION), "exchange_count": 3}),
+        PriorContext(significant_people=[{"name": "Kamala", "relationship": "sister"}]),
+    )
+    assert "Kamala" in prompt
+    assert "only loose" not in prompt
+    assert "If nothing is shared today, leave them for another day" in prompt
+
+
+def test_katha_does_not_ask_the_same_thing_twice():
+    """In TC-11, Katha spent its one recall chance re-asking the school's
+    town, which the parent had passed over; the pilot review found a parent
+    asked about something she had already answered (session 3, turn 6)."""
+    prompt = build_system_prompt(_PROFILE, _SESSION, PriorContext())
+    assert "Never repeat a question from this conversation" in prompt
+
+
+def test_extraction_sees_what_the_user_was_answering():
+    """'I never said Divya' is only a rejection next to the question that
+    raised Divya."""
+    from prompts.system_prompt import build_extraction_prompt
+
+    asked = "What made Divya so dear to you?"
+    with_it = build_extraction_prompt(
+        _PROFILE, _SESSION, PriorContext(), "I never said Divya.", "Sorry.", asked
+    )
+    without = build_extraction_prompt(
+        _PROFILE, _SESSION, PriorContext(), "I never said Divya.", "Sorry."
+    )
+    assert f"Katha had just said: {asked}" in with_it
+    assert with_it.index(asked) < with_it.index("User said: I never said Divya.")
+    assert "Katha had just said" not in without

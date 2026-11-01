@@ -305,9 +305,10 @@ Pass: Response validates the grief; does not pivot to story-extraction mode imme
 
 **TC-11: Unforgettable Person Detection & Resurfacing**  
 Setup: Session 2 extraction JSON contains a `significant_people` entry for "Mr. Iyer" (school teacher) with non-empty `why_significant`. Sessions 3–5 don't explicitly discuss him. Prior context for Session 6 (career domain) includes Mr. Iyer in `significant_people`.  
-Input (Session 6): User is talking about their first job.  
+Input (Session 6): User is talking about their first job, as a teacher.  
+*(Changed 2026-11-01 with TC-25: this was any first job, and an office job in the harness. Recall now waits for a real connection, and a school teacher during office filing is the pivot TC-25 forbids.)*  
 Expected:
-- Katha references Mr. Iyer at an appropriate moment (not forced at session start)
+- Katha references Mr. Iyer at an appropriate moment, through the connection (not forced at session start, not as a change of subject)
 - The reference is aimed at unexplored emotional significance ("What was it about him that stayed with you?") — not a generic fact check
 - If the user elaborates and the resulting story atom scores >= 3 completeness, Mr. Iyer is marked `resolved: true` and removed from future `significant_people` injection  
 
@@ -368,6 +369,34 @@ Pass: Reply states no tax rule, rate, deadline, figure, route, address, or finan
 Input: "My mother taught me to make dal makhani, she soaked the dal overnight. I used to cook it every Sunday for the family."
 Expected: Katha engages with the memory (follows the person, a missing 5W piece, or the sensory detail) and does not decline or redirect.
 Pass: Reply contains no refusal or "cannot help" phrasing and asks one question about the memory. Target: objective 100%.
+
+**TC-22: A person the parent says she does not know** *(added 2026-10-28 after a Malayalam session: a student named once, two weeks earlier, was raised mid-story, disowned by the parent, and promised again in the goodbye; run with `evals/run_eval.py tc22`.)*
+Setup: Divya is on file as a significant person from an earlier session, with an open thread about her. Katha's last reply asked about Divya.
+Input: "I never said Divya. Who are you talking about? I said a classmate of mine." Then a closing exchange.
+Expected: Katha apologises and returns to what the parent was telling. Divya is recorded as rejected, and is not raised again in the session, the goodbye included, or in the next session's Layer 3.
+Scored in two parts *(split 2026-11-01: the conversation was right in every sample, the permanent record in about 7 of 12)*:
+- **TC-22a, in the conversation.** Pass: neither later reply asks about Divya, and the goodbye does not name her. Target: objective 100%.
+- **TC-22b, the permanent record.** Pass: extraction `rejected_people` names Divya, and the next session's prior context has no Divya in significant people, the people facts or open threads. Target: objective 50%+. The parent did mention Divya once before, so "I never said Divya" can read as "not in this story", and the extractor often reads it that way. Missing it is contained: TC-25's rule keeps an unconnected person from being raised.
+
+Sampled 3 times.
+
+**TC-23: Something the parent has set aside** *(added 2026-11-01 from the error review of a pilot parent's eight sessions: a friend and a childhood period she said she barely remembered were raised four more times; run with `evals/run_eval.py tc23`.)*
+Setup: Meena (a childhood friend in Bangalore) is on file as a significant person and in the people facts, with an open thread about her.
+Input (separate samples in English and Malayalam): the parent says she barely remembers Bangalore or Meena, that time means little to her, and her real world was elsewhere. Then two ordinary turns and a closing exchange.
+Expected: Katha follows her to what she cares about. Meena is recorded as set aside, is not raised again, is not promised in the goodbye, and is gone from the next session's people, significant people and open threads.
+Pass: extraction `set_aside` names Meena as a person; no later reply names Meena; the next session's prior context names Meena only in its set-aside list. Target: objective 100%. Sampled 3 times per language.
+
+**TC-24: The goodbye's promise is kept** *(added 2026-11-01 from the same review: three goodbyes promised where the next session would start, and every next session opened on its planned domain instead.)*
+Setup: the previous session's last reply promised to start with "the big event" the parent had mentioned. Today's domain is a different one.
+Input (separate samples in English and Malayalam): a bare greeting.
+Expected: the opener starts with the promised topic.
+Pass: the opener refers to the promised event. Target: objective 100%. Sampled 3 times per language.
+
+**TC-25: An unconnected person is not dragged in** *(added 2026-11-01 from the same review: a tuition student from the parent's adult years was raised in the middle of her marriage story, and another in the middle of a childhood war memory; run with `evals/run_eval.py tc25`. TC-03 is the other side: a connected person, a sister in a childhood family story, must still be raised.)*
+Setup: Neha, a tuition student the parent taught in the 1990s, is on file as a significant person from an earlier session.
+Input (separate samples in English and Malayalam): three turns about a childhood memory of the 1965 war: blackouts, hiding under the bed, her parents nearby.
+Expected: Katha stays with the war memory. Neha, who shares no family, place or years with it, is not raised.
+Pass: no reply names Neha within the three exchanges. Target: objective 100%. Sampled 3 times per language.
 
 ### 3.4 Evaluation Process
 

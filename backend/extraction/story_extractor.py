@@ -25,6 +25,8 @@ class ExtractionResult:
     story_atoms: list[StoryAtom]
     significant_people_detected: list[dict] = field(default_factory=list)
     resolved_people: list[str] = field(default_factory=list)
+    rejected_people: list[str] = field(default_factory=list)
+    set_aside: list[dict] = field(default_factory=list)
 
 
 _PARENTHETICAL_RE = re.compile(r"\s*\([^)]*\)")
@@ -140,7 +142,8 @@ async def process_extraction(
     2. Parse extraction_json['story_atoms'] → list[StoryAtom]
     3. Compute completeness_score for each atom
     4. Insert all story atoms to DB
-    5. Parse significant_people and upsert to fact store
+    5. Mark anyone in rejected_people as rejected, record set_aside, then
+       upsert the significant_people she has neither rejected nor set aside
     6. Mark resolved only for people already on file BEFORE this pass, once
        an atom here elaborates on them (>= 3 completeness). Someone first
        flagged in this same pass is never resolved by it — they have not
@@ -215,7 +218,22 @@ async def process_extraction(
         if key:
             known_before[key] = p.get("name", "")
 
-    for person in significant_people:
+    # Rejection first, so nobody she has just disowned is flagged afresh
+    # under another spelling in the same pass.
+    rejected_now = [
+        n
+        for n in extraction_json.get("rejected_people") or []
+        if isinstance(n, str) and n.strip()
+    ]
+    for name in rejected_now:
+        await fact_store.mark_rejected(user_id, name.strip(), db)
+    set_aside_now = [
+        i for i in extraction_json.get("set_aside") or [] if isinstance(i, dict)
+    ]
+    await fact_store.add_set_aside(user_id, set_aside_now, db)
+    dropped = await fact_store.get_dropped_names(user_id, db)
+
+    for person in fact_store.without_rejected(significant_people, dropped):
         await fact_store.upsert_significant_person(
             user_id, person, db, session_number=session_number
         )
@@ -244,4 +262,6 @@ async def process_extraction(
         story_atoms=created_atoms,
         significant_people_detected=significant_people,
         resolved_people=resolved,
+        rejected_people=rejected_now,
+        set_aside=set_aside_now,
     )

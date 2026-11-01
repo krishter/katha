@@ -131,3 +131,165 @@ async def test_a_failed_snapshot_read_still_gives_the_turn_a_layer_3(
         session_id, user_id, "childhood", real_db
     )
     assert context.facts == {"places": ["Madurai"]}
+
+
+async def test_a_person_rejected_mid_session_leaves_the_frozen_snapshot(real_db):
+    """The live case: Divya was in this session's Layer 3 snapshot, the
+    parent said "I never said Divya", and Katha raised her again at the
+    close because the snapshot is frozen. A rejection must reach the turns
+    still to come in the same session."""
+    user_id = f"freeze-{uuid.uuid4().hex[:8]}"
+    session_id = await _user_and_session(real_db, user_id)
+    await fact_store.update_facts(
+        user_id,
+        {
+            "people": [
+                {"name": "ദിവ്യ (Divya)", "relationship": "former student"},
+                {"name": "നേഹ (Neha)", "relationship": "former student"},
+            ]
+        },
+        real_db,
+    )
+    for name in ("Divya", "Neha"):
+        await fact_store.upsert_significant_person(
+            user_id,
+            {"name": name, "relationship": "student", "why_significant": "cried"},
+            real_db,
+        )
+
+    first = await orchestrator.prior_context_for_session(
+        session_id, user_id, "childhood", real_db
+    )
+    assert {p["name"] for p in first.significant_people} == {"Divya", "Neha"}
+
+    await fact_store.mark_rejected(user_id, "ദിവ്യ (Divya)", real_db)
+
+    later = await orchestrator.prior_context_for_session(
+        session_id, user_id, "childhood", real_db
+    )
+    assert [p["name"] for p in later.significant_people] == ["Neha"]
+    assert [p["name"] for p in later.facts["people"]] == ["നേഹ (Neha)"]
+
+    # And the next session, built fresh, never sees her either.
+    fresh = await orchestrator.build_prior_context(user_id, "childhood", real_db)
+    assert [p["name"] for p in fresh.significant_people] == ["Neha"]
+    assert [p["name"] for p in fresh.facts["people"]] == ["നേഹ (Neha)"]
+
+
+async def test_set_aside_people_and_topics_leave_layer_3(real_db):
+    """The live case: Rani came back four times after the parent said she
+    barely remembered her and that Nagpur meant little to her."""
+    user_id = f"freeze-{uuid.uuid4().hex[:8]}"
+    session_id = await _user_and_session(real_db, user_id)
+    await fact_store.update_facts(
+        user_id,
+        {
+            "people": [
+                {"name": "റാണി (Rani)", "relationship": "childhood friend in Nagpur"},
+                {"name": "ഉമ (Uma)", "relationship": "cousin, like a sister"},
+            ]
+        },
+        real_db,
+    )
+    first = await orchestrator.prior_context_for_session(
+        session_id, user_id, "childhood", real_db
+    )
+    assert len(first.facts["people"]) == 2
+
+    await fact_store.add_set_aside(
+        user_id,
+        [
+            {"kind": "person", "name": "Rani"},
+            {"kind": "topic", "name": "childhood years in Nagpur"},
+        ],
+        real_db,
+    )
+
+    # Same session, frozen snapshot: Rani goes now, not tomorrow.
+    later = await orchestrator.prior_context_for_session(
+        session_id, user_id, "childhood", real_db
+    )
+    assert [p["name"] for p in later.facts["people"]] == ["ഉമ (Uma)"]
+    assert later.set_aside == ["Rani", "childhood years in Nagpur"]
+    assert "set_aside" not in later.facts
+
+    fresh = await orchestrator.build_prior_context(user_id, "childhood", real_db)
+    assert [p["name"] for p in fresh.facts["people"]] == ["ഉമ (Uma)"]
+    assert fresh.set_aside == ["Rani", "childhood years in Nagpur"]
+
+
+async def test_the_last_goodbye_comes_from_the_previous_session(real_db):
+    from models.turn import Turn
+
+    user_id = f"freeze-{uuid.uuid4().hex[:8]}"
+    old_session = await _user_and_session(real_db, user_id)
+    for n, text in (
+        (1, "[parent consent: yes]"),
+        (2, "Tomorrow, let's start with the big event you mentioned."),
+    ):
+        real_db.add(
+            Turn(
+                session_id=uuid.UUID(old_session),
+                user_id=user_id,
+                turn_number=n,
+                transcript="...",
+                response_text=text,
+            )
+        )
+    await real_db.commit()
+    new_session = uuid.uuid4()
+    real_db.add(
+        Session(
+            id=new_session,
+            user_id=user_id,
+            session_number=5,
+            domain="family_ancestors",
+            status="active",
+        )
+    )
+    real_db.add(
+        Turn(
+            session_id=new_session,
+            user_id=user_id,
+            turn_number=1,
+            transcript="hello",
+            response_text="Good evening! Shall we talk about your grandparents?",
+        )
+    )
+    await real_db.commit()
+
+    context = await orchestrator.build_prior_context(
+        user_id, "family_ancestors", real_db, str(new_session)
+    )
+    assert context.last_goodbye == (
+        "Tomorrow, let's start with the big event you mentioned."
+    )
+
+
+async def test_previous_reply_is_the_one_before_this_turn(real_db):
+    from models.turn import Turn
+
+    user_id = f"freeze-{uuid.uuid4().hex[:8]}"
+    session_id = await _user_and_session(real_db, user_id)
+    turns = []
+    for n, reply in (
+        (1, "Where did you grow up?"),
+        (2, "What made Divya so dear?"),
+        (3, "Sorry."),
+    ):
+        t = Turn(
+            session_id=uuid.UUID(session_id),
+            user_id=user_id,
+            turn_number=n,
+            transcript="...",
+            response_text=reply,
+        )
+        real_db.add(t)
+        await real_db.commit()
+        turns.append(t)
+
+    assert await orchestrator.previous_reply(session_id, turns[2].id, real_db) == (
+        "What made Divya so dear?"
+    )
+    assert await orchestrator.previous_reply(session_id, turns[0].id, real_db) == ""
+    assert await orchestrator.previous_reply("not-a-uuid", turns[0].id, real_db) == ""
