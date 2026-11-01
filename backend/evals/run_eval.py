@@ -77,6 +77,16 @@ from prompts.system_prompt import (  # noqa: E402
 
 RESULTS: list[dict] = []
 
+# TC-01 to TC-11 call the model once per run, so one sampled reply decided
+# each case and one flip moved the 80%/75% gate by about 9 points (eval
+# audit, 2026-11-01: TC-03, TC-06 and TC-08 each failed once that week and
+# passed on rerun). Each is now run EVAL_SAMPLES times and the gate is read
+# from the pass rate across samples, as TC-19 to TC-25 already do for
+# themselves. EVAL_SAMPLES=1 gives the old single-shot run.
+EVAL_SAMPLES = max(1, int(os.environ.get("EVAL_SAMPLES", "3")))
+REPEATED_CASES = {f"tc{n:02d}" for n in range(1, 12)}
+SAMPLE: int | None = None
+
 # EVAL_CARDS=1 runs every case with conversation cards on for the parent
 # (CONVERSATION_CARDS.md §12: "Layers 2 and 4 change, so the full
 # regression set runs too"). She has already said yes to sharing and has
@@ -100,6 +110,8 @@ VERBATIM_CHECKS: list[dict] = []
 
 
 def record(tc, kind, passed, evidence):
+    if SAMPLE is not None:
+        tc = f"{tc} #{SAMPLE}"
     RESULTS.append({"tc": tc, "kind": kind, "passed": passed, "evidence": evidence})
     print(f"\n{'=' * 90}\n{tc} [{kind}] -> {'PASS' if passed else 'FAIL'}\n{'-' * 90}")
     print(evidence)
@@ -498,6 +510,14 @@ async def tc03(db):
         pp,
         "Kamala was two years older than me. We were very close as "
         "children, always together.",
+    )
+    # Whether session 2 lands on family_ancestors depended on how many
+    # childhood atoms the real extraction happened to file (2026-11-01: one
+    # sample in three got "childhood" again and the case errored before
+    # Katha replied). Top up from the real count, as TC-11 does, so the
+    # sample measures recall rather than the extractor's atom count.
+    await top_up_domain(
+        db, uid, s1.session_id, "childhood", get_domain("childhood").target_story_atoms
     )
     await orchestrator.close_and_process_session(s1.session_id, db)
 
@@ -3116,6 +3136,21 @@ ALL_CASES = {
 }
 
 
+def pass_rates(results: list[dict]) -> dict[str, tuple[int, int]]:
+    """Passes and samples per repeated case, keyed by its base id ("TC-03").
+
+    A sample that raised counts as a failed sample, not a missing one.
+    """
+    rates: dict[str, tuple[int, int]] = {}
+    for r in results:
+        m = re.fullmatch(r"(TC-(?:0[1-9]|1[01])) #\d+", r["tc"])
+        if not m:
+            continue
+        passed, total = rates.get(m.group(1), (0, 0))
+        rates[m.group(1)] = (passed + bool(r["passed"]), total + 1)
+    return rates
+
+
 async def main():
     selected = sys.argv[1:] or list(ALL_CASES.keys())
     if selected == ["cards"]:
@@ -3127,8 +3162,14 @@ async def main():
         "withdraw": withdraw,
         "privacy": privacy,
     }
+    global SAMPLE
+    runs = [
+        (name, n if EVAL_SAMPLES > 1 else None)
+        for name in selected
+        for n in (range(1, EVAL_SAMPLES + 1) if name in REPEATED_CASES else [None])
+    ]
     async with AsyncSessionLocal() as db:
-        for name in selected:
+        for name, SAMPLE in runs:
             fn = cases[name]
             try:
                 # Every case's user id is eval-<case>; calls made outside
@@ -3155,6 +3196,8 @@ async def main():
                 except Exception:
                     await db.rollback()
 
+        SAMPLE = None
+
         # Rows a case left behind (an error before its own cleanup, or
         # EVAL_SKIP_CLEANUP=1) are still this run's spend.
         await capture_usage(db)
@@ -3169,6 +3212,12 @@ async def main():
     errors = [r for r in RESULTS if r["kind"] == "ERROR"]
     for r in RESULTS:
         print(f"  {r['tc']:8s} [{r['kind']:9s}] {'PASS' if r['passed'] else 'FAIL'}")
+    per_case = pass_rates(RESULTS)
+    if EVAL_SAMPLES > 1:
+        print(f"\nPASS RATE ACROSS {EVAL_SAMPLES} SAMPLES (TC-01 to TC-11)")
+        for tc, (passed, total) in per_case.items():
+            flag = "" if passed in (0, total) else "  varies"
+            print(f"  {tc:8s} {passed}/{total}{flag}")
     obj_pass = sum(1 for r in objective if r["passed"])
     rub_pass = sum(1 for r in rubric if r["passed"])
     print(f"\nObjective: {obj_pass}/{len(objective)}")
@@ -3206,6 +3255,8 @@ async def main():
                 "cases_selected": selected,
                 "complete_run": len(selected) == len(ALL_CASES),
                 "cards_on": EVAL_CARDS,
+                "samples": EVAL_SAMPLES,
+                "pass_rates": {tc: f"{p}/{t}" for tc, (p, t) in per_case.items()},
                 "objective": f"{obj_pass}/{len(objective)}",
                 "rubric": f"{rub_pass}/{len(rubric)}",
                 "overall": f"{total_pass}/{total}",
