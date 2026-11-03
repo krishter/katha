@@ -948,19 +948,47 @@ async def tc08(db):
     # "what" widened 2026-11-03 with the owner's approval: "What was he
     # known for making" and "what was the sweet he made that you remember
     # best" ask §3.3's "What (what sweets)" and failed all three samples.
-    # "known as" stays out: "what was he known as" asks who.
+    # "known as" stays out: "what was he known as" asks who. "the sweet"
+    # added the same day: "what was the sweet you waited for him to make"
+    # had passed only on the loose "where" match removed below. Spelt
+    # with its ending so "the sweet-maker" does not count.
     w_targets = {
         "who": ["name", "who was he", "what was his name", "called"],
         "what": [
             "what sweet",
             "which sweet",
             "what kind of sweet",
+            "the sweet ",
+            "the sweets",
+            "first sweet",
             "known for",
             "he made",
             "did he make",
         ],
-        "when": ["when", "what year", "how old were you", "what age"],
-        "where": ["where", "which street", "which part", "whereabouts"],
+        # Bare "when" and "where" tightened 2026-11-03 with the owner's
+        # approval: they matched "When you think of it now, what was the
+        # first smell..." and "a place of his own where people gathered",
+        # which ask neither, and passed two samples that asked only his
+        # name. Only forms that ask the time or the place count.
+        "when": [
+            "when was",
+            "when did",
+            "when were",
+            "what year",
+            "which year",
+            "how old were you",
+            "what age",
+        ],
+        "where": [
+            "where was",
+            "where did",
+            "where were",
+            "where is",
+            "where in",
+            "which street",
+            "which part",
+            "whereabouts",
+        ],
         "why": ["why", "what made", "what was special", "favourite", "favorite"],
     }
     hits = []
