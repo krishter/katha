@@ -945,9 +945,20 @@ async def tc08(db):
     )
     resp2 = r2["response_text"]
 
+    # "what" widened 2026-11-03 with the owner's approval: "What was he
+    # known for making" and "what was the sweet he made that you remember
+    # best" ask §3.3's "What (what sweets)" and failed all three samples.
+    # "known as" stays out: "what was he known as" asks who.
     w_targets = {
         "who": ["name", "who was he", "what was his name", "called"],
-        "what": ["what sweets", "which sweets", "what kind of sweet"],
+        "what": [
+            "what sweet",
+            "which sweet",
+            "what kind of sweet",
+            "known for",
+            "he made",
+            "did he make",
+        ],
         "when": ["when", "what year", "how old were you", "what age"],
         "where": ["where", "which street", "which part", "whereabouts"],
         "why": ["why", "what made", "what was special", "favourite", "favorite"],
