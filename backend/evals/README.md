@@ -16,6 +16,8 @@ DATABASE_URL="postgresql+asyncpg://katha:katha@localhost:5432/katha" \
 DATABASE_URL="..." ./.venv/bin/python evals/run_eval.py tc03 tc11   # selected
 ```
 
+TC-01 to TC-11 each run **3 times** by default, because the model is sampled and one reply used to decide a case. Set `EVAL_SAMPLES=5` for a closer read, or `EVAL_SAMPLES=1` for the old single-shot run (it costs a third as much, about ₹12 for TC-01 to TC-11, but one flip moves the gate by about 9 points). The 80% and 75% targets are read across every sample, and the summary prints each case's pass rate, marking any case whose samples disagree. A sample that crashes counts as a failure. TC-19 to TC-25 repeat themselves and are not multiplied again.
+
 Results land in `evals/results/<timestamp>.json`, timestamped and never overwritten. Partial runs get a `-partial-` suffix, because a partial re-run once clobbered a full run's results file and the file on disk then silently disagreed with the run it appeared to describe.
 
 ## Why live calls, not mocks
@@ -46,4 +48,4 @@ The corollary — **do not loosen a criterion to make a run pass.** Change it on
 
 - **STT and TTS are bypassed.** Transcripts are fed directly. This touches nothing in the memory or extraction pipeline, but it means TC-06 measures extraction on code-mixed *text*, not Sarvam's transcription of code-mixed *audio* — its pass is narrower than it appears, and the real gap there is a Sarvam accuracy matter.
 - **Filler sessions insert `StoryAtom` rows directly** to advance the domain sequence so a later session lands on the domain a case needs. Anything actually under judgement goes through the real prompt-building code and a real API call.
-- **Rubric cases are LLM-sampled and vary run to run.** TC-04 has been observed FAIL / PASS / FAIL across three samples with byte-identical Layer 3 content. Before reporting a rubric change as a regression, re-run the case and check whether the input to the model actually changed.
+- **Every case is LLM-sampled and varies run to run.** TC-04 has been observed FAIL / PASS / FAIL across three samples with byte-identical Layer 3 content. This is why each case runs several times. Before reporting a change as a regression, compare pass rates, not single results, and check whether the input to the model actually changed.
