@@ -1,0 +1,41 @@
+name: Uptime
+
+# The production box was stopped from outside on 2026-11-02 and nobody
+# knew for four days, until a parent's messages went unanswered. This
+# checks the public health endpoint every five minutes and fails when it
+# does not answer. GitHub emails a failed scheduled run to whoever last
+# changed this schedule, so that person must keep failed-workflow emails
+# on (Settings > Notifications > Actions).
+#
+# Scheduled runs can start several minutes late, and GitHub disables them
+# after 60 days without a commit to the repository. Workflow_dispatch lets
+# you run it by hand to test the alert.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  health:
+    name: api.katha.life/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Three tries, 20 seconds apart, so a restart or one dropped packet
+      # does not send an alert. Down for a minute is not down.
+      - name: Check health
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -m 15 https://api.katha.life/health || true)
+            if [ "$code" = "200" ]; then
+              echo "healthy (attempt $attempt)"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP ${code:-none}"
+            sleep 20
+          done
+          echo "::error::api.katha.life/health has not answered 200 for about a minute. Parents' messages are not being answered."
+          exit 1
