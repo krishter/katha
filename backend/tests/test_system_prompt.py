@@ -697,6 +697,25 @@ def test_free_text_pronouns_are_passed_through_verbatim():
     )
 
 
+def test_extraction_writes_narratives_with_the_stated_pronouns():
+    """The narratives are third person and shown to the family. Without the
+    pronouns the extractor took a gender from the name and called a she/her
+    parent "he"."""
+    prompt = build_extraction_prompt(
+        _profile("she/her"), _pronoun_state(3, 2), _LATER_CONTEXT, "I danced", "Oh?"
+    )
+    assert "Refer to Lakshmi with the pronouns she/her" in prompt
+    assert "Never infer" in prompt
+
+
+def test_extraction_with_unstated_pronouns_uses_no_gendered_pronoun():
+    prompt = build_extraction_prompt(
+        _profile(""), _pronoun_state(3, 2), _LATER_CONTEXT, "I danced", "Oh?"
+    )
+    assert "pronouns are not recorded" in prompt
+    assert "no gendered pronoun for Lakshmi" in prompt
+
+
 # ── the family's note (Layer 3) ──────────────────────────────────────────────
 
 
