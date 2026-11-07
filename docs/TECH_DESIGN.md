@@ -58,7 +58,7 @@
 
 **Text-to-Speech: Gemini 3.8 Flash-Lite TTS, with Sarvam Bulbul**
 *(Changed 2026-10-18; see `docs/specs/GEMINI_TTS.md`. This section said Sarvam Bulbul V3.)*
-- New families speak with Gemini 3.8 Flash-Lite TTS: one voice per persona (Sulafat, Achird) in 12 of Katha's 13 languages, steered by a plain-words style ("unhurried, warm and gentle").
+- New families speak with Gemini 3.8 Flash-Lite TTS: one voice per persona (Sulafat, Achird) in 12 of Katha's 13 languages, steered by a plain-words style ("warm and caring, clear and attentive, at a natural conversational pace"; until 2026-11-07 "unhurried, warm and gentle", which a Malayalam parent found too slow and breathy).
 - Sarvam Bulbul (v4 Flash where it has a conversation voice, else v3) speaks Urdu, which Gemini does not list, and every family pinned before the switch.
 - Each parent's voice is pinned on her profile (`user_profiles.tts_voice`) and only an operator moves it (`scripts/set_voice.py`), so a change of default never changes the voice she knows.
 - If Gemini fails, that one reply is said in the persona's Sarvam voice rather than sent as text.

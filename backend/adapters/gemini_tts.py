@@ -52,11 +52,14 @@ _URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24_000
 _SAMPLE_WIDTH = 2  # 16-bit
 
-# The one delivery style, as heard in the A/B. Google advises a short style
-# string, reused unchanged across turns, over long instructions.
+# The one delivery style. Google advises a short style string, reused
+# unchanged across turns, over long instructions. Changed 2026-11-07: a
+# Malayalam parent heard the A/B style ("unhurried, warm and gentle") as too
+# slow and breathy; she chose this one from four samples.
 STYLE = (
-    "unhurried, warm and gentle, talking with an elderly parent; "
-    "calm and kind, not energetic, not salesy"
+    "warm and caring, clear and attentive, at a natural conversational pace, "
+    "like a respectful younger relative talking with an elder; "
+    "not slow, not breathy, not whispery"
 )
 
 # Languages whose script another Katha language shares, so the model could

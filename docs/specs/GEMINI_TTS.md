@@ -173,6 +173,8 @@ Same assumptions as the proposal's §4: about 2,300 characters of speech a sessi
 - **Metrics.** `units` gains `tts_gemini_clips`, `tts_gemini_audio_minutes`, `tts_vendor_fallbacks` and `tts_vendor_fallback_rate`, and the metrics page shows the fallback rate against the 1% target.
 - **Privacy page.** It now says replies are processed outside India by Anthropic and Google, used only to answer each request, and never used for training, with abuse-monitoring copies deleted after a limited period. This wording still needs the DPDP check in §4.4.
 
+**Style change (2026-11-07).** A Malayalam pilot parent found the A/B style too slow and "more sensual than empathetic". Production replies ran about 11 characters a second in her clips. From four samples of one reply (current style; the new style in Sulafat, Erinome and Gacrux) she chose Sulafat with the new style, about 25% shorter: "warm and caring, clear and attentive, at a natural conversational pace, like a respectful younger relative talking with an elder; not slow, not breathy, not whispery". The style is global, so every Gemini parent hears it. Gemini system-speech keys now hash the style too, so cached clips are re-synthesised in the new style rather than replayed.
+
 **Still open:**
 - Stages 2–4 of §6.
 - The §2 checks: the male voice (`Achird`) has never been heard; Marathi; and native listeners for Tamil, Malayalam and Odia.
