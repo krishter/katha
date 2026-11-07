@@ -123,6 +123,20 @@ def test_a_gemini_voice_has_its_own_key(monkeypatch):
     assert system_speech.speech_key("Hello", "ta-IN", "female", sarvam) != key
 
 
+def test_a_new_gemini_style_makes_new_keys_and_leaves_sarvam_alone(monkeypatch):
+    # Cached clips said in the old style must not be replayed after it changes.
+    from media import voices
+
+    monkeypatch.setattr("config.settings.TTS_VENDOR", "gemini")
+    sarvam = voices.voice_for("ta-IN", "female", "bulbul:v4-flash")
+    gemini_key = system_speech.speech_key("Hello", "ta-IN", "female")
+    sarvam_key = system_speech.speech_key("Hello", "ta-IN", "female", sarvam)
+
+    monkeypatch.setattr("adapters.gemini_tts.STYLE", "brisk and bright")
+    assert system_speech.speech_key("Hello", "ta-IN", "female") != gemini_key
+    assert system_speech.speech_key("Hello", "ta-IN", "female", sarvam) == sarvam_key
+
+
 async def test_a_pinned_voice_wins_over_the_default(monkeypatch, system_speech_store):
     from media import voices
 

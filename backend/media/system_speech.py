@@ -6,9 +6,10 @@ Text with no name in it — the failure apologies, "we already talked
 today", the consent outcomes — sounds the same for every parent, so paying
 Sarvam to synthesise it again on every use, and 39 clips again on every
 restart, is waste. Each phrase is kept as OGG in S3 and in a process-wide
-dict, keyed by model, voice, language and a hash of the text, and only
-synthesised on a miss. Changing any of the four makes a new key, so a
-reworded phrase or a voice change can never replay stale audio.
+dict, keyed by model, voice, language and a hash of the text (and, for
+Gemini, of the delivery style), and only synthesised on a miss. Changing
+any of them makes a new key, so a reworded phrase, a voice change or a new
+style can never replay stale audio.
 
 The voice is the parent's pinned one (media/tts.py), passed in by the
 caller; without it, the default for a new parent with that language and
@@ -28,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import logging
 
+from adapters import gemini_tts
 from media import audio_convert, storage, tts, voices
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,11 @@ def speech_key(
     """The S3 key for a phrase as `voice` (by default, a new parent's voice
     for this language and persona) would say it."""
     voice = voice or tts.default_voice(language_code, gender)
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    hashed = text
+    if voice.vendor == voices.GOOGLE:
+        # Gemini's delivery is steered by the style, so a new style is new audio.
+        hashed = f"{text}\0{gemini_tts.style_for(language_code)}"
+    digest = hashlib.sha256(hashed.encode("utf-8")).hexdigest()[:12]
     return f"system/speech/{voice.model}/{voice.speaker}/{language_code}/{digest}.ogg"
 
 
