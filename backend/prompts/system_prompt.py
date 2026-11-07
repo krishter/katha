@@ -848,6 +848,24 @@ share_restriction, not this."""
     )
 
 
+def _extraction_pronoun_line(user_profile: UserProfile) -> str:
+    """The narratives are written about the parent in the third person, so
+    without this the extractor took a gender from the name and got a she/her
+    parent wrong in 7 of her 36 stories. Unstated pronouns get no gendered
+    pronoun at all, as in Layer 1."""
+    name = user_profile.name
+    if user_profile.pronouns.strip():
+        return (
+            f"\n\nRefer to {name} with the pronouns {user_profile.pronouns.strip()} "
+            "in every field you write. Never infer them from the name or the story."
+        )
+    return (
+        f"\n\n{name}'s pronouns are not recorded: in every field you write, use "
+        f"{name}'s name and no gendered pronoun for {name}. Never infer one from "
+        "the name or the story."
+    )
+
+
 def build_extraction_prompt(
     user_profile: UserProfile,
     session_state: SessionState,
@@ -890,7 +908,7 @@ def build_extraction_prompt(
     return f"""You are Katha's extraction engine. You are given one exchange from \
 a reminiscence conversation with {user_profile.name}. Extract structured data \
 from the USER's statement — do not extract from Katha's replies, which are \
-included only for context.
+included only for context.{_extraction_pronoun_line(user_profile)}
 
 Today's focus domain: {domain.name} ({domain.id}).{known_people_block}{goal_met_note}
 
