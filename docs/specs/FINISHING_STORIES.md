@@ -1,6 +1,6 @@
 # Help her finish the stories she starts: plan
 
-**Status:** Proposed 2026-11-08. Not built.
+**Status:** Decided 2026-11-08: D1–D4 take the suggested answers. Step 1 (baseline) in progress.
 **Owner:** Krish · **Written:** 2026-11-08
 **Branch:** `feature/finishing-stories`, one PR. Never commit to `main`; see `.claude/rules/git.md`.
 **Touches:** `backend/prompts/system_prompt.py` (Layer 2 principle 8, the extraction prompt's `open_threads`), `backend/evals/run_eval.py`, `backend/tests/test_system_prompt.py`, `docs/TECH_DESIGN.md` §2.3 and §3.3.
@@ -69,6 +69,8 @@ TC-19 to TC-25 are taken, so the new cases start at TC-26. Each runs in English 
 
 The judgement in TC-26 to TC-28 is a reading of Katha's reply. Score them first with keyword lists in both languages, as TC-05 and TC-10 are, and show every failing reply verbatim. Krish decides any change to a criterion (`reference_eval_harness`); the open eval-audit item to validate keyword scorers against his labels applies here too.
 
+**Baseline (2026-11-08, current prompt, 3 samples × en/ml, ₹9):** TC-26 **0/6**, TC-27 **0/6**, TC-28 6/6, TC-29 3/6 by the scorer. Every TC-26 reply asked what she saw, heard or felt, or who was there; every TC-27 reply asked a name, a place or a feeling. The three TC-29 fails do name the missing part ("How the family responded that night and where they went"), in words the scorer does not list, so the extractor already does what 2.2 asks for: 6/6 by hand.
+
 Then the full regression: TC-01 to TC-11 at three samples, plus TC-19 to TC-25. Targets as always: 80%+ objective, 75%+ rubric.
 
 ## 5. Did it work
@@ -99,7 +101,9 @@ No new calls. Principle 8 grows by about 400 characters inside Layer 2, which is
 
 ## 8. Decisions for Krish
 
-| # | Question | Suggested |
+Decided 2026-11-08 (Krish): all four as suggested.
+
+| # | Question | Decided |
 |---|---|---|
 | D1 | The target for incidents reaching a complete arc | 40%, about double the baseline. Revisit after the first rerun |
 | D2 | Ship 2.2 (open threads naming the missing part) now, or wait for Phase B's stored threads and ask-limit | Now. It reuses the existing path, and the risk of an old incident being raised too often is capped by the 12-thread list and the no-repeat rule |

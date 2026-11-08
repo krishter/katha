@@ -3142,6 +3142,277 @@ async def tc25(db):
             await _tc25_once(db, language, n)
 
 
+# ---------------------------------------------------------------------
+# TC-26 to TC-29: Helping a story reach its end
+# (docs/specs/FINISHING_STORIES.md §4, TECH_DESIGN §3.3)
+# ---------------------------------------------------------------------
+_TC26_SAMPLES = 3
+
+_TC26_INCIDENT = {
+    "en-IN": "We were living by the river then, I must have been about ten. "
+    "One night the water came into the house.",
+    "ml-IN": "ഞങ്ങൾ അന്ന് പുഴയുടെ അടുത്താണ് താമസിച്ചിരുന്നത്. എനിക്ക് ഒരു പത്ത് "
+    "വയസ്സ് കാണും. ഒരു രാത്രി വെള്ളം വീട്ടിനകത്തേക്ക് കയറി വന്നു.",
+}
+_TC27_TURN = {
+    "en-IN": "My father carried my grandmother on his back to the temple steps. "
+    "We all ran behind him.",
+    "ml-IN": "അച്ഛൻ അമ്മൂമ്മയെ പുറത്ത് ചുമന്ന് അമ്പലത്തിന്റെ പടിക്കെട്ടിലേക്ക് "
+    "കൊണ്ടുപോയി. ഞങ്ങൾ എല്ലാവരും പിന്നാലെ ഓടി.",
+}
+_TC28_LOSS = {
+    "en-IN": "My elder brother had gone to Madras for work. One evening a telegram "
+    "came saying there had been an accident. He was gone.",
+    "ml-IN": "എന്റെ ചേട്ടൻ ജോലിക്ക് മദ്രാസിലേക്ക് പോയതാണ്. ഒരു ദിവസം വൈകുന്നേരം "
+    "ഒരു ടെലിഗ്രാം വന്നു, ഒരു ആക്സിഡന്റ് ഉണ്ടായി എന്ന്. ചേട്ടൻ പോയി.",
+}
+
+# Asks what happened then, or what they did: the turn.
+_ARC_NEXT = {
+    "en-IN": [
+        "what happened",
+        "happened next",
+        "happened then",
+        "what did you do",
+        "what did you all do",
+        "what did your",
+        "what did they do",
+        "what did he do",
+        "what did she do",
+        "what came next",
+        "what came after",
+        "what followed",
+        "then what",
+        "and then",
+    ],
+    "ml-IN": [
+        "സംഭവിച്ചു",
+        "സംഭവിച്ചത്",
+        "ചെയ്തു",
+        "ചെയ്തത്",
+        "പിന്നെ എന്ത്",
+        "പിന്നീട് എന്ത്",
+        "അതിനു ശേഷം",
+        "അതിനുശേഷം",
+        "പിന്നെ",
+    ],
+}
+# Asks how it ended, what came after, or what it meant: the resolution.
+_ARC_END = {
+    "en-IN": [
+        "how did it end",
+        "did it end",
+        "it ended",
+        "in the end",
+        "after that",
+        "afterwards",
+        "morning",
+        "went down",
+        "go back",
+        "went back",
+        "mean to you",
+        "meant to you",
+        "change",
+        "since then",
+        "look back",
+        "looking back",
+        "stayed with you",
+        "what happened",
+    ],
+    "ml-IN": [
+        "അവസാനം",
+        "കഴിഞ്ഞ്",
+        "ശേഷം",
+        "പിന്നീട്",
+        "പിറ്റേന്ന്",
+        "രാവിലെ",
+        "ഇറങ്ങ",
+        "തിരിച്ച്",
+        "മാറ്റ",
+        "മാറി",
+        "മനസ്സിൽ",
+        "സംഭവിച്ചു",
+        "സംഭവിച്ചത്",
+        "പിന്നെ",
+    ],
+}
+# A W or a sensory detail in place of the arc: the Phase A failure.
+_ARC_META = {
+    "en-IN": [
+        "name",
+        "called",
+        "what year",
+        "which year",
+        "how old",
+        "what age",
+        "smell",
+        "where was",
+        "where were",
+        "which village",
+        "which town",
+    ],
+    "ml-IN": [
+        "പേര്",
+        "വർഷം",
+        "വയസ്സ്",
+        "വയസ്",
+        "മണം",
+        "എവിടെ",
+        "ഏത് സ്ഥലം",
+        "ഏതു സ്ഥലം",
+        "ഏത് പുഴ",
+        "ഏതു പുഴ",
+    ],
+}
+_LOSS_VALIDATES = {
+    "en-IN": [
+        "sorry",
+        "loss",
+        "difficult",
+        "heartbreaking",
+        "terrible",
+        "shock",
+        "hear that",
+        "must have been",
+        "thank you for telling",
+        "thank you for sharing",
+    ],
+    "ml-IN": [
+        "വിഷമ",
+        "ദുഃഖ",
+        "ദുഖ",
+        "സങ്കട",
+        "വേദന",
+        "ക്ഷമിക്കണം",
+        "ഖേദ",
+        "ഞെട്ടൽ",
+        "പ്രയാസ",
+        "നന്ദി",
+    ],
+}
+_LOSS_PUSH = {
+    "en-IN": [
+        "what happened",
+        "how did it happen",
+        "how did he",
+        "what kind of accident",
+        "his name",
+        "how old",
+        "what year",
+        "when did",
+        "tell me more",
+    ],
+    "ml-IN": [
+        "സംഭവിച്ചു",
+        "സംഭവിച്ചത്",
+        "എങ്ങനെ സംഭവ",
+        "എങ്ങനെയാണ് സംഭവ",
+        "പേര്",
+        "വയസ്സ്",
+        "വർഷം",
+        "എപ്പോൾ",
+    ],
+}
+
+
+def _question_hits(reply: str, words) -> list[str]:
+    """Which of `words` appear in the reply's questions."""
+    questions = re.findall(r"[^.!?।]*\?", reply.lower())
+    return [w for w in words if any(w in q for q in questions)]
+
+
+def _names_flood_ending(thread: str) -> bool:
+    lower = thread.lower()
+    incident = any(w in lower for w in ("water", "flood", "night", "house", "വെള്ളം"))
+    after = any(
+        w in lower for w in ("happen", "after", "next", "then", "what did", "how did")
+    )
+    return incident and after
+
+
+async def _arc_profile(db, uid: str, language: str):
+    await cleanup(db, uid)
+    row = await seed_profile(db, uid, name="Lalitha")
+    row.preferred_language = language
+    row.pronouns = "she/her"
+    await db.commit()
+    return to_prompt_profile(row)
+
+
+async def _tc26_once(db, language: str, n: int) -> None:
+    uid = "eval-tc26"
+    pp = await _arc_profile(db, uid, language)
+    state = await session_manager.start_session(uid, db)
+    label = f"{language[:2]} #{n}"
+
+    r1 = await real_turn(db, uid, state.session_id, state, pp, _TC26_INCIDENT[language])
+    reply1 = r1["response_text"]
+    nxt = _question_hits(reply1, _ARC_NEXT[language])
+    meta = _question_hits(reply1, _ARC_META[language])
+    record(
+        f"TC-26 {label}",
+        "objective",
+        bool(nxt) and not meta,
+        f"reply: {reply1!r}\nasks_next={nxt} asks_w_or_sense={meta}",
+    )
+
+    threads = [
+        t
+        for atom in (r1["extraction_json"] or {}).get("story_atoms", [])
+        if isinstance(atom, dict)
+        for t in atom.get("open_threads") or []
+    ]
+    record(
+        f"TC-29 {label}",
+        "objective",
+        any(_names_flood_ending(t) for t in threads),
+        f"open_threads: {threads!r}",
+    )
+
+    r2 = await real_turn(
+        db, uid, state.session_id, r1["state"], pp, _TC27_TURN[language]
+    )
+    reply2 = r2["response_text"]
+    end = _question_hits(reply2, _ARC_END[language])
+    meta2 = _question_hits(reply2, _ARC_META[language])
+    record(
+        f"TC-27 {label}",
+        "objective",
+        bool(end) and not meta2,
+        f"first reply: {reply1!r}\nreply: {reply2!r}\n"
+        f"asks_end_or_meaning={end} asks_w_or_sense={meta2}",
+    )
+    await cleanup(db, uid)
+
+
+async def tc26(db):
+    """TC-26, TC-27 and TC-29 share one conversation per sample."""
+    for n in range(1, _TC26_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            await _tc26_once(db, language, n)
+
+
+async def tc28(db):
+    for n in range(1, _TC26_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            uid = "eval-tc28"
+            pp = await _arc_profile(db, uid, language)
+            state = await session_manager.start_session(uid, db)
+            r = await real_turn(
+                db, uid, state.session_id, state, pp, _TC28_LOSS[language]
+            )
+            reply = r["response_text"]
+            validates = [w for w in _LOSS_VALIDATES[language] if w in reply.lower()]
+            push = _question_hits(reply, _LOSS_PUSH[language])
+            record(
+                f"TC-28 {language[:2]} #{n}",
+                "rubric",
+                bool(validates) and not push,
+                f"reply: {reply!r}\nvalidates={validates} pushes={push}",
+            )
+            await cleanup(db, uid)
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -3172,6 +3443,8 @@ ALL_CASES = {
     "tc23": tc23,
     "tc24": tc24,
     "tc25": tc25,
+    "tc26": tc26,
+    "tc28": tc28,
 }
 
 
