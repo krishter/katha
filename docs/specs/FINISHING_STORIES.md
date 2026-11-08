@@ -1,6 +1,6 @@
 # Help her finish the stories she starts: plan
 
-**Status:** Decided 2026-11-08: D1–D4 take the suggested answers. Step 1 (baseline) in progress.
+**Status:** Decided 2026-11-08: D1–D4 take the suggested answers. Steps 1 and 2 done; step 3 (Krish's listening review) next.
 **Owner:** Krish · **Written:** 2026-11-08
 **Branch:** `feature/finishing-stories`, one PR. Never commit to `main`; see `.claude/rules/git.md`.
 **Touches:** `backend/prompts/system_prompt.py` (Layer 2 principle 8, the extraction prompt's `open_threads`), `backend/evals/run_eval.py`, `backend/tests/test_system_prompt.py`, `docs/TECH_DESIGN.md` §2.3 and §3.3.
@@ -20,7 +20,7 @@ Five W's describe a fact. An arc describes an account. The family is waiting for
 
 ## 2. What changes
 
-Two parts, both prompt-only. No schema, no new LLM call.
+Two parts were planned, both prompt-only; only 2.1 is built (see 2.2). No schema, no new LLM call.
 
 ### 2.1 In the moment: ask for the arc while she is telling it (Layer 2)
 
@@ -36,6 +36,8 @@ The draft wording, for review:
 Unchanged around it: one question per reply (Layer 5), never re-asking a question passed over, principle 4 (mood first), the grief handling of TC-10, the crisis protocol, set-aside topics, and the card read-back and sharing offers.
 
 ### 2.2 Across sessions: name the missing part in the open thread (extraction)
+
+**Dropped 2026-11-08 (Krish).** The baseline showed the extractor already does this: all six TC-29 samples left an open thread naming the missing turn. Only 2.1 changes; TC-29 stays, as the check that it keeps doing so.
 
 When she moves on before an incident ends, the arc is lost unless the next session knows what is missing. Today each atom's `open_threads` are free-text hints ("the name of her school"). Layer 3 already shows up to 12 of them, and principle 7 already tells Katha to raise them when today's topic gives an opening.
 
@@ -72,6 +74,13 @@ The judgement in TC-26 to TC-28 is a reading of Katha's reply. Score them first 
 **Baseline (2026-11-08, current prompt, 3 samples × en/ml, ₹9):** TC-26 **0/6**, TC-27 **0/6**, TC-28 6/6, TC-29 3/6 by the scorer. Every TC-26 reply asked what she saw, heard or felt, or who was there; every TC-27 reply asked a name, a place or a feeling. The three TC-29 fails do name the missing part ("How the family responded that night and where they went"), in words the scorer does not list, so the extractor already does what 2.2 asks for: 6/6 by hand.
 
 Then the full regression: TC-01 to TC-11 at three samples, plus TC-19 to TC-25. Targets as always: 80%+ objective, 75%+ rubric.
+
+**After (2026-11-08, ₹9 per run).** The first rewrite of principle 8 gave TC-26 2/6 and TC-27 3/6: Katha zoomed into the moment ("What do you remember about that moment, when you first saw the water?", "How did that night begin?"). Principle 8 now adds "not what that moment looked, sounded or felt like, and not how it began". With three scorer widenings Krish approved (en "what you did"; ml "കടന്നുപോയി", "കഴിച്ചുകൂട്ടി"; "വയസ്സുകാരി", a ten-year-old, no longer counts as asking her age), the result is TC-26 **5/6**, TC-27 **5/6**, TC-28 6/6, TC-29 6/6. The fails: TC-27 "Once you all reached the temple steps, what did you do there?" (asks for the next step again) and a TC-26 Malayalam reply that asks for the turn as a statement, with no question mark. Note that TC-27's end list includes "what happened", so "Once you reached the temple steps, what happened next?" passes; read strictly it would be 3/6.
+
+**Regression on the new prompt:** objective 71/72, rubric 37/48 (77%). Two cases were checked against `main` (ec359c5), because they could plausibly move:
+
+- TC-08 (a portrait, D4): 8/9 on the branch, 8/9 on `main`.
+- TC-20 (bridge rubric): 9/18 by the scorer on the branch, 14/18 on `main`. Read by hand (is the memory question about money?), both are 9/18. The scorer passes "what did the house you grew up in look like?" on "working years" and fails "a small hoard of coins… where did you keep it?". The tax replies jump to the house or the school on both. An existing weakness, not this change.
 
 ## 5. Did it work
 

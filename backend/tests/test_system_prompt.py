@@ -85,11 +85,16 @@ def test_prompt_length_stays_bounded():
     Without it Katha wrote the Python program in 6 of 6 samples and read
     a dal makhani recipe aloud in 2 of 6 (TC-19 baseline).
 
+    Raised from 6900 to 7400 (6585 -> 7078) on 2026-11-08 for principle 8
+    following an incident to its turn and end (docs/specs/FINISHING_STORIES.md).
+    Without it Katha asked a name, a place or a feeling where the story needed
+    "what happened then?": TC-26 0 of 6 and TC-27 0 of 6 at baseline.
+
     Raise it again only for something equally load-bearing, and say what
     in here.
     """
     prompt = _build()
-    assert len(prompt) < 6900, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 7400, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():
@@ -270,12 +275,36 @@ def test_prompt_layer3_is_early_session_when_nothing_known():
     assert "early session" in prompt.lower()
 
 
-# ── Layer 2 principle 8: progress through incomplete stories ──────────────
+# ── Layer 2 principle 8: help a story reach its end ─────────────────────────
 
 
 def test_prompt_contains_eighth_principle_progress_not_repeat():
     prompt = _build()
     assert "don't repeat" in prompt.lower()
+
+
+def test_an_incident_is_followed_to_its_turn_and_end():
+    """FINISHING_STORIES.md: the 5W rule alone had Katha ask names and years
+    in the middle of an incident, and 11 of 14 incidents never reached
+    their turn. An incident now asks what happened, then how it ended."""
+    lower = _build().lower()
+    assert "ask what happened then, or what they did" in lower
+    assert "ask how it ended or what it meant to them" in lower
+    # The first rewrite still got "what do you remember about that moment?"
+    # and "how did that night begin?" in place of the turn.
+    assert "not what that moment looked, sounded or felt like" in lower
+    assert "not how it began" in lower
+
+
+def test_a_portrait_still_gets_one_missing_w_at_a_time():
+    """TC-08's case: a person or place, not an incident, keeps the 5Ws."""
+    lower = _build().lower()
+    assert "describing a person, a place or a routine" in lower
+    assert "who, what, when, where or why" in lower
+
+
+def test_a_loss_is_not_followed_to_its_end():
+    assert "a loss is not a story to finish" in _build().lower()
 
 
 # ── Layer 4 recall-forcing instruction ──────────────────────────────────────
@@ -817,11 +846,14 @@ def test_session_100_prompt_stays_under_8500_characters():
     Raised from 8000 to 8500 on 2026-10-25 for the OUTSIDE REMEMBERING rule
     in Layer 2 (see test_prompt_length_stays_bounded). It is fixed text in
     the cached half, so it does not grow with tenure.
+
+    Raised from 8500 to 9000 on 2026-11-08 for principle 8 (see
+    test_prompt_length_stays_bounded), also fixed text in the cached half.
     """
     session = SimpleNamespace(**{**vars(_SESSION), "session_number": 100})
     session.exchange_count = 3  # recall anchor and full Layer 4 in play
     prompt = build_system_prompt(_PROFILE, session, _session_100_prior())
-    assert len(prompt) < 8500, len(prompt)
+    assert len(prompt) < 9000, len(prompt)
 
 
 # ── C3: the prompt in a cacheable half and a per-turn half ────────────────────

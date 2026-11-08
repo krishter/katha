@@ -3174,6 +3174,7 @@ _ARC_NEXT = {
         "happened next",
         "happened then",
         "what did you do",
+        "what you did",
         "what did you all do",
         "what did your",
         "what did they do",
@@ -3234,6 +3235,10 @@ _ARC_END = {
         "സംഭവിച്ചു",
         "സംഭവിച്ചത്",
         "പിന്നെ",
+        # Widened 2026-11-08 with the owner's approval: "how did that night
+        # pass", "how did you all get through that night".
+        "കടന്നുപോയി",
+        "കഴിച്ചുകൂട്ടി",
     ],
 }
 # A W or a sensory detail in place of the arc: the Phase A failure.
@@ -3315,17 +3320,45 @@ _LOSS_PUSH = {
 }
 
 
+# "a ten-year-old girl/boy" describes her; it doesn't ask her age. Removed
+# before matching (2026-11-08, owner's approval), so "വയസ്" in _ARC_META only
+# fires on a real age question.
+_DESCRIPTIVE_AGE = re.compile(r"വയസ്സ?ുകാര[ിന]")
+
+
 def _question_hits(reply: str, words) -> list[str]:
     """Which of `words` appear in the reply's questions."""
-    questions = re.findall(r"[^.!?।]*\?", reply.lower())
+    questions = re.findall(r"[^.!?।]*\?", _DESCRIPTIVE_AGE.sub("", reply.lower()))
     return [w for w in words if any(w in q for q in questions)]
 
 
 def _names_flood_ending(thread: str) -> bool:
+    # Widened 2026-11-08 with the owner's approval: "What the family did to
+    # save belongings or themselves" and "How the family responded that night
+    # and where they went" name the missing turn and failed the first list.
+    # Bare "what did" dropped the same day: it passed "What did they hear or
+    # feel when they first knew the water was inside?", a sensory question.
     lower = thread.lower()
-    incident = any(w in lower for w in ("water", "flood", "night", "house", "വെള്ളം"))
+    incident = any(
+        w in lower
+        for w in ("water", "flood", "night", "house", "family", "belongings", "വെള്ളം")
+    )
     after = any(
-        w in lower for w in ("happen", "after", "next", "then", "what did", "how did")
+        w in lower
+        for w in (
+            "happen",
+            "after",
+            "next",
+            "then",
+            "family do",
+            "family did",
+            "they do",
+            "they did",
+            "did to",
+            "respond",
+            "react",
+            "where they went",
+        )
     )
     return incident and after
 
