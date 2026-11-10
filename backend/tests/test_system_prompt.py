@@ -325,6 +325,10 @@ def test_an_incident_is_followed_to_its_turn_and_end():
     # and "how did that night begin?" in place of the turn.
     assert "not what that moment looked, sounded or felt like" in lower
     assert "not how it began" in lower
+    # Not an example of the question to avoid: "Where were you when you first
+    # noticed?" was tried on 2026-11-10 and Katha asked it, near word for
+    # word, in 5 of 6 replies (TC-26 0/6).
+    assert "where were you when you first noticed" not in lower
 
 
 def test_a_portrait_still_gets_one_missing_w_at_a_time():

@@ -3299,6 +3299,11 @@ _LOSS_VALIDATES = {
         "ഞെട്ടൽ",
         "പ്രയാസ",
         "നന്ദി",
+        # Widened 2026-11-10 with the owner's approval: "ഇത് പറയാൻ
+        # എളുപ്പമല്ല" (this isn't easy to say), "ചേട്ടനെ നഷ്ടപ്പെട്ടത്" (losing
+        # your brother).
+        "എളുപ്പമല്ല",
+        "നഷ്ടപ്പെട്ട",
     ],
 }
 _LOSS_PUSH = {
