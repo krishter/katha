@@ -3515,6 +3515,7 @@ def _repeated_acknowledgements(replies: list[str], said: str) -> list[str]:
     for w in _TC30_STOCK:
         if sum(w in lead for lead in leads) > 1:
             found.append(w)
+
     # The same first two words, or the same three words in a row anywhere.
     def grams(lead: str, n: int) -> set[tuple]:
         ws = _tokens(lead)
@@ -3539,7 +3540,14 @@ def _repeated_acknowledgements(replies: list[str], said: str) -> list[str]:
 # turn 5. On the old rule Katha closed at turn 4 ("tomorrow I'd love to hear
 # what happened when he finally reached you") and the session closed with it.
 _CLOSING_WORDS = {
-    "en-IN": ["tomorrow", "next time", "rest here", "stop here", "for today", "close here"],
+    "en-IN": [
+        "tomorrow",
+        "next time",
+        "rest here",
+        "stop here",
+        "for today",
+        "close here",
+    ],
     "ml-IN": ["നാളെ", "ഇന്നത്തേക്ക്", "നിർത്താം", "അവസാനിപ്പിക്കാം"],
 }
 
