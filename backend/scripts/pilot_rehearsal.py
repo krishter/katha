@@ -191,7 +191,9 @@ _KAMALA = {
 
 # One story-extraction payload per turn of session 1. Turns 2-4 each add an
 # atom; by turn 4 the cumulative count reaches childhood's target of 3 and
-# goal_met flips, so turn 5 is the closing exchange.
+# goal_met flips, so turn 5 is the closing exchange. Its extraction reports
+# Katha's close (session_end_suggested): with the goal met, that close, not
+# goal_met alone, ends the session (FINISHING_STORIES.md).
 _SESSION1_EXTRACTIONS = {
     1: {"story_atoms": [], "significant_people": [_KAMALA]},
     2: {
@@ -210,7 +212,7 @@ _SESSION1_EXTRACTIONS = {
         ],
         "significant_people": [],
     },
-    5: {"story_atoms": [], "significant_people": []},
+    5: {"story_atoms": [], "significant_people": [], "session_end": True},
 }
 
 # Deliberately fenced. entity_extractor asks for bare JSON and Claude
@@ -242,7 +244,7 @@ def _extraction_envelope(payload: dict) -> str:
         "themes": ["childhood"],
         "energy_signal": "high",
         "gaps_remaining": [],
-        "session_end_suggested": False,
+        "session_end_suggested": payload.get("session_end", False),
     }
     return f"<extraction>{json.dumps(full)}</extraction>"
 
