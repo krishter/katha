@@ -112,6 +112,12 @@ class UserProfileModel(Base):
     conversation_cards_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    # Stories (docs/specs/STORIES.md). Run for a parent only when
+    # STORIES_ENABLED is on AND this is true; an operator turns it on one
+    # family at a time.
+    stories_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     # Her own answer to "shall I share some of these with your child?"
     # (§5.1): not_asked | share_with_approval | unsure | never. No card is
     # drafted unless it is share_with_approval.

@@ -41,6 +41,7 @@ import models.media_object  # noqa: E402, F401
 import models.memory_card  # noqa: E402, F401
 import models.operator_alert  # noqa: E402, F401
 import models.session  # noqa: E402, F401
+import models.story  # noqa: E402, F401
 import models.story_atom  # noqa: E402, F401
 import models.turn  # noqa: E402, F401
 import models.twilio_deletion  # noqa: E402, F401

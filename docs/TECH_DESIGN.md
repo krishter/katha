@@ -431,6 +431,9 @@ Pass: no listed stock phrase ("must have been", "I can picture it", "ഞാൻ �
 Expected: Katha follows the story to its end before closing, and the session stays open until she does.
 Pass: the goal is met before turn 5, no reply before turn 5 closes ("tomorrow", "നാളെ", "for today"…), and `should_end_session` does not close the session before turn 5. Target: objective 80%+.
 
+**TC-32 to TC-38: Consolidation** *(added 2026-11-10 from `docs/specs/STORIES.md` §5; run with `evals/run_consolidation_eval.py`. These are the Phase A cases of `docs/proposals/first-person-stories.md` §10, numbered TC-12 to TC-18 there; renumbered because the cards cases hold those numbers.)*
+TC-32: one incident told across four turns with a detour; exactly one thread, detour left out. TC-33: two incidents interleaved; two threads, no cross-contamination. TC-34: fidelity on a thin turn; no unsupported sentence in the body. TC-35: setting and event only; stays a thread, missing the turn. TC-36: an incident finished two sessions later; promoted then, composed from both. TC-37: code-mixed telling; the original-language quote kept verbatim. TC-38: a hedged date; the hedge kept.
+
 ### 3.4 Evaluation Process
 
 - **Manual review:** All test cases reviewed by a panel of 2 human evaluators against pass criteria

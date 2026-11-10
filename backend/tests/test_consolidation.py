@@ -3,7 +3,7 @@ Unit tests for the consolidation pipeline's own logic.
 
 These deliberately do NOT test whether the model groups or composes well —
 that is the model's judgement, it needs real calls, and it lives in
-evals/run_consolidation_eval.py with the TC-12..TC-18 fixtures. What is
+evals/run_consolidation_eval.py with the TC-32..TC-38 fixtures. What is
 tested here is the machinery around it: the arc bar, carrying a thread
 across sessions, and what happens to a draft when the fidelity check
 rejects a sentence. A mocked LLM can answer those exactly.
@@ -278,8 +278,8 @@ async def test_connective_sentences_are_kept_but_carry_no_arc():
 
 
 async def test_incomplete_arc_stays_a_thread_and_never_composes():
-    """TC-15 shape: no compose call should be made at all."""
-    fixture = load_fixture("tc15")
+    """TC-35 shape: no compose call should be made at all."""
+    fixture = load_fixture("tc35")
     session = fixture["sessions"][0]
     call = scripted_llm(
         [
@@ -404,7 +404,7 @@ async def test_token_usage_is_recorded_per_step():
 
 
 @pytest.mark.parametrize(
-    "name", ["tc12", "tc13", "tc14", "tc15", "tc16", "tc17", "tc18"]
+    "name", ["tc32", "tc33", "tc34", "tc35", "tc36", "tc37", "tc38"]
 )
 def test_fixture_is_well_formed(name):
     """The fixtures drive the live eval; a malformed one would fail there
