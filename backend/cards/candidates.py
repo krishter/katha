@@ -21,12 +21,13 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards import state
 from core import sharing
 from models.conversation_card import ConversationCard
+from models.story import Story
 from models.story_atom import StoryAtom
 from models.turn import Turn
 from models.user_profile import UserProfileModel
@@ -77,6 +78,14 @@ async def blocked(
     return None
 
 
+def in_a_story():
+    """Atoms that belong to a Story, pending or approved or kept private
+    (STORIES.md D-f): the child should not get the same moment twice, and a
+    card must not carry a Story she kept to herself. Atoms of a thread stay
+    available until it becomes a Story."""
+    return exists().where(Story.id == StoryAtom.story_id, Story.status == "story")
+
+
 async def candidate_atoms(
     profile: UserProfileModel, db: AsyncSession
 ) -> list[StoryAtom]:
@@ -108,6 +117,7 @@ async def candidate_atoms(
         .where(StoryAtom.verbatim_quote.is_not(None))
         .where(func.length(func.trim(StoryAtom.verbatim_quote)) > 0)
         .where(Turn.is_private.is_(False))
+        .where(~in_a_story())
         .order_by(StoryAtom.created_at.desc())
     )
     atoms = (await db.execute(query)).scalars().all()

@@ -49,6 +49,7 @@ from prompts.system_prompt import (
     build_system_prompt_parts,
 )
 from speech import catalogue
+from stories import consolidate as story_consolidation
 
 logger = logging.getLogger(__name__)
 
@@ -752,6 +753,12 @@ async def _produce_session_outputs(session_id: str, user_id: str, db) -> None:
         await run_post_session(session_id, user_id, db)
     except Exception:
         logger.exception("Post-session processing failed for session %s", session_id)
+
+    # Stories (STORIES.md §2.1), before the card: material that becomes a
+    # Story leaves the card pool (D-f). Off unless STORIES_ENABLED and her
+    # family's switch are both on. Never raises.
+    if settings.STORIES_ENABLED:
+        await story_consolidation.consolidate_for_session(session_id, user_id, db)
 
     # Conversation cards replace the memory card for a family that has
     # them (CONVERSATION_CARDS.md D2): today's card reaches the child

@@ -1,6 +1,6 @@
 # Stories (Phase B and C): build plan
 
-**Status:** Plan agreed 2026-11-10 (Krish took every recommendation in §3). Stage 1 in progress.
+**Status:** Plan agreed 2026-11-10 (Krish took every recommendation in §3). Stage 1 built (§6a); Stage 2 next.
 **Branch:** `feature/stories`, one PR per stage (§6). Never commit to `main`; see `.claude/rules/git.md`.
 **Design:** `docs/proposals/first-person-stories.md` (the proposal; its decisions D1 to D5 stand). This document is how to build it on today's code, and where today's code changes the proposal.
 **Depends on:** Phase A (`consolidation/`, merged in October), conversation cards (`cards/`, merged in #46), finishing stories (#66, deployed 2026-11-10).
@@ -122,6 +122,28 @@ Proposal §8 stands, with these changes for today's code:
 | **Go-live** | After the 2026-11-24 rerun: self-trial, then the backfill (D-c), then the flag on per family, as for cards | Yes. Needs Krish's explicit go |
 
 Each stage is one PR. Stages 1 and 2 are the bulk of the work; Stage 3 needs Meta's template approval, so its template is submitted on the first day of Stage 3.
+
+## 6a. Stage 1 record (2026-11-10)
+
+Built behind `STORIES_ENABLED` (off) and `user_profiles.stories_enabled` (off):
+
+- **Storage:** the `stories` and `story_versions` tables, plus `story_atoms.story_id`. The CHECK constraint refuses an approval unless the operator has passed the Story and `approved_hash = readback_hash`. Tested against Postgres.
+- **The pass** (`stories/consolidate.py`) runs in `_produce_session_outputs`, before card drafting.
+  - It reads only turns that aren't private and whose extraction is done, and passes her private topics to the grouping step. The grouping prompt is unchanged when there are none.
+  - It carries her 15 most recent open threads and their source turns, so a thread is finished and composed from every telling.
+  - It never runs twice for one session.
+- **Read-back** (`stories/readback.py`): written in her language, then checked both ways against the English body: nothing added, nothing left out. There is one rewrite; a Story whose read-back still fails can't be passed.
+- **Operator page:** `/admin/stories/view`, with pass, rewrite read-back and retire.
+- **D-f:** a Story's atoms leave the card pool.
+- **Family side:**
+  - Erasure deletes stories and versions.
+  - `/family/export` adds `first_person_stories`, approved only, through `stories.store.approved_stories()`.
+  - `scripts/backfill_stories.py` is written; it hasn't been run.
+- **Cost:** each step is its own `api_usage` operation (`story_group`, `story_compose`, `story_fidelity`, `story_readback`, `story_readback_check`).
+
+**Evals.** TC-32 to TC-38, renumbered from Phase A, pass 7/7 on Sonnet 4.6.
+
+**D-e, the Haiku trial:** with `LLM_STORY_GROUP_MODEL=claude-haiku-5-5`, TC-36 failed. The thread finished in session 3 was never promoted, and carrying a thread across sessions is the case Stories need most. Haiku's grouping also wrote about twice the output tokens. Grouping stays on Sonnet. This was one sample; a later trial needs TC-36 at 3+ samples.
 
 ## 7. Risks
 
