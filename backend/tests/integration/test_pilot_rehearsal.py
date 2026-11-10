@@ -17,7 +17,10 @@ Scenario: 5 turns, one elderly user, one session, domain "childhood"
      before the dialogue call ever got a chance to deliver a closing
      message), closing defers to the next turn.
   5. The closing exchange — the dialogue call now sees goal_met=True and
-     (per Layer 4) wraps up; the session closes at the end of this turn.
+     (per Layer 4) wraps up; its extraction reports the close
+     (session_end_suggested), and the session closes at the end of this
+     turn. With the goal met it is that close, not goal_met alone, that
+     ends the session, so a story can be finished first (FINISHING_STORIES).
 """
 
 from __future__ import annotations
@@ -60,7 +63,7 @@ def _atom(title: str) -> dict:
     }
 
 
-def _extraction_content(atoms: list[dict]) -> str:
+def _extraction_content(atoms: list[dict], session_end: bool = False) -> str:
     payload = {
         "story_atoms": atoms,
         "named_entities": {},
@@ -68,7 +71,7 @@ def _extraction_content(atoms: list[dict]) -> str:
         "themes": ["childhood"],
         "energy_signal": "high",
         "gaps_remaining": [],
-        "session_end_suggested": False,
+        "session_end_suggested": session_end,
     }
     return f"<extraction>{json.dumps(payload)}</extraction>"
 
@@ -80,7 +83,7 @@ _EXTRACTIONS_BY_TURN = {
     2: _extraction_content([_atom("the street outside our house")]),
     3: _extraction_content([_atom("my mother's kitchen")]),
     4: _extraction_content([_atom("the neighbour who made sweets")]),
-    5: _extraction_content([]),
+    5: _extraction_content([], session_end=True),
 }
 
 

@@ -3142,6 +3142,463 @@ async def tc25(db):
             await _tc25_once(db, language, n)
 
 
+# ---------------------------------------------------------------------
+# TC-26 to TC-29: Helping a story reach its end
+# (docs/specs/FINISHING_STORIES.md §4, TECH_DESIGN §3.3)
+# ---------------------------------------------------------------------
+_TC26_SAMPLES = 3
+
+_TC26_INCIDENT = {
+    "en-IN": "We were living by the river then, I must have been about ten. "
+    "One night the water came into the house.",
+    "ml-IN": "ഞങ്ങൾ അന്ന് പുഴയുടെ അടുത്താണ് താമസിച്ചിരുന്നത്. എനിക്ക് ഒരു പത്ത് "
+    "വയസ്സ് കാണും. ഒരു രാത്രി വെള്ളം വീട്ടിനകത്തേക്ക് കയറി വന്നു.",
+}
+_TC27_TURN = {
+    "en-IN": "My father carried my grandmother on his back to the temple steps. "
+    "We all ran behind him.",
+    "ml-IN": "അച്ഛൻ അമ്മൂമ്മയെ പുറത്ത് ചുമന്ന് അമ്പലത്തിന്റെ പടിക്കെട്ടിലേക്ക് "
+    "കൊണ്ടുപോയി. ഞങ്ങൾ എല്ലാവരും പിന്നാലെ ഓടി.",
+}
+_TC28_LOSS = {
+    "en-IN": "My elder brother had gone to Madras for work. One evening a telegram "
+    "came saying there had been an accident. He was gone.",
+    "ml-IN": "എന്റെ ചേട്ടൻ ജോലിക്ക് മദ്രാസിലേക്ക് പോയതാണ്. ഒരു ദിവസം വൈകുന്നേരം "
+    "ഒരു ടെലിഗ്രാം വന്നു, ഒരു ആക്സിഡന്റ് ഉണ്ടായി എന്ന്. ചേട്ടൻ പോയി.",
+}
+
+# Asks what happened then, or what they did: the turn.
+_ARC_NEXT = {
+    "en-IN": [
+        "what happened",
+        "happened next",
+        "happened then",
+        "what did you do",
+        "what you did",
+        "what did you and",
+        "what did you all do",
+        "what did your",
+        "what did they do",
+        "what did he do",
+        "what did she do",
+        "what came next",
+        "what came after",
+        "what followed",
+        "then what",
+        "and then",
+    ],
+    "ml-IN": [
+        "സംഭവിച്ചു",
+        "സംഭവിച്ചത്",
+        # Widened 2026-11-09 with the owner's approval: "എന്താണ് ഉണ്ടായത്"
+        # (what happened) and "എന്നിട്ട്?" (and then?), now a prompt example.
+        "ഉണ്ടായ",
+        "എന്നിട്ട്",
+        "ചെയ്തു",
+        "ചെയ്തത്",
+        "പിന്നെ എന്ത്",
+        "പിന്നീട് എന്ത്",
+        "അതിനു ശേഷം",
+        "അതിനുശേഷം",
+        "പിന്നെ",
+    ],
+}
+# Asks how it ended, what came after, or what it meant: the resolution.
+_ARC_END = {
+    "en-IN": [
+        "how did it end",
+        "did it end",
+        "it ended",
+        "in the end",
+        "after that",
+        "afterwards",
+        "morning",
+        "went down",
+        "go back",
+        "went back",
+        "mean to you",
+        "meant to you",
+        "change",
+        "since then",
+        "look back",
+        "looking back",
+        "stayed with you",
+        "what happened",
+    ],
+    "ml-IN": [
+        "അവസാനം",
+        "കഴിഞ്ഞ്",
+        "ശേഷം",
+        "പിന്നീട്",
+        "പിറ്റേന്ന്",
+        "രാവിലെ",
+        "ഇറങ്ങ",
+        "തിരിച്ച്",
+        "മാറ്റ",
+        "മാറി",
+        "മനസ്സിൽ",
+        "സംഭവിച്ചു",
+        "സംഭവിച്ചത്",
+        "പിന്നെ",
+        # Widened 2026-11-08 with the owner's approval: "how did that night
+        # pass", "how did you all get through that night".
+        "കടന്നുപോയി",
+        "കഴിച്ചുകൂട്ടി",
+        "എന്നിട്ട്",
+    ],
+}
+# A W or a sensory detail in place of the arc: the Phase A failure.
+_ARC_META = {
+    "en-IN": [
+        "name",
+        "called",
+        "what year",
+        "which year",
+        "how old",
+        "what age",
+        "smell",
+        "where was",
+        "where were",
+        "which village",
+        "which town",
+    ],
+    "ml-IN": [
+        "പേര്",
+        "വർഷം",
+        "വയസ്സ്",
+        "വയസ്",
+        "മണം",
+        "എവിടെ",
+        "ഏത് സ്ഥലം",
+        "ഏതു സ്ഥലം",
+        "ഏത് പുഴ",
+        "ഏതു പുഴ",
+    ],
+}
+_LOSS_VALIDATES = {
+    "en-IN": [
+        "sorry",
+        "loss",
+        "difficult",
+        "heartbreaking",
+        "terrible",
+        "shock",
+        "hear that",
+        "must have been",
+        "thank you for telling",
+        "thank you for sharing",
+    ],
+    "ml-IN": [
+        "വിഷമ",
+        "ദുഃഖ",
+        "ദുഖ",
+        "സങ്കട",
+        "വേദന",
+        "ക്ഷമിക്കണം",
+        "ഖേദ",
+        "ഞെട്ടൽ",
+        "പ്രയാസ",
+        "നന്ദി",
+        # Widened 2026-11-10 with the owner's approval: "ഇത് പറയാൻ
+        # എളുപ്പമല്ല" (this isn't easy to say), "ചേട്ടനെ നഷ്ടപ്പെട്ടത്" (losing
+        # your brother).
+        "എളുപ്പമല്ല",
+        "നഷ്ടപ്പെട്ട",
+    ],
+}
+_LOSS_PUSH = {
+    "en-IN": [
+        "what happened",
+        "how did it happen",
+        "how did he",
+        "what kind of accident",
+        "his name",
+        "how old",
+        "what year",
+        "when did",
+        "tell me more",
+    ],
+    "ml-IN": [
+        "സംഭവിച്ചു",
+        "സംഭവിച്ചത്",
+        "എങ്ങനെ സംഭവ",
+        "എങ്ങനെയാണ് സംഭവ",
+        "പേര്",
+        "വയസ്സ്",
+        "വർഷം",
+        "എപ്പോൾ",
+    ],
+}
+
+
+# "a ten-year-old girl/boy" describes her; it doesn't ask her age. Removed
+# before matching (2026-11-08, owner's approval), so "വയസ്" in _ARC_META only
+# fires on a real age question.
+_DESCRIPTIVE_AGE = re.compile(r"വയസ്സ?ുകാര[ിന]")
+
+
+def _question_hits(reply: str, words) -> list[str]:
+    """Which of `words` appear in the reply's questions."""
+    questions = re.findall(r"[^.!?।]*\?", _DESCRIPTIVE_AGE.sub("", reply.lower()))
+    return [w for w in words if any(w in q for q in questions)]
+
+
+def _names_flood_ending(thread: str) -> bool:
+    # Widened 2026-11-08 with the owner's approval: "What the family did to
+    # save belongings or themselves" and "How the family responded that night
+    # and where they went" name the missing turn and failed the first list.
+    # Bare "what did" dropped the same day: it passed "What did they hear or
+    # feel when they first knew the water was inside?", a sensory question.
+    lower = thread.lower()
+    incident = any(
+        w in lower
+        for w in ("water", "flood", "night", "house", "family", "belongings", "വെള്ളം")
+    )
+    after = any(
+        w in lower
+        for w in (
+            "happen",
+            "after",
+            "next",
+            "then",
+            "family do",
+            "family did",
+            "they do",
+            "they did",
+            "did to",
+            "respond",
+            "react",
+            "where they went",
+        )
+    )
+    return incident and after
+
+
+async def _arc_profile(db, uid: str, language: str):
+    await cleanup(db, uid)
+    row = await seed_profile(db, uid, name="Lalitha")
+    row.preferred_language = language
+    row.pronouns = "she/her"
+    await db.commit()
+    return to_prompt_profile(row)
+
+
+async def _tc26_once(db, language: str, n: int) -> None:
+    uid = "eval-tc26"
+    pp = await _arc_profile(db, uid, language)
+    state = await session_manager.start_session(uid, db)
+    label = f"{language[:2]} #{n}"
+
+    r1 = await real_turn(db, uid, state.session_id, state, pp, _TC26_INCIDENT[language])
+    reply1 = r1["response_text"]
+    nxt = _question_hits(reply1, _ARC_NEXT[language])
+    meta = _question_hits(reply1, _ARC_META[language])
+    record(
+        f"TC-26 {label}",
+        "objective",
+        bool(nxt) and not meta,
+        f"reply: {reply1!r}\nasks_next={nxt} asks_w_or_sense={meta}",
+    )
+
+    threads = [
+        t
+        for atom in (r1["extraction_json"] or {}).get("story_atoms", [])
+        if isinstance(atom, dict)
+        for t in atom.get("open_threads") or []
+    ]
+    record(
+        f"TC-29 {label}",
+        "objective",
+        any(_names_flood_ending(t) for t in threads),
+        f"open_threads: {threads!r}",
+    )
+
+    r2 = await real_turn(
+        db, uid, state.session_id, r1["state"], pp, _TC27_TURN[language]
+    )
+    reply2 = r2["response_text"]
+    end = _question_hits(reply2, _ARC_END[language])
+    meta2 = _question_hits(reply2, _ARC_META[language])
+    record(
+        f"TC-27 {label}",
+        "objective",
+        bool(end) and not meta2,
+        f"first reply: {reply1!r}\nreply: {reply2!r}\n"
+        f"asks_end_or_meaning={end} asks_w_or_sense={meta2}",
+    )
+    await cleanup(db, uid)
+
+
+async def tc26(db):
+    """TC-26, TC-27 and TC-29 share one conversation per sample."""
+    for n in range(1, _TC26_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            await _tc26_once(db, language, n)
+
+
+async def tc28(db):
+    for n in range(1, _TC26_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            uid = "eval-tc28"
+            pp = await _arc_profile(db, uid, language)
+            state = await session_manager.start_session(uid, db)
+            r = await real_turn(
+                db, uid, state.session_id, state, pp, _TC28_LOSS[language]
+            )
+            reply = r["response_text"]
+            validates = [w for w in _LOSS_VALIDATES[language] if w in reply.lower()]
+            push = _question_hits(reply, _LOSS_PUSH[language])
+            record(
+                f"TC-28 {language[:2]} #{n}",
+                "rubric",
+                bool(validates) and not push,
+                f"reply: {reply!r}\nvalidates={validates} pushes={push}",
+            )
+            await cleanup(db, uid)
+
+
+# ── TC-30: acknowledgements don't repeat within a session ────────────────────
+# From the Malayalam listening review (2026-11-09): replies opened by retelling
+# her last answer, and "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്" ("I can picture it") opened
+# reply after reply. TC-26 and TC-27 are one or two turns and can't see a
+# repeat; this is one five-turn story. An invented family and festival.
+_TC30_STORY = {
+    "en-IN": [
+        "When I was twelve, my uncle took us to the Thrissur Pooram for the first time.",
+        "We went by bus, it was very crowded, and I held my uncle's hand the whole way.",
+        "In the crowd I let go of his hand and lost him. I stood by the temple wall and cried.",
+        "A policeman found me, took me to a stall, and they called out my name on the loudspeaker.",
+        "My uncle came running. He didn't scold me, he bought me a balloon. "
+        "After that he never let go of my hand.",
+    ],
+    "ml-IN": [
+        "എനിക്ക് പന്ത്രണ്ട് വയസ്സുള്ളപ്പോൾ അമ്മാവൻ ഞങ്ങളെ ആദ്യമായി തൃശ്ശൂർ പൂരത്തിന് കൊണ്ടുപോയി.",
+        "ബസ്സിലാണ് പോയത്, വല്ലാത്ത തിരക്കായിരുന്നു. ഞാൻ വഴി മുഴുവൻ അമ്മാവന്റെ കൈ പിടിച്ചിരുന്നു.",
+        "തിരക്കിനിടയിൽ കൈ വിട്ടുപോയി, അമ്മാവനെ കാണാതായി. ഞാൻ അമ്പലത്തിന്റെ മതിലിനടുത്ത് നിന്ന് കരഞ്ഞു.",
+        "ഒരു പോലീസുകാരൻ എന്നെ കണ്ടു, ഒരു കടയിലേക്ക് കൊണ്ടുപോയി, ലൗഡ്സ്പീക്കറിൽ എന്റെ പേര് വിളിച്ചുപറഞ്ഞു.",
+        "അമ്മാവൻ ഓടിവന്നു. എന്നെ വഴക്കു പറഞ്ഞില്ല, ഒരു ബലൂൺ വാങ്ങിത്തന്നു. "
+        "അതിനുശേഷം പിന്നെ ഒരിക്കലും എന്റെ കൈ വിട്ടില്ല.",
+    ],
+}
+# Acknowledgements seen repeating, and the Layer 5 examples (copied word for
+# word in 2 of 3 replies the first time they were added).
+_TC30_STOCK = [
+    "must have been",
+    "sounds like",
+    "picture",
+    "imagine",
+    "thought first",
+    "മനസ്സിൽ കാണ",
+    "വല്ലാത്തൊരു",
+    "ആദ്യം ഓർത്തത്",
+    "ധൈര്യമായിരുന്നു",
+    "അത്ര ഇഷ്ടമായിരുന്നു",
+]
+
+
+def _lead(reply: str) -> str:
+    """The reply before its question: where the acknowledgement is."""
+    return re.split(r"[^.!?।]*\?", reply)[0] or reply
+
+
+def _tokens(text: str) -> list[str]:
+    # Not \w+: Python's \w splits Malayalam words at their vowel signs.
+    return re.findall(r"[^\s.,;:!?।—'\"()-]+", text)
+
+
+def _repeated_acknowledgements(replies: list[str], said: str) -> list[str]:
+    """Phrases that open more than one reply's acknowledgement. A phrase made
+    only of her own words is her story, not a habit, and doesn't count."""
+    said_words = set(_tokens(said.lower()))
+    leads = [_lead(r).lower() for r in replies]
+    found = []
+    for w in _TC30_STOCK:
+        if sum(w in lead for lead in leads) > 1:
+            found.append(w)
+
+    # The same first two words, or the same three words in a row anywhere.
+    def grams(lead: str, n: int) -> set[tuple]:
+        ws = _tokens(lead)
+        return {tuple(ws[i : i + n]) for i in range(len(ws) - n + 1)}
+
+    openers = [tuple(_tokens(lead)[:2]) for lead in leads]
+    for o in set(openers):
+        if o and openers.count(o) > 1 and not set(o) <= said_words:
+            found.append(" ".join(o) + " …")
+    seen: dict[tuple, int] = {}
+    for lead in leads:
+        for g in grams(lead, 3):
+            seen[g] = seen.get(g, 0) + 1
+    for g, count in seen.items():
+        if count > 1 and not set(g) <= said_words:
+            found.append(" ".join(g))
+    return sorted(set(found))
+
+
+# TC-31: a met goal doesn't close in the middle of a story. The same session:
+# three atoms meet the childhood goal by about turn 3, and the story ends at
+# turn 5. On the old rule Katha closed at turn 4 ("tomorrow I'd love to hear
+# what happened when he finally reached you") and the session closed with it.
+_CLOSING_WORDS = {
+    "en-IN": [
+        "tomorrow",
+        "next time",
+        "rest here",
+        "stop here",
+        "for today",
+        "close here",
+    ],
+    "ml-IN": ["നാളെ", "ഇന്നത്തേക്ക്", "നിർത്താം", "അവസാനിപ്പിക്കാം"],
+}
+
+
+async def tc30(db):
+    """TC-30 and TC-31 share one five-turn session per sample."""
+    for n in range(1, _TC26_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            uid = "eval-tc30"
+            pp = await _arc_profile(db, uid, language)
+            state = await session_manager.start_session(uid, db)
+            replies, closed_at, goal_met_at = [], None, None
+            for turn, text in enumerate(_TC30_STORY[language], start=1):
+                before = state
+                r = await real_turn(db, uid, state.session_id, state, pp, text)
+                state = r["state"]
+                replies.append(r["response_text"])
+                if state.goal_met and goal_met_at is None:
+                    goal_met_at = turn
+                if closed_at is None and session_manager.should_end_session(
+                    state, goal_met_before_this_turn=before.goal_met
+                ):
+                    closed_at = turn
+            repeats = _repeated_acknowledgements(
+                replies, " ".join(_TC30_STORY[language])
+            )
+            shown = "\n".join(f"  {i + 1}. {r!r}" for i, r in enumerate(replies))
+            record(
+                f"TC-30 {language[:2]} #{n}",
+                "objective",
+                not repeats,
+                f"replies:\n{shown}\nrepeated={repeats}",
+            )
+            early = [
+                i + 1
+                for i, reply in enumerate(replies[:-1])
+                if any(w in reply.lower() for w in _CLOSING_WORDS[language])
+            ]
+            record(
+                f"TC-31 {language[:2]} #{n}",
+                "objective",
+                goal_met_at is not None
+                and goal_met_at < len(replies)
+                and not early
+                and (closed_at is None or closed_at == len(replies)),
+                f"goal met at turn {goal_met_at}; session would close at turn "
+                f"{closed_at}; replies before the story's end that close: {early}",
+            )
+            await cleanup(db, uid)
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -3172,6 +3629,9 @@ ALL_CASES = {
     "tc23": tc23,
     "tc24": tc24,
     "tc25": tc25,
+    "tc26": tc26,
+    "tc28": tc28,
+    "tc30": tc30,
 }
 
 

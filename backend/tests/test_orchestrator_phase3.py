@@ -1232,7 +1232,7 @@ async def test_run_extraction_for_turn_defers_close_when_goal_just_met():
 
 async def test_run_extraction_for_turn_closes_when_goal_was_already_met():
     """The turn after goal_met first flipped true: the dialogue call for
-    this turn already knew, and closing may proceed."""
+    this turn already knew and closed, so the session closes."""
     from core.orchestrator import run_extraction_for_turn
 
     turn_id = uuid.uuid4()
@@ -1241,7 +1241,7 @@ async def test_run_extraction_for_turn_closes_when_goal_was_already_met():
     )
     db = _make_extraction_db(turn_row=turn_row)
     session_state = _make_session_state(goal_met=True)
-    still_met_state = _make_session_state(goal_met=True, session_end_suggested=False)
+    still_met_state = _make_session_state(goal_met=True, session_end_suggested=True)
 
     with (
         patch(
