@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 
 _STALE_SESSION_AGE = timedelta(hours=4)
 
+# Once the domain goal is met, Katha closes on her own reply, but not in the
+# middle of a story (FINISHING_STORIES.md: one incident told over four turns
+# met the goal halfway and was closed before its ending). The extraction
+# reports her close as session_end_suggested; this is the backstop for a
+# session she never closes. The design target is 6-8 exchanges.
+GOAL_MET_EXCHANGE_CEILING = 10
+
 
 @dataclass
 class SessionState:
@@ -266,8 +273,11 @@ def should_end_session(
     state: SessionState, *, goal_met_before_this_turn: bool | None = None
 ) -> bool:
     """
-    Return True if the LLM signalled the end, the domain goal is met, or
-    the user is low-energy and the session has run long enough. This is
+    Return True if the LLM signalled the end, the domain goal is met and
+    the session has reached GOAL_MET_EXCHANGE_CEILING, or the user is
+    low-energy and the session has run long enough. With the goal met, it is
+    Katha's closing reply (session_end_suggested) that ends the session, so
+    she can follow a story to its end first. This is
     the single source of truth for "is this session over" — callers must
     not re-derive it from session_end_suggested/goal_met directly.
 
@@ -287,7 +297,7 @@ def should_end_session(
     if state.goal_met and goal_met_before_this_turn is False:
         return False
     if state.goal_met:
-        return True
+        return state.exchange_count >= GOAL_MET_EXCHANGE_CEILING
     if state.energy_signal == "low" and state.exchange_count >= 3:
         return True
     return False

@@ -43,6 +43,16 @@ When she moves on before an incident ends, the arc is lost unless the next sessi
 
 The extraction prompt gains one rule: for an atom that describes an incident left without its turn or ending, one of its `open_threads` names the missing part as a question about that incident, e.g. "What happened after the water came into the house?". This uses the existing path (atom → `_extract_open_threads` → Layer 3 → principle 7) and needs no new storage.
 
+### 2.2a Acknowledge, don't retell (Layer 5; added 2026-11-09)
+
+Krish's Malayalam listening review: replies opened by retelling the parent's last answer (44–74% of the words before the question were hers), and "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്" ("I can picture it") opened every Malayalam TC-27 reply. The cause was the October line "Often the best start is the detail they just gave you". Layer 5 now says: don't retell; respond to how it must have felt or what it shows about someone, or go straight to the question; the examples show the kind, not the words; never the same acknowledgement twice in a session. The first examples Krish chose (a night, a father) were copied word for word wherever the story fitted them, so they were swapped for "അത് വലിയൊരു ധൈര്യമായിരുന്നു." ("that took real courage"), "അവർക്ക് നിങ്ങളെ അത്ര ഇഷ്ടമായിരുന്നു, അല്ലേ." ("they must have loved you very much") and "എന്നിട്ട്?" ("and then?"). TC-30 checks a five-turn session for a repeated acknowledgement.
+
+### 2.2b Don't close in the middle of a story (Layer 4 and `session_manager`; added 2026-11-09)
+
+TC-30 found the biggest single cause of unfinished stories. One incident told over several turns makes an atom a turn, so the domain's atom goal (3 for childhood) was met halfway, Layer 4 told the next reply to close, and `should_end_session` closed the session one turn later whatever Katha said. Katha put the ending off: "tomorrow I'd love to hear what happened when he finally reached you", and anything she said after counted as a second conversation. `main` did the same.
+
+Now, with the goal met, Layer 4 says not to close while they are in the middle of telling something, and to close on the reply after it ends. The extraction reports that close as `session_end_suggested`, which ends the session; `goal_met` alone ends it only at `GOAL_MET_EXCHANGE_CEILING` (10 exchanges; the design target is 6–8). `ended_reason` stays `goal_met`. TC-31 checks it.
+
 ### 2.3 Not in this change: the "unfinished stories" block and its ask-limit
 
 Proposal §9 wants a separate Layer 3 block of at most two unfinished stories, raised at most once a session, and dropped after two declined asks. Counting asks per incident needs the incident stored, which is the `stories` table of Phase B (a Thread is a `stories` row with `status = thread`). It ships with Phase B. Until then, the existing rule that Katha never re-asks a question already passed over in the conversation holds within a session, and an open thread stays one hint among twelve.
@@ -81,6 +91,8 @@ Then the full regression: TC-01 to TC-11 at three samples, plus TC-19 to TC-25. 
 
 - TC-08 (a portrait, D4): 8/9 on the branch, 8/9 on `main`.
 - TC-20 (bridge rubric): 9/18 by the scorer on the branch, 14/18 on `main`. Read by hand (is the memory question about money?), both are 9/18. The scorer passes "what did the house you grew up in look like?" on "working years" and fails "a small hoard of coins… where did you keep it?". The tax replies jump to the house or the school on both. An existing weakness, not this change.
+
+**After 2.2a and 2.2b (2026-11-10, TC-26 to TC-31 ₹15, regression about ₹40).** TC-26 en 0/3, ml 3/3; TC-27 6/6; TC-28 5/6 (the fail validates and offers to pause, in words the list lacks: "ഇത് പറയാൻ എളുപ്പമല്ല…"); TC-29 6/6; TC-30 ml 3/3, en 0/3 ("must have been", "must have felt" twice in a session; `main` 2/6, its Malayalam repeating "കേൾക്കാൻ എനിക്ക് വലിയ ആഗ്രഹമുണ്ട്"); TC-31 **6/6** (goal met at turn 3 every time, no close before turn 5). Regression: objective 68/72, rubric 40/48 (83%); TC-09 3/3. The fails are known ones: an empty extraction on TC-06, TC-08's one-W follow-up, the two-question slip on TC-19 and TC-20, and TC-20's bridge scorer. English TC-26 still zooms into the moment ("Do you remember where you were in the house when you first noticed the water?"), 3 of the last 6 by hand.
 
 ## 5. Did it work
 

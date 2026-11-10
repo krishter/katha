@@ -16,7 +16,7 @@ DATABASE_URL="postgresql+asyncpg://katha:katha@localhost:5432/katha" \
 DATABASE_URL="..." ./.venv/bin/python evals/run_eval.py tc03 tc11   # selected
 ```
 
-TC-01 to TC-11 each run **3 times** by default, because the model is sampled and one reply used to decide a case. Set `EVAL_SAMPLES=5` for a closer read, or `EVAL_SAMPLES=1` for the old single-shot run (it costs a third as much, about ₹12 for TC-01 to TC-11, but one flip moves the gate by about 9 points). The 80% and 75% targets are read across every sample, and the summary prints each case's pass rate, marking any case whose samples disagree. A sample that crashes counts as a failure. TC-19 to TC-29 repeat themselves and are not multiplied again.
+TC-01 to TC-11 each run **3 times** by default, because the model is sampled and one reply used to decide a case. Set `EVAL_SAMPLES=5` for a closer read, or `EVAL_SAMPLES=1` for the old single-shot run (it costs a third as much, about ₹12 for TC-01 to TC-11, but one flip moves the gate by about 9 points). The 80% and 75% targets are read across every sample, and the summary prints each case's pass rate, marking any case whose samples disagree. A sample that crashes counts as a failure. TC-19 to TC-31 repeat themselves and are not multiplied again.
 
 Results land in `evals/results/<timestamp>.json`, timestamped and never overwritten. Partial runs get a `-partial-` suffix, because a partial re-run once clobbered a full run's results file and the file on disk then silently disagreed with the run it appeared to describe.
 

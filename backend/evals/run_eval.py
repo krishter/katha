@@ -3486,6 +3486,8 @@ _TC30_STOCK = [
     "മനസ്സിൽ കാണ",
     "വല്ലാത്തൊരു",
     "ആദ്യം ഓർത്തത്",
+    "ധൈര്യമായിരുന്നു",
+    "അത്ര ഇഷ്ടമായിരുന്നു",
 ]
 
 
@@ -3527,17 +3529,35 @@ def _repeated_acknowledgements(replies: list[str], said: str) -> list[str]:
     return sorted(set(found))
 
 
+# TC-31: a met goal doesn't close in the middle of a story. The same session:
+# three atoms meet the childhood goal by about turn 3, and the story ends at
+# turn 5. On the old rule Katha closed at turn 4 ("tomorrow I'd love to hear
+# what happened when he finally reached you") and the session closed with it.
+_CLOSING_WORDS = {
+    "en-IN": ["tomorrow", "next time", "rest here", "stop here", "for today", "close here"],
+    "ml-IN": ["നാളെ", "ഇന്നത്തേക്ക്", "നിർത്താം", "അവസാനിപ്പിക്കാം"],
+}
+
+
 async def tc30(db):
+    """TC-30 and TC-31 share one five-turn session per sample."""
     for n in range(1, _TC26_SAMPLES + 1):
         for language in ("en-IN", "ml-IN"):
             uid = "eval-tc30"
             pp = await _arc_profile(db, uid, language)
             state = await session_manager.start_session(uid, db)
-            replies = []
-            for text in _TC30_STORY[language]:
+            replies, closed_at, goal_met_at = [], None, None
+            for turn, text in enumerate(_TC30_STORY[language], start=1):
+                before = state
                 r = await real_turn(db, uid, state.session_id, state, pp, text)
                 state = r["state"]
                 replies.append(r["response_text"])
+                if state.goal_met and goal_met_at is None:
+                    goal_met_at = turn
+                if closed_at is None and session_manager.should_end_session(
+                    state, goal_met_before_this_turn=before.goal_met
+                ):
+                    closed_at = turn
             repeats = _repeated_acknowledgements(
                 replies, " ".join(_TC30_STORY[language])
             )
@@ -3547,6 +3567,21 @@ async def tc30(db):
                 "objective",
                 not repeats,
                 f"replies:\n{shown}\nrepeated={repeats}",
+            )
+            early = [
+                i + 1
+                for i, reply in enumerate(replies[:-1])
+                if any(w in reply.lower() for w in _CLOSING_WORDS[language])
+            ]
+            record(
+                f"TC-31 {language[:2]} #{n}",
+                "objective",
+                goal_met_at is not None
+                and goal_met_at < len(replies)
+                and not early
+                and (closed_at is None or closed_at == len(replies)),
+                f"goal met at turn {goal_met_at}; session would close at turn "
+                f"{closed_at}; replies before the story's end that close: {early}",
             )
             await cleanup(db, uid)
 

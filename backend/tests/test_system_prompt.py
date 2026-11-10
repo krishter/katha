@@ -156,6 +156,31 @@ def test_prompt_instructs_closing_when_goal_already_met():
     assert "closing exchange" in prompt.lower()
 
 
+def test_a_met_goal_does_not_close_in_the_middle_of_a_story():
+    """FINISHING_STORIES.md, TC-31: one incident told over four turns met the
+    goal halfway, and Katha closed with "tomorrow I'd love to hear what
+    happened when he reached you", putting off its ending."""
+    met_session = SimpleNamespace(**{**_SESSION.__dict__, "goal_met": True})
+    lower = build_system_prompt(_PROFILE, met_session, _PRIOR).lower()
+    assert "in the middle of telling something that happened, don't close" in lower
+    assert "close on the reply after it ends" in lower
+
+
+def test_extraction_reads_the_close_from_katha_s_reply():
+    """With the goal met, the session ends on Katha's closing reply, which the
+    extraction reports as session_end_suggested (session_manager)."""
+    met_session = SimpleNamespace(**{**_SESSION.__dict__, "goal_met": True})
+    lower = build_extraction_prompt(
+        _PROFILE,
+        met_session,
+        _PRIOR,
+        user_transcript="Then the water reached the steps.",
+        assistant_response="And then? What did you all do?",
+    ).lower()
+    assert "true if katha's reply above closed the conversation" in lower
+    assert "false if it went on with what the user was telling" in lower
+
+
 def test_prompt_omits_closing_instruction_when_goal_not_met():
     prompt = _build()
     assert "closing exchange" not in prompt.lower()
@@ -321,7 +346,10 @@ def test_a_reply_does_not_retell_what_she_just_said():
         in prompt.lower()
     )
     assert "the detail they just gave you" not in prompt
-    # The examples were copied word for word ("അച്ഛൻ ആദ്യം ഓർത്തത്" in 2 of 3).
+    # The first examples were copied word for word wherever the story fitted
+    # them ("അച്ഛൻ ആദ്യം ഓർത്തത്", your father thought of her first, opened all
+    # three TC-27 replies), so they were swapped for less common content.
+    assert "അച്ഛൻ ആദ്യം ഓർത്തത്" not in prompt
     assert "these show the kind, not the words" in prompt.lower()
 
 

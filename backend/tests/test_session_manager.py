@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from core import session_manager
 from core.session_manager import SessionState, should_end_session
 
 
@@ -294,18 +295,34 @@ async def test_apply_extraction_goal_met_uses_cumulative_not_current_turn_count(
 # ── should_end_session ────────────────────────────────────────────────────────
 
 
-def test_should_end_when_goal_met():
-    state = SessionState(
+def _met(exchange_count: int, session_end_suggested: bool) -> SessionState:
+    return SessionState(
         session_id="s1",
         user_id="u1",
         session_number=1,
         domain="childhood",
-        exchange_count=5,
+        exchange_count=exchange_count,
         energy_signal="high",
         goal_met=True,
-        session_end_suggested=False,
+        session_end_suggested=session_end_suggested,
     )
-    assert should_end_session(state) is True
+
+
+def test_a_met_goal_ends_on_katha_s_closing_reply():
+    assert should_end_session(_met(5, True)) is True
+
+
+def test_a_met_goal_stays_open_while_she_finishes_a_story():
+    """FINISHING_STORIES.md, TC-31: closing on goal_met alone cut a story off
+    before its ending. Katha's reply decides, through session_end_suggested."""
+    assert should_end_session(_met(5, False)) is False
+    assert should_end_session(_met(6, False), goal_met_before_this_turn=True) is False
+
+
+def test_a_met_goal_closes_at_the_ceiling_even_without_a_closing_reply():
+    ceiling = session_manager.GOAL_MET_EXCHANGE_CEILING
+    assert should_end_session(_met(ceiling - 1, False)) is False
+    assert should_end_session(_met(ceiling, False)) is True
 
 
 def test_should_not_end_when_goal_just_became_met_this_turn():
@@ -330,18 +347,9 @@ def test_should_not_end_when_goal_just_became_met_this_turn():
 
 def test_should_end_when_goal_was_already_met_before_this_turn():
     """The turn *after* goal_met first flipped true — the dialogue call for
-    this turn already knew and (per Layer 4) should have wrapped up."""
-    state = SessionState(
-        session_id="s1",
-        user_id="u1",
-        session_number=1,
-        domain="childhood",
-        exchange_count=6,
-        energy_signal="high",
-        goal_met=True,
-        session_end_suggested=False,
-    )
-    assert should_end_session(state, goal_met_before_this_turn=True) is True
+    this turn already knew and (per Layer 4) wrapped up, which the extraction
+    reports as session_end_suggested."""
+    assert should_end_session(_met(6, True), goal_met_before_this_turn=True) is True
 
 
 def test_should_still_end_on_session_end_suggested_even_if_goal_just_met():

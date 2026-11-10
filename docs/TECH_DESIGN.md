@@ -420,6 +420,17 @@ Pass: the reply validates the loss, and its question asks neither what happened 
 Input: TC-26's turn.
 Pass: an extracted atom's `open_threads` includes a question about what happened after the water came in. Target: objective 80%+.
 
+**TC-30 and TC-31: A five-turn story in one session** *(added 2026-11-09 from the Malayalam listening review; run with `evals/run_eval.py tc30`, which scores both on the same session.)*
+Input: a five-turn incident (a child lost and found at a temple festival). Three atoms meet the childhood goal by about turn 3; the story ends at turn 5.
+
+**TC-30: Acknowledgements don't repeat**
+Expected: each reply responds to what she said rather than retelling it, and no acknowledgement is reused within the session.
+Pass: no listed stock phrase ("must have been", "I can picture it", "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്", the Layer 5 examples) and no three-word phrase or two-word opening, other than her own words, appears in more than one reply before its question. Target: objective 80%+.
+
+**TC-31: A met goal doesn't close in the middle of a story**
+Expected: Katha follows the story to its end before closing, and the session stays open until she does.
+Pass: the goal is met before turn 5, no reply before turn 5 closes ("tomorrow", "നാളെ", "for today"…), and `should_end_session` does not close the session before turn 5. Target: objective 80%+.
+
 ### 3.4 Evaluation Process
 
 - **Manual review:** All test cases reviewed by a panel of 2 human evaluators against pass criteria

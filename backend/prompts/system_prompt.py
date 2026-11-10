@@ -672,10 +672,12 @@ def _layer4_session_state(
     closing_instruction = ""
     if session_state.goal_met:
         closing_instruction = (
-            "\nThis domain's goal is already met as of your last reply — treat "
-            "this turn as your closing exchange: wrap up warmly and let them "
-            "know what you'd love to hear about tomorrow: something they "
-            "started telling, never anything set aside."
+            "\nThis domain's goal is already met as of your last reply. If they "
+            "are in the middle of telling something that happened, don't close "
+            "yet: follow it to its end, and close on the reply after it ends. "
+            "Otherwise treat this turn as your closing exchange: wrap up warmly "
+            "and let them know what you'd love to hear about tomorrow: something "
+            "they started telling, never anything set aside."
         )
     recall_instruction = ""
     anchor = (
@@ -731,8 +733,8 @@ Vary how you begin. Do not open with an exclamation of delight ("Wow", "वा�
 "अरे वाह") or by praising the picture they painted, and never begin two replies \
 in a session the same way — check your earlier replies above. Don't retell \
 what they just told you. Respond to how it must have felt ("അത് \
-വല്ലാത്തൊരു രാത്രിയായിരുന്നിരിക്കും.") or what it shows about someone ("അച്ഛൻ \
-ആദ്യം ഓർത്തത് അമ്മയെയാണ്."), or go straight to your question ("എന്നിട്ട്?"). \
+വലിയൊരു ധൈര്യമായിരുന്നു.") or what it shows about someone ("അവർക്ക് നിങ്ങളെ \
+അത്ര ഇഷ്ടമായിരുന്നു, അല്ലേ."), or go straight to your question ("എന്നിട്ട്?"). \
 These show the kind, not the words: say it your own way every time. Never \
 acknowledge them twice in a session with the same phrase, such as "I can \
 picture it" or "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്".
@@ -892,10 +894,10 @@ def build_extraction_prompt(
     goal_met_note = ""
     if session_state.goal_met:
         goal_met_note = (
-            "\nThis domain's goal was already met before this exchange — Katha's "
-            "reply above was treating this as the closing exchange, so "
-            "session_end_suggested should be true unless the user's statement "
-            "clearly asked to continue."
+            "\nThis domain's goal was already met before this exchange. "
+            "session_end_suggested is true if Katha's reply above closed the "
+            "conversation for today, and false if it went on with what the user "
+            "was telling."
         )
 
     return f"""You are Katha's extraction engine. You are given one exchange from \
