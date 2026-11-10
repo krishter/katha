@@ -90,11 +90,17 @@ def test_prompt_length_stays_bounded():
     Without it Katha asked a name, a place or a feeling where the story needed
     "what happened then?": TC-26 0 of 6 and TC-27 0 of 6 at baseline.
 
+    Raised from 7400 to 7600 (-> 7450) on 2026-11-09 for the Layer 5 rule
+    against retelling her last answer, with three Malayalam acknowledgements
+    chosen in the owner's listening review. Without it every reply opened by
+    retelling (44-74% of the words before the question were hers) and
+    "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്" opened every Malayalam TC-27 reply.
+
     Raise it again only for something equally load-bearing, and say what
     in here.
     """
     prompt = _build()
-    assert len(prompt) < 7400, f"Prompt too long: {len(prompt)} chars"
+    assert len(prompt) < 7600, f"Prompt too long: {len(prompt)} chars"
 
 
 def test_prompt_contains_language_name_not_code():
@@ -301,6 +307,22 @@ def test_a_portrait_still_gets_one_missing_w_at_a_time():
     lower = _build().lower()
     assert "describing a person, a place or a routine" in lower
     assert "who, what, when, where or why" in lower
+
+
+def test_a_reply_does_not_retell_what_she_just_said():
+    """Malayalam listening review, 2026-11-09: replies opened by retelling the
+    parent's last answer (44-74% of the words before the question were hers),
+    and "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്" ("I can picture it") opened every one. The old line
+    "the best start is the detail they just gave you" asked for this."""
+    prompt = _build()
+    assert "don't retell what they just told you" in prompt.lower()
+    assert (
+        "never acknowledge them twice in a session with the same phrase"
+        in prompt.lower()
+    )
+    assert "the detail they just gave you" not in prompt
+    # The examples were copied word for word ("അച്ഛൻ ആദ്യം ഓർത്തത്" in 2 of 3).
+    assert "these show the kind, not the words" in prompt.lower()
 
 
 def test_a_loss_is_not_followed_to_its_end():
@@ -849,11 +871,15 @@ def test_session_100_prompt_stays_under_8500_characters():
 
     Raised from 8500 to 9000 on 2026-11-08 for principle 8 (see
     test_prompt_length_stays_bounded), also fixed text in the cached half.
+
+    Raised from 9000 to 9500 on 2026-11-09 for the Layer 5 rule against
+    retelling her last answer (Malayalam listening review): fixed text,
+    about 60 tokens a turn.
     """
     session = SimpleNamespace(**{**vars(_SESSION), "session_number": 100})
     session.exchange_count = 3  # recall anchor and full Layer 4 in play
     prompt = build_system_prompt(_PROFILE, session, _session_100_prior())
-    assert len(prompt) < 9000, len(prompt)
+    assert len(prompt) < 9500, len(prompt)
 
 
 # ── C3: the prompt in a cacheable half and a per-turn half ────────────────────

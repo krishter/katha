@@ -3175,6 +3175,7 @@ _ARC_NEXT = {
         "happened then",
         "what did you do",
         "what you did",
+        "what did you and",
         "what did you all do",
         "what did your",
         "what did they do",
@@ -3189,6 +3190,10 @@ _ARC_NEXT = {
     "ml-IN": [
         "സംഭവിച്ചു",
         "സംഭവിച്ചത്",
+        # Widened 2026-11-09 with the owner's approval: "എന്താണ് ഉണ്ടായത്"
+        # (what happened) and "എന്നിട്ട്?" (and then?), now a prompt example.
+        "ഉണ്ടായ",
+        "എന്നിട്ട്",
         "ചെയ്തു",
         "ചെയ്തത്",
         "പിന്നെ എന്ത്",
@@ -3239,6 +3244,7 @@ _ARC_END = {
         # pass", "how did you all get through that night".
         "കടന്നുപോയി",
         "കഴിച്ചുകൂട്ടി",
+        "എന്നിട്ട്",
     ],
 }
 # A W or a sensory detail in place of the arc: the Phase A failure.
@@ -3446,6 +3452,105 @@ async def tc28(db):
             await cleanup(db, uid)
 
 
+# ── TC-30: acknowledgements don't repeat within a session ────────────────────
+# From the Malayalam listening review (2026-11-09): replies opened by retelling
+# her last answer, and "ഞാൻ മനസ്സിൽ കാണുന്നുണ്ട്" ("I can picture it") opened
+# reply after reply. TC-26 and TC-27 are one or two turns and can't see a
+# repeat; this is one five-turn story. An invented family and festival.
+_TC30_STORY = {
+    "en-IN": [
+        "When I was twelve, my uncle took us to the Thrissur Pooram for the first time.",
+        "We went by bus, it was very crowded, and I held my uncle's hand the whole way.",
+        "In the crowd I let go of his hand and lost him. I stood by the temple wall and cried.",
+        "A policeman found me, took me to a stall, and they called out my name on the loudspeaker.",
+        "My uncle came running. He didn't scold me, he bought me a balloon. "
+        "After that he never let go of my hand.",
+    ],
+    "ml-IN": [
+        "എനിക്ക് പന്ത്രണ്ട് വയസ്സുള്ളപ്പോൾ അമ്മാവൻ ഞങ്ങളെ ആദ്യമായി തൃശ്ശൂർ പൂരത്തിന് കൊണ്ടുപോയി.",
+        "ബസ്സിലാണ് പോയത്, വല്ലാത്ത തിരക്കായിരുന്നു. ഞാൻ വഴി മുഴുവൻ അമ്മാവന്റെ കൈ പിടിച്ചിരുന്നു.",
+        "തിരക്കിനിടയിൽ കൈ വിട്ടുപോയി, അമ്മാവനെ കാണാതായി. ഞാൻ അമ്പലത്തിന്റെ മതിലിനടുത്ത് നിന്ന് കരഞ്ഞു.",
+        "ഒരു പോലീസുകാരൻ എന്നെ കണ്ടു, ഒരു കടയിലേക്ക് കൊണ്ടുപോയി, ലൗഡ്സ്പീക്കറിൽ എന്റെ പേര് വിളിച്ചുപറഞ്ഞു.",
+        "അമ്മാവൻ ഓടിവന്നു. എന്നെ വഴക്കു പറഞ്ഞില്ല, ഒരു ബലൂൺ വാങ്ങിത്തന്നു. "
+        "അതിനുശേഷം പിന്നെ ഒരിക്കലും എന്റെ കൈ വിട്ടില്ല.",
+    ],
+}
+# Acknowledgements seen repeating, and the Layer 5 examples (copied word for
+# word in 2 of 3 replies the first time they were added).
+_TC30_STOCK = [
+    "must have been",
+    "sounds like",
+    "picture",
+    "imagine",
+    "thought first",
+    "മനസ്സിൽ കാണ",
+    "വല്ലാത്തൊരു",
+    "ആദ്യം ഓർത്തത്",
+]
+
+
+def _lead(reply: str) -> str:
+    """The reply before its question: where the acknowledgement is."""
+    return re.split(r"[^.!?।]*\?", reply)[0] or reply
+
+
+def _tokens(text: str) -> list[str]:
+    # Not \w+: Python's \w splits Malayalam words at their vowel signs.
+    return re.findall(r"[^\s.,;:!?।—'\"()-]+", text)
+
+
+def _repeated_acknowledgements(replies: list[str], said: str) -> list[str]:
+    """Phrases that open more than one reply's acknowledgement. A phrase made
+    only of her own words is her story, not a habit, and doesn't count."""
+    said_words = set(_tokens(said.lower()))
+    leads = [_lead(r).lower() for r in replies]
+    found = []
+    for w in _TC30_STOCK:
+        if sum(w in lead for lead in leads) > 1:
+            found.append(w)
+    # The same first two words, or the same three words in a row anywhere.
+    def grams(lead: str, n: int) -> set[tuple]:
+        ws = _tokens(lead)
+        return {tuple(ws[i : i + n]) for i in range(len(ws) - n + 1)}
+
+    openers = [tuple(_tokens(lead)[:2]) for lead in leads]
+    for o in set(openers):
+        if o and openers.count(o) > 1 and not set(o) <= said_words:
+            found.append(" ".join(o) + " …")
+    seen: dict[tuple, int] = {}
+    for lead in leads:
+        for g in grams(lead, 3):
+            seen[g] = seen.get(g, 0) + 1
+    for g, count in seen.items():
+        if count > 1 and not set(g) <= said_words:
+            found.append(" ".join(g))
+    return sorted(set(found))
+
+
+async def tc30(db):
+    for n in range(1, _TC26_SAMPLES + 1):
+        for language in ("en-IN", "ml-IN"):
+            uid = "eval-tc30"
+            pp = await _arc_profile(db, uid, language)
+            state = await session_manager.start_session(uid, db)
+            replies = []
+            for text in _TC30_STORY[language]:
+                r = await real_turn(db, uid, state.session_id, state, pp, text)
+                state = r["state"]
+                replies.append(r["response_text"])
+            repeats = _repeated_acknowledgements(
+                replies, " ".join(_TC30_STORY[language])
+            )
+            shown = "\n".join(f"  {i + 1}. {r!r}" for i, r in enumerate(replies))
+            record(
+                f"TC-30 {language[:2]} #{n}",
+                "objective",
+                not repeats,
+                f"replies:\n{shown}\nrepeated={repeats}",
+            )
+            await cleanup(db, uid)
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -3478,6 +3583,7 @@ ALL_CASES = {
     "tc25": tc25,
     "tc26": tc26,
     "tc28": tc28,
+    "tc30": tc30,
 }
 
 
