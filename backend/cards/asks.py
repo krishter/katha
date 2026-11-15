@@ -10,6 +10,9 @@ An ask is one of:
     story_readback_offer, story_readback
                      the same two steps for a Story (stories/asks.py,
                      STORIES.md §2.3)
+    retell_offer     Katha could not write her correction to a card or
+                     Story: tell that part again, or set it aside? (§6c)
+    retelling        her next message, which is that part told again
 
 At most one a session, never mid-story (§4.7). The dialogue model writes
 the share question, the offer and the relayed question from a Layer 4
@@ -58,8 +61,10 @@ READBACK = "readback"
 CHILD_QUESTION = "child_question"
 STORY_READBACK_OFFER = "story_readback_offer"
 STORY_READBACK = "story_readback"
+RETELL_OFFER = "retell_offer"
+RETELLING = "retelling"
 REACTION = "reaction"  # not an ask (§9.2): it rides along with anything
-ASK_KINDS = (SHARE, READBACK_OFFER, CHILD_QUESTION, STORY_READBACK_OFFER)
+ASK_KINDS = (SHARE, READBACK_OFFER, CHILD_QUESTION, STORY_READBACK_OFFER, RETELL_OFFER)
 
 MAX_READBACK_OFFERS = 3  # D9
 QUESTION_EXPIRY = timedelta(days=21)  # §10.2
@@ -305,6 +310,97 @@ async def _answer_story_readback(story, transcript, child, plan: TurnPlan) -> No
         )
 
 
+async def _retell_item(ref, db):
+    """The Story or card a retelling ask is about."""
+    story = await story_asks.get(ref, db)
+    if story is not None:
+        return "story", story
+    card = await _card(ref, db)
+    return ("card", card) if card is not None else (None, None)
+
+
+def _still_waiting(kind, item) -> bool:
+    if kind == "story":
+        return bool(
+            item.status == "story"
+            and item.approval_status == "pending"
+            and item.needs_retelling
+        )
+    if kind == "card":
+        return bool(item.status == "correction" and item.needs_retelling)
+    return False
+
+
+async def _answer_retell_offer(kind, item, transcript, plan: TurnPlan, db) -> None:
+    if not _still_waiting(kind, item):
+        return
+    label = await story_asks.classify_retell(transcript)
+    plan.outcome = f"retell_{label}"
+    thing = "story" if kind == "story" else "card"
+    if label == "retell":
+        plan.offered = RETELLING
+        plan.offered_ref = item.id
+        plan.tag_kinds.append(RETELLING)
+        plan.layer4.append(
+            f"The user would like to tell that part of the {thing} again. In one "
+            "short question, ask them to tell you how that part went, in their "
+            "own words. Ask nothing else in this reply. If you ask, add "
+            f"{RETELLING} to the <asked> tag."
+        )
+    elif label == "set_aside":
+        if kind == "story":
+            await story_asks.set_aside(item, db)
+        else:
+            item.needs_retelling = False
+            state.transition(item, "kept_private")
+        plan.layer4.append(
+            f"The user would rather set the {thing} aside. Confirm in one short "
+            "sentence that it is set aside and is still theirs, without asking "
+            "why, then carry on."
+        )
+    elif label == "not_now":
+        plan.layer4.append(
+            "The user wants to leave it for now. Say that is fine in a few words "
+            "and carry on."
+        )
+
+
+async def _answer_retelling(kind, item, plan: TurnPlan) -> None:
+    """Her message is that part told again: a source for the rewrite, which
+    runs once the turn is saved, as for a correction."""
+    if not _still_waiting(kind, item):
+        return
+    if kind == "story":
+        item.parent_answer = "retelling"
+        item.parent_answered_at = datetime.now(timezone.utc)
+        plan.answered_story_id = item.id
+        plan.correction_story_id = item.id
+    else:
+        plan.correction_card_id = item.id
+    plan.outcome = "retelling"
+    plan.layer4.append(
+        "The user just told that part again. Thank them warmly, say you will "
+        "write it again and read it to them another day, then carry on."
+    )
+
+
+async def _waiting_retell_card(user_id: str, db) -> Optional[ConversationCard]:
+    return (
+        (
+            await db.execute(
+                select(ConversationCard)
+                .where(ConversationCard.user_id == user_id)
+                .where(ConversationCard.status == "correction")
+                .where(ConversationCard.needs_retelling.is_(True))
+                .order_by(ConversationCard.parent_answered_at)
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+
 # ── what this turn should carry ──────────────────────────────────────────────
 
 
@@ -422,6 +518,12 @@ async def before_dialogue(
                 session.pending_ask_ref = story.id
         elif pending == STORY_READBACK:
             await _answer_story_readback(story, transcript, child, plan)
+        elif pending == RETELL_OFFER:
+            kind, item = await _retell_item(ref, db)
+            await _answer_retell_offer(kind, item, transcript, plan, db)
+        elif pending == RETELLING:
+            kind, item = await _retell_item(ref, db)
+            await _answer_retelling(kind, item, plan)
         # CHILD_QUESTION: her answer is ordinary conversation (§10.3).
         session.ask_outcome = plan.outcome
 
@@ -488,10 +590,25 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
     card = await _waiting_card(profile.user_id, db)
     story = await story_asks.waiting_story(profile, db)
     question = questions[0] if questions else None
+    retell_story = await story_asks.waiting_retelling(profile, db)
+    retell_card = await _waiting_retell_card(profile.user_id, db)
     waiting = [
         (card.operator_reviewed_at or card.created_at or now, "card") if card else None,
         (story_asks.waiting_since(story) or now, "story") if story else None,
         (question.created_at or now, "question") if question else None,
+        (
+            (story_asks.waiting_since_correction(retell_story) or now, "retell_story")
+            if retell_story
+            else None
+        ),
+        (
+            (
+                retell_card.parent_answered_at or retell_card.created_at or now,
+                "retell_card",
+            )
+            if retell_card
+            else None
+        ),
     ]
     # Oldest first; on a tie the earlier kind in this list goes first, so
     # with no Story waiting the choice is the one cards always made.
@@ -500,6 +617,11 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
     card = card if kind == "card" else None
     story = story if kind == "story" else None
     question = question if kind == "question" else None
+
+    if kind in ("retell_story", "retell_card"):
+        item = retell_story if kind == "retell_story" else retell_card
+        _plan_retell_offer(plan, session, item, kind == "retell_story")
+        return
 
     if story is not None:
         what = (
@@ -562,6 +684,44 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
         )
 
 
+def _plan_retell_offer(plan: TurnPlan, session, item, is_story: bool) -> None:
+    """§6c: Katha could not write her correction. Its own shortcoming, never
+    hers; and from the second failed rewrite, setting it aside is offered as
+    an easy choice. She decides, however many times it takes."""
+    thing = "story" if is_story else "card"
+    hint = ""
+    if is_story:
+        reasons = [str(r.get("reason") or "") for r in item.removed_sentences or []]
+        unclear = story_asks.what_was_unclear(reasons)
+        if unclear:
+            hint = (
+                " Your notes on that part (never say them as a fact, never "
+                f"repeat what the story said there): {unclear}. Name the part "
+                "as a short question in their language, such as who did "
+                "something or what happened next."
+            )
+    what = (
+        f"telling them, as your own shortcoming and never theirs, that you "
+        f'could not write one part of their {thing} about "{item.title}" the '
+        "way they told it, and asking whether they would like to tell you "
+        f"that part again, or set this {thing} aside"
+    )
+    if (item.failed_rewrites or 0) >= 2:
+        what += (
+            ". Mention gently that setting it aside is perfectly all right: "
+            "it is still their story"
+        )
+    timing = _timing(session.exchange_count, session.goal_met, what)
+    if not timing:
+        return
+    plan.offered = RETELL_OFFER
+    plan.offered_ref = item.id
+    plan.tag_kinds.append(RETELL_OFFER)
+    plan.layer4.append(
+        f"{timing}{hint} If you ask, add {RETELL_OFFER} to the <asked> tag."
+    )
+
+
 async def after_dialogue(
     plan: TurnPlan,
     asked: set[str],
@@ -588,6 +748,10 @@ async def after_dialogue(
             story = await story_asks.get(plan.offered_ref, db)
             if story is not None:
                 story.readback_offers = (story.readback_offers or 0) + 1
+        elif plan.offered == RETELL_OFFER:
+            _, item = await _retell_item(plan.offered_ref, db)
+            if item is not None:
+                item.readback_offers = (item.readback_offers or 0) + 1
         elif plan.offered == CHILD_QUESTION:
             await _mark_asked(plan.offered_ref, session_id, now, db)
     if REACTION in asked:

@@ -66,6 +66,7 @@ def readable(story: Optional[Story]) -> bool:
     return bool(
         story is not None
         and story.status == "story"
+        and not story.needs_retelling
         and story.review_status == "passed"
         and story.approval_status == "pending"
         and (story.readback_check or {}).get("result") == "passed"
@@ -151,6 +152,74 @@ def record_answer(story: Story, label: str) -> None:
     elif label == "keep_private":
         story.approval_status = "kept_private"
     # not_now / unclear: no move; the offer already counted.
+
+
+# ── when Katha could not write a correction (§6c) ────────────────────────────
+
+
+def retell_question() -> str:
+    return (
+        "I couldn't write one part of your story the way you told it. Would you "
+        "like to tell me that part again, or shall we set this story aside?"
+    )
+
+
+def waiting_since_correction(story: Story) -> Optional[datetime]:
+    return story.parent_answered_at or story.updated_at or story.created_at
+
+
+async def waiting_retelling(profile, db: AsyncSession) -> Optional[Story]:
+    """The Story waiting longest for her to tell a part again or set it
+    aside. She has heard it before, so this is asked even if Stories have
+    since been switched off for her family, but never if she said never
+    share: then it is simply never shared."""
+    if profile.share_preference == sharing.NEVER:
+        return None
+    rows = (
+        (
+            await db.execute(
+                select(Story)
+                .where(Story.user_id == profile.user_id)
+                .where(Story.status == "story")
+                .where(Story.approval_status == "pending")
+                .where(Story.needs_retelling.is_(True))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    return min(rows, key=lambda s: waiting_since_correction(s) or epoch, default=None)
+
+
+def what_was_unclear(reasons: list[str]) -> str:
+    """Why the check cut what it cut, for Katha to name the part as a
+    question. Never the cut sentence itself: that may hold a detail she
+    did not say."""
+    return "; ".join(r for r in reasons if r)[:400]
+
+
+async def set_aside(story: Story, db: AsyncSession) -> None:
+    """She chose to set it aside: retired, never offered or shared again,
+    and its pieces go back to the card pool. Does not commit."""
+    from sqlalchemy import update
+
+    from models.story_atom import StoryAtom
+
+    story.status = "retired"
+    story.retired_reason = "set_aside"
+    story.needs_retelling = False
+    story.notes = [*(story.notes or []), "She chose to set it aside."]
+    await db.execute(
+        update(StoryAtom).where(StoryAtom.story_id == story.id).values(story_id=None)
+    )
+
+
+async def classify_retell(transcript: str) -> str:
+    result = await parent_answers.classify(
+        parent_answers.RETELL, retell_question(), transcript
+    )
+    return result.label
 
 
 async def classify_offer(transcript: str, child: str) -> str:

@@ -483,6 +483,7 @@ class Recomposer:
                         "text": "I was twelve.",
                         "verdict": self.fidelity,
                         "turn_ids": [self.correction_id],
+                        "reason": "she did not say how old she was",
                     },
                     {
                         "text": "The water came in.",
@@ -821,3 +822,205 @@ async def test_no_second_try_when_nothing_was_cut(real_db):
         await correction.rewrite_for_correction(story_id, turn_id, real_db)
 
     assert [s for s, _ in model.prompts].count("compose") == 1
+
+
+# ── §6c: with no reviewer, she decides ───────────────────────────────────────
+
+
+@pytest.fixture
+def no_review(monkeypatch):
+    monkeypatch.setattr("config.settings.STORIES_OPERATOR_REVIEW", False)
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+
+
+async def _stuck_story(db, f):
+    """She corrected it, and the rewrite did not pass its check."""
+    story_id = await waiting_story(db, f)
+    await offered_and_heard(db, f, story_id)
+    _, turn_id = await answer(db, f, "correction", "ഇല്ല, അമ്മാവനാണ്")
+    model = Recomposer(f, str(turn_id), fidelity="unsupported")
+    with patch.object(consolidate, "_call_llm", model):
+        await correction.rewrite_for_correction(story_id, turn_id, db)
+    return story_id, turn_id
+
+
+async def _new_session(db, f, **values):
+    s = Session(
+        id=uuid.uuid4(),
+        user_id=f.user_id,
+        session_number=5,
+        domain="childhood",
+        **values,
+    )
+    db.add(s)
+    await db.commit()
+    f.session_id = str(s.id)
+
+
+async def test_a_correction_that_passes_goes_straight_back_to_her(real_db, no_review):
+    f = await seed(real_db)
+    story_id = await waiting_story(real_db, f)
+    await offered_and_heard(real_db, f, story_id)
+    _, turn_id = await answer(real_db, f, "correction", "പന്ത്രണ്ട്")
+    with patch.object(consolidate, "_call_llm", Recomposer(f, str(turn_id))):
+        await correction.rewrite_for_correction(story_id, turn_id, real_db)
+
+    story = await get(real_db, Story, story_id)
+    assert story.version == 2 and story.review_status == "passed"
+    assert story_asks.readable(story)
+    await _new_session(real_db, f)
+    assert (await plan(real_db, f)).offered == asks.STORY_READBACK_OFFER
+
+
+async def test_a_correction_katha_cannot_write_waits_for_her(real_db, no_review):
+    f = await seed(real_db)
+    story_id, turn_id = await _stuck_story(real_db, f)
+
+    story = await get(real_db, Story, story_id)
+    assert story.needs_retelling and story.failed_rewrites == 1
+    assert story.version == 1 and story.approval_status == "pending"
+    assert story.review_status == "passed"
+    assert str(turn_id) in story.added_source_turn_ids
+    assert not story_asks.readable(story)
+    correction.send_operator_alert.assert_not_awaited()
+
+    await _new_session(real_db, f)
+    p = await plan(real_db, f)
+
+    assert (p.offered, p.offered_ref) == (asks.RETELL_OFFER, story_id)
+    said = " ".join(p.layer4)
+    assert "own shortcoming" in said and "set this story aside" in said
+    # Katha may name the part, but never says what the cut sentence said.
+    assert "never repeat what the story said" in said
+    assert "she did not say how old she was" in said
+    assert "I was twelve." not in said
+    assert "perfectly all right" not in said  # only from the second failure
+
+
+async def test_she_tells_it_again_and_the_story_is_rewritten_from_it(
+    real_db, no_review
+):
+    f = await seed(real_db)
+    story_id, first = await _stuck_story(real_db, f)
+    await _new_session(real_db, f)
+    p = await plan(real_db, f)
+    await asks.after_dialogue(
+        p, {asks.RETELL_OFFER}, session_id=f.session_id, user_id=f.user_id, db=real_db
+    )
+
+    with labels(("retell", "ഞാൻ പറയാം")):
+        p2 = await plan(real_db, f, "ഞാൻ പറയാം")
+    assert p2.offered == asks.RETELLING and p2.outcome == "retell_retell"
+    await asks.after_dialogue(
+        p2, {asks.RETELLING}, session_id=f.session_id, user_id=f.user_id, db=real_db
+    )
+    session = await get(real_db, Session, uuid.UUID(f.session_id))
+    assert session.pending_ask == asks.RETELLING
+
+    retold = "എനിക്ക് പന്ത്രണ്ട് വയസ്സായിരുന്നു. അമ്മാവനാണ് മുത്തശ്ശിയെ എടുത്തത്."
+    p3, turn_id = await answer(real_db, f, "unused", retold)
+    assert p3.correction_story_id == story_id and p3.outcome == "retelling"
+
+    with patch.object(consolidate, "_call_llm", Recomposer(f, str(turn_id))):
+        await correction.rewrite_for_correction(story_id, turn_id, real_db)
+
+    story = await get(real_db, Story, story_id)
+    assert story.version == 2 and not story.needs_retelling
+    assert {str(first), str(turn_id)} <= set(story.added_source_turn_ids)
+    assert story.parent_answer_turn_id == turn_id
+    assert story_asks.readable(story)
+
+
+async def test_she_sets_it_aside_and_it_is_never_offered_again(real_db, no_review):
+    f = await seed(real_db)
+    story_id, _ = await _stuck_story(real_db, f)
+    await _new_session(real_db, f)
+    p = await plan(real_db, f)
+    await asks.after_dialogue(
+        p, {asks.RETELL_OFFER}, session_id=f.session_id, user_id=f.user_id, db=real_db
+    )
+
+    with labels(("set_aside", "വിട്ടേക്കൂ")):
+        p2 = await plan(real_db, f, "വിട്ടേക്കൂ")
+
+    assert p2.outcome == "retell_set_aside"
+    assert any("set aside" in line for line in p2.layer4)
+    story = await get(real_db, Story, story_id)
+    assert story.status == "retired" and story.retired_reason == "set_aside"
+    await _new_session(real_db, f)
+    assert (await plan(real_db, f)).offered is None
+    assert (await export_data(current_user={"user_id": f.user_id}, db=real_db))[
+        "first_person_stories"
+    ] == []
+
+
+@pytest.mark.parametrize("label", ["not_now", "unclear"])
+async def test_not_now_keeps_asking_another_day(real_db, no_review, label):
+    f = await seed(real_db)
+    story_id, _ = await _stuck_story(real_db, f)
+    await _new_session(real_db, f)
+    p = await plan(real_db, f)
+    await asks.after_dialogue(
+        p, {asks.RETELL_OFFER}, session_id=f.session_id, user_id=f.user_id, db=real_db
+    )
+    with labels((label, "പിന്നെ")):
+        await plan(real_db, f, "പിന്നെ")
+
+    await _new_session(real_db, f)
+    again = await plan(real_db, f)
+    assert (again.offered, again.offered_ref) == (asks.RETELL_OFFER, story_id)
+
+
+async def test_from_the_second_failure_setting_aside_is_offered_gently(
+    real_db, no_review
+):
+    f = await seed(real_db)
+    story_id, _ = await _stuck_story(real_db, f)
+    story = await get(real_db, Story, story_id)
+    story.failed_rewrites = 2
+    await real_db.commit()
+    await _new_session(real_db, f)
+
+    p = await plan(real_db, f)
+
+    assert any("perfectly all right" in line for line in p.layer4)
+
+
+async def test_the_retelling_ask_is_never_mid_story(real_db, no_review):
+    f = await seed(real_db)
+    await _stuck_story(real_db, f)
+    await _new_session(real_db, f, exchange_count=3)
+
+    assert (await plan(real_db, f, "അന്ന്...")).offered is None
+
+
+async def test_a_card_katha_could_not_rewrite_can_be_set_aside(real_db, no_review):
+    f = await seed(real_db)
+    card = ConversationCard(id=uuid.uuid4(), user_id=f.user_id, status="draft")
+    state.set_text(
+        card,
+        title="The walk to the talkies",
+        hook="Did you know?",
+        excerpt="We walked.",
+        call_prompt="What film was it?",
+        readback_text="A card read-back",
+    )
+    card.status = "correction"
+    card.needs_retelling = True
+    card.failed_rewrites = 1
+    card.parent_answered_at = datetime.now(timezone.utc)
+    db_id = card.id
+    real_db.add(card)
+    await real_db.commit()
+
+    p = await plan(real_db, f)
+    assert (p.offered, p.offered_ref) == (asks.RETELL_OFFER, db_id)
+    assert any("set this card aside" in line for line in p.layer4)
+    await asks.after_dialogue(
+        p, {asks.RETELL_OFFER}, session_id=f.session_id, user_id=f.user_id, db=real_db
+    )
+    with labels(("set_aside", "വേണ്ട")):
+        await plan(real_db, f, "വേണ്ട")
+
+    card = await get(real_db, ConversationCard, db_id)
+    assert card.status == "kept_private" and not card.needs_retelling

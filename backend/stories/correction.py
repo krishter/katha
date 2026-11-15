@@ -1,17 +1,22 @@
 """
-She corrected a Story after hearing it read back (docs/specs/STORIES.md
-§2.3, proposal §6.4).
+She corrected a Story after hearing it read back, or told a part of it
+again (docs/specs/STORIES.md §2.3, §6c; proposal §6.4).
 
-Her correction turn becomes a source. The Story is composed again from
-every telling plus the correction, checked sentence by sentence as before,
+Her turn becomes a source, kept on the Story. The Story is composed again
+from every telling plus that turn, checked sentence by sentence as before,
 and saved as a new version; the version she heard is kept in
 story_versions. Its read-back is written and checked again, and it goes
-back to the operator (D-a) and then to her for one more read-back.
+back to her for one more read-back.
 
-A second correction, or a correction the pipeline cannot turn into a Story
-that passes its checks, goes to the operator to resolve by hand, as for
-cards. Nothing here can show the family anything: the Story leaves pending.
-Runs as a background task after the turn is saved. Never raises.
+When the rewrite cannot pass its checks, no one at Katha fixes it (§6c):
+the Story waits for her, and in a later session Katha says it could not
+write that part the way she told it and asks whether she would like to tell
+it again or set the story aside (stories/asks.py). That goes on until she
+chooses. With STORIES_OPERATOR_REVIEW on, it goes to the operator instead,
+as before.
+
+Nothing here can show the family anything: the Story stays pending. Runs as
+a background task after the turn is saved. Never raises.
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ from stories import consolidate, store
 
 logger = logging.getLogger(__name__)
 
+# With operator review on, a second correction goes to the operator.
 MAX_AUTOMATIC_CORRECTIONS = 1
 
 
@@ -57,6 +63,22 @@ async def _alert(story: Story, what: str) -> None:
         "A story needs a correction resolved by hand",
         f"Story {story.id} for user {story.user_id}: {what}.",
     )
+
+
+async def _cannot_write(story: Story, what: str, db: AsyncSession) -> None:
+    """The rewrite did not pass. With no reviewer it waits for her (§6c);
+    with one, it goes to the operator as before. The Story keeps the words
+    she last heard; nothing is offered for approval until a rewrite passes."""
+    story.failed_rewrites = (story.failed_rewrites or 0) + 1
+    if settings.STORIES_OPERATOR_REVIEW:
+        _back_to_operator(story, what)
+        await db.commit()
+        await _alert(story, what)
+        return
+    story.needs_retelling = True
+    story.readback_offers = 0
+    story.notes = [*(story.notes or []), f"Waiting for her: {what}"]
+    await db.commit()
 
 
 def _keep_version(story: Story, db: AsyncSession) -> None:
@@ -94,11 +116,12 @@ async def _turns(turn_ids: set[str], db: AsyncSession) -> list[dict]:
 
 
 def source_turn_ids(story: Story) -> set[str]:
-    """Every turn the Story was told from: its arc, and any turn a sentence
-    cites (a corrected Story cites her correction)."""
+    """Every turn the Story was told from: its arc, any turn a sentence
+    cites, and every correction or retelling she added."""
     ids = set(store.to_thread(story, []).arc.source_turn_ids)
     for sentence in story.sentence_sources or []:
         ids |= {str(t) for t in (sentence.get("turn_ids") or [])}
+    ids |= {str(t) for t in (story.added_source_turn_ids or [])}
     return ids
 
 
@@ -108,7 +131,7 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
         story is None
         or story.status != "story"
         or story.approval_status != "pending"
-        or story.parent_answer != "correction"
+        or story.parent_answer not in ("correction", "retelling")
     ):
         return
     profile = (
@@ -117,24 +140,27 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
         )
     ).scalar_one()
 
-    # Whatever happens next, her yes to the old words no longer stands and
-    # the old words are kept.
-    _keep_version(story, db)
+    correction = str(turn_id)
+    # Her yes to the old words no longer stands, and what she said is kept
+    # as a source for every later rewrite.
     story.approved_hash = None
     story.readback_offers = 0
+    if correction not in [str(t) for t in story.added_source_turn_ids or []]:
+        story.added_source_turn_ids = [*(story.added_source_turn_ids or []), correction]
 
-    if (story.correction_round or 0) > MAX_AUTOMATIC_CORRECTIONS:
+    if (
+        settings.STORIES_OPERATOR_REVIEW
+        and (story.correction_round or 0) > MAX_AUTOMATIC_CORRECTIONS
+    ):
         _back_to_operator(story, f"Corrected again in turn {turn_id}: by hand.")
         await db.commit()
         await _alert(story, "she corrected it a second time")
         return
 
-    correction = str(turn_id)
-    turns = await _turns(source_turn_ids(story) | {correction}, db)
+    turns = await _turns(source_turn_ids(story), db)
     if correction not in {t["id"] for t in turns}:
-        _back_to_operator(story, f"Correction turn {turn_id} is not readable.")
-        await db.commit()
-        await _alert(story, "her correction could not be read")
+        # Private, or its privacy not settled: never a source.
+        await _cannot_write(story, "her correction could not be used", db)
         return
 
     incident = {
@@ -173,15 +199,13 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
         ):
             redone = retry
     if redone.status != "story" or not redone.body_first_person:
-        _back_to_operator(
-            story,
-            f"Correction in turn {turn_id} did not survive the fidelity check: "
-            + "; ".join(redone.notes[-2:]),
-        )
-        await db.commit()
-        await _alert(story, "the corrected version did not pass its check")
+        # What was cut, and why: Katha names that part when it asks her.
+        story.removed_sentences = list(redone.removed_sentences)
+        await _cannot_write(story, "the rewrite did not pass its check", db)
         return
 
+    # The version she heard, kept as it was, then the new one.
+    _keep_version(story, db)
     story.version = (story.version or 1) + 1
     story.title = redone.title or story.title
     story.body_first_person = redone.body_first_person
@@ -190,27 +214,20 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
     story.removed_sentences = list(redone.removed_sentences)
     story.fidelity_status = redone.fidelity_status
     story.parent_answer = None
+    story.needs_retelling = False
     story.review_status = (
         "operator_review" if settings.STORIES_OPERATOR_REVIEW else "passed"
     )
     story.operator_reviewed_at = None
     note = f"Version {story.version}: her correction."
     if redone.removed_sentences:
-        # A cut can take the moment the story turns on with it, and the arc
-        # test can still pass: the operator reads what was cut.
-        note += (
-            f" The check cut {len(redone.removed_sentences)} sentence(s); "
-            "read them before passing it."
-        )
+        note += f" The check cut {len(redone.removed_sentences)} sentence(s)."
     story.notes = [*(story.notes or []), note]
     await db.commit()
 
     # Writes, checks and fingerprints the new read-back. A failed check
-    # leaves it with the operator: it cannot be passed until one passes.
+    # means it cannot be read to her: it waits for her as above.
     await consolidate.write_readback_for(story, story.user_id, profile, db)
-    if (story.readback_check or {}).get("result") != "passed" and (
-        story.review_status == "passed"
-    ):
-        _back_to_operator(story, "The corrected read-back did not pass its check.")
-        await db.commit()
+    if (story.readback_check or {}).get("result") != "passed":
+        await _cannot_write(story, "the new read-back did not pass its check", db)
     logger.info("Story %s re-composed as version %d", story.id, story.version)

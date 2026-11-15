@@ -3870,12 +3870,18 @@ async def tc41(db):
         "drops_ten": not re.search(r"\bten\b", lower),
         # A word boundary: "Kunjappan" contains "appa".
         "drops_appa_carrying": not re.search(r"\bappa\b[^.]*carried", lower),
+        # §5: "goes back to pending". With no operator review it is passed
+        # straight back to her read-back.
         "back_to_pending": story.approval_status == "pending"
-        and story.review_status == "operator_review",
+        and story.review_status
+        == ("operator_review" if settings.STORIES_OPERATOR_REVIEW else "passed"),
         "family_sees_nothing": exported["first_person_stories"] == [],
     }
+    # Reported, not scored: a new criterion is Krish's call (§3.3).
+    invented = bool(re.search(r"uncle[^.]*\bwoke\b|\bwoke\b[^.]*uncle", lower))
     evidence = (
-        f"checks={checks}\nnew body: {body!r}\n"
+        f"checks={checks}\nNOT SCORED uncle_woke_us_invented={invented}\n"
+        f"new body: {body!r}\n"
         f"read-back check: {(story.readback_check or {}).get('result')}\n"
         f"removed by fidelity: {story.removed_sentences}\n"
         f"notes: {story.notes}"
@@ -3993,11 +3999,169 @@ async def _no_commit():
     return None
 
 
+_RETELL_ANSWERS = [
+    ("Yes, I'll tell you again, listen.", "retell"),
+    ("ശരി, ഞാൻ ഒന്നുകൂടി പറയാം.", "retell"),
+    ("हाँ, मैं फिर से बताती हूँ।", "retell"),
+    ("Leave it, it doesn't matter.", "set_aside"),
+    ("അത് വിട്ടേക്കൂ, സാരമില്ല.", "set_aside"),
+    ("रहने दो, कोई बात नहीं।", "set_aside"),
+    ("Not today, maybe another time.", "not_now"),
+    ("ഇന്ന് വേണ്ട, പിന്നെ നോക്കാം.", "not_now"),
+]
+
+
+async def tc45(db):
+    """STORIES.md §6c, TC-45: when Katha could not write her correction, she
+    decides. (1) Katha's ask: one question, its own shortcoming, never the
+    detail the check cut; from the second failure, setting aside offered.
+    (2) Her answer read right. (3) A rewrite from her retelling uses it."""
+    from core import parent_answers
+    from stories import asks as story_asks
+    from stories import correction
+
+    with stories_switched_on():
+        saved = settings.STORIES_OPERATOR_REVIEW
+        settings.STORIES_OPERATOR_REVIEW = False
+        try:
+            # (1) the ask, after one failed rewrite and after two
+            for failures in (1, 2):
+                uid = f"eval-tc45-ask{failures}"
+                await cleanup(db, uid)
+                _, pp = await seed_story_family(db, uid)
+                _, turns = await seed_told_session(
+                    db, uid, 1, [(_RIVER_SETTING, False), (_RIVER_EVENT, False)]
+                )
+                story_id = await seed_passed_story(db, uid, turns)
+                story = await db.get(Story, story_id)
+                story.needs_retelling = True
+                story.failed_rewrites = failures
+                story.parent_answer = "correction"
+                story.parent_answered_at = datetime.now(timezone.utc)
+                story.removed_sentences = [
+                    {
+                        "text": "My uncle Kunjappan woke us up and carried my "
+                        "grandmother out.",
+                        "reason": "she never said who woke them up",
+                    }
+                ]
+                await db.commit()
+                state = await session_manager.start_session(uid, db)
+                r = await real_turn(
+                    db, uid, state.session_id, state, pp, "Good morning Katha!"
+                )
+                reply = r["response_text"]
+                lower = reply.lower()
+                checks = {
+                    "asked": "retell_offer" in r["asked"],
+                    "one_question": _questions(reply) <= 1,
+                    "no_unsaid_detail": "woke" not in lower,
+                    "offers_both": any(w in lower for w in ("again", "retell"))
+                    and "aside" in lower,
+                }
+                if failures >= 2:
+                    checks["setting_aside_is_fine"] = any(
+                        w in lower
+                        for w in (
+                            "all right",
+                            "alright",
+                            "perfectly fine",
+                            "okay",
+                            "still your",
+                        )
+                    )
+                record(
+                    f"TC-45 ask after {failures} failure(s)",
+                    "objective",
+                    all(checks.values()),
+                    f"checks={checks}\nreply: {reply!r}",
+                )
+                await cleanup(db, uid)
+
+            # (2) her answer
+            right, misses = 0, []
+            for said, want in _RETELL_ANSWERS:
+                got = (
+                    await parent_answers.classify(
+                        parent_answers.RETELL, story_asks.retell_question(), said
+                    )
+                ).label
+                right += got == want
+                if got != want:
+                    misses.append(f"{said!r}: want {want}, got {got}")
+            record(
+                "TC-45 her answer",
+                "objective",
+                right == len(_RETELL_ANSWERS),
+                f"{right}/{len(_RETELL_ANSWERS)} right\n" + "\n".join(misses),
+            )
+
+            # (3) the rewrite from her retelling
+            uid = "eval-tc45-retold"
+            await cleanup(db, uid)
+            await seed_story_family(db, uid)
+            _, turns = await seed_told_session(
+                db, uid, 1, [(_RIVER_SETTING, False), (_RIVER_EVENT, False)]
+            )
+            story_id = await seed_passed_story(db, uid, turns)
+            today = Session(
+                id=uuid.uuid4(), user_id=uid, session_number=2, domain="childhood"
+            )
+            db.add(today)
+            await db.flush()
+            retold = (
+                "That night I was twelve, not ten. Appa was away in Madras. It "
+                "was my uncle Kunjappan who put grandmother on his back and took "
+                "her to the temple steps."
+            )
+            turn = Turn(
+                id=uuid.uuid4(),
+                session_id=today.id,
+                user_id=uid,
+                turn_number=1,
+                transcript=retold,
+                detected_language="en-IN",
+                response_text="Thank you, I'll write it again.",
+                extraction_status="done",
+            )
+            db.add(turn)
+            turn_id = turn.id
+            story = await db.get(Story, story_id)
+            story.needs_retelling = True
+            story.failed_rewrites = 1
+            story.parent_answer = "retelling"
+            await db.commit()
+            with usage.usage_scope(user_id=uid):
+                await correction.rewrite_for_correction(story_id, turn_id, db)
+            db.expire_all()
+            story = await db.get(Story, story_id)
+            body = (story.body_first_person or "").lower()
+            checks = {
+                "rewritten": story.version == 2 and not story.needs_retelling,
+                "uses_retelling": ("twelve" in body or "12" in body)
+                and ("uncle" in body or "kunjappan" in body),
+                "no_unsaid_waking": not re.search(
+                    r"uncle[^.]*\bwoke\b|\bwoke\b[^.]*uncle", body
+                ),
+            }
+            record(
+                "TC-45 rewrite from her retelling",
+                "objective",
+                all(checks.values()),
+                f"checks={checks}\nbody: {story.body_first_person!r}\n"
+                f"notes: {story.notes}",
+            )
+            await cleanup(db, uid)
+        finally:
+            settings.STORIES_OPERATOR_REVIEW = saved
+
+
 STORY_CASES = {
     "tc39": tc39,
     "tc41": tc41,
     "tc42": tc42,
     "tc43": tc43,
+    "tc45": tc45,
 }
 
 

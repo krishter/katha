@@ -33,6 +33,9 @@ OFFER = "offer"
 READBACK = "readback"
 SHARE = "share"
 CONSENT = "consent"
+# Katha could not write part of a story the way she told it: tell that
+# part again, or set the story aside (STORIES.md §6c).
+RETELL = "retell"
 # Not an answer to a question: whether something she said mid-conversation
 # asks Katha to stop for good (core/withdrawal.py, P4).
 WITHDRAW = "withdraw"
@@ -42,6 +45,7 @@ LABELS: dict[str, tuple[str, ...]] = {
     READBACK: ("approve", "correction", "keep_private", "not_now", "unclear"),
     SHARE: ("yes", "no", "unclear"),
     CONSENT: ("yes", "no", "unclear"),
+    RETELL: ("retell", "set_aside", "not_now", "unclear"),
     WITHDRAW: ("withdraw", "pause", "none"),
 }
 
@@ -51,11 +55,12 @@ SAFE: dict[str, str] = {
     READBACK: "unclear",
     SHARE: "unclear",
     CONSENT: "unclear",
+    RETELL: "unclear",
     WITHDRAW: "none",
 }
 
 # Labels that move something forward. Each must quote her.
-POSITIVE = frozenset({"yes", "approve", "withdraw"})
+POSITIVE = frozenset({"yes", "approve", "withdraw", "retell", "set_aside"})
 
 # Headroom over the ~20-token JSON answer, in case the model thinks at all
 # (see LLM_CLASSIFIER_EFFORT). An empty reply is read as the safe label.
@@ -101,6 +106,16 @@ her consent to being recorded.
 A clear yes stays a yes when she adds that she is fine with it: "yes,
 I'm ok", "yes, that's fine", "haan, mujhe theek hai" are "yes". The reply
 may be in English even when Katha asked in another language.""",
+    RETELL: """Katha told her it could not write one part of her story the way
+she told it, and asked whether she would like to tell that part again, or
+set the story aside.
+- "retell": she wants to tell it again, or starts telling that part now
+  ("yes, I'll tell you", "haan, sunao main batati hoon", "it was like
+  this...", "சொல்றேன்").
+- "set_aside": she wants to leave the story aside ("leave it", "never
+  mind", "rehne do", "விடுங்க", "keep it aside").
+- "not_now": she wants to decide later ("not today", "later", "abhi nahi").
+- "unclear": anything else, including changing the subject.""",
     WITHDRAW: """She is talking with Katha, an AI that records her life stories for
 her family. Decide whether she is asking Katha to stop for good.
 - "withdraw": she clearly wants Katha to stop recording her or contacting

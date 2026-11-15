@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -27,7 +28,7 @@ REVIEW_STATUSES = ("operator_review", "passed")
 # Her side (§2.3). Null while a thread.
 APPROVAL_STATUSES = ("pending", "approved", "kept_private")
 
-RETIRED_REASONS = ("merged", "operator", "declined_twice", "fidelity")
+RETIRED_REASONS = ("merged", "operator", "declined_twice", "fidelity", "set_aside")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -155,6 +156,18 @@ class Story(Base):
     # second goes to the operator to resolve by hand, as for cards.
     correction_round: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
+    )
+    # §6c: a correction Katha could not write is put to her: tell that part
+    # again, or set the story aside. Her corrections and retellings are
+    # kept as sources.
+    needs_retelling: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    failed_rewrites: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    added_source_turn_ids: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
     )
 
     operator_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

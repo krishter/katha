@@ -56,8 +56,15 @@ ALLOWED: dict[str, frozenset[str]] = {
     "awaiting_parent": frozenset(
         {"approved", "correction", "kept_private", "expired", "withdrawn"}
     ),
+    # kept_private: she set aside a card Katha could not rewrite (§6c).
     "correction": frozenset(
-        {"operator_review", "awaiting_parent", "failed_fidelity", "withdrawn"}
+        {
+            "operator_review",
+            "awaiting_parent",
+            "failed_fidelity",
+            "withdrawn",
+            "kept_private",
+        }
     ),
     "approved": frozenset({"scheduled", "withdrawn"}),
     "scheduled": frozenset({"sent", "withdrawn"}),
