@@ -65,7 +65,7 @@
 
 **Conversation cards** *(added 2026-10-18; `docs/specs/CONVERSATION_CARDS.md`; behind `CONVERSATION_CARDS_ENABLED` and a per-family switch)*
 - After a session, a family with cards on gets a draft "Did you know?" card in place of the memory card: one moment chosen from her story atoms, written from her raw transcripts, and checked sentence by sentence against them (`cards/write.py`).
-- An operator reviews it (`/admin/cards/view`), then Katha offers to read it to her in her next session and speaks the stored read-back in her pinned voice (`cards/asks.py`). Only her classified "approve", on the card's exact current wording, lets it leave; a CHECK constraint holds the same rule in the database (`cards/state.py`).
+- No one at Katha reviews it *(decided 2026-11-15; until then an operator reviewed each card at `/admin/cards/view`, D3)*. Katha offers to read it to her in her next session and speaks the stored read-back in her pinned voice (`cards/asks.py`). Only her classified "approve", on the card's exact current wording, lets it leave; a CHECK constraint holds the same rule in the database (`cards/state.py`).
 - Approved cards go on WhatsApp (template) and email a few hours before the child's usual call (`cards/schedule.py`, `cards/deliver.py`). The child's taps and questions come back through the webhook or the card's page and are screened before she hears them, credited to the child (`cards/family_inbox.py`).
 
 **Session Memory & RAG**
@@ -436,6 +436,10 @@ TC-32: one incident told across four turns with a detour; exactly one thread, de
 
 **TC-39 to TC-43: A Story read back to her** *(added 2026-11-15 from `docs/specs/STORIES.md` §5, Stage 2; run with `evals/run_eval.py stories`, except TC-40.)*
 TC-39: a thread with a private turn among its tellings; no word of the private turn in the body, read-back or quotes (objective 100%). TC-40: only Stories she approved reach any `/family/*` response or the export; deterministic, so it is tested in `tests/integration/test_story_asks.py` and `test_stories.py`, not sampled. TC-41: a correction at read-back gives a new version that uses it, back with the operator and pending; the family sees nothing meanwhile. TC-42: a Story and a card both waiting; one ask after a greeting and at the close, none mid-story, judged by the `<asked>` tag as TC-14 is. TC-43: the read-back in Malayalam, Tamil and Hindi passes its two-way check against the English body and is in her script; this is the system's own check, so the rubric is Krish listening to the Malayalam read-backs before go-live.
+
+**TC-45: When Katha could not write her correction** *(added 2026-11-15 from `docs/specs/STORIES.md` §6c; run with `evals/run_eval.py tc45`.)*
+Expected: Katha says, as its own shortcoming, that it could not write one part the way she told it, and asks whether she would like to tell that part again or set it aside; from the second failed rewrite it adds that setting it aside is fine. Her answer is read right, and a rewrite from her retelling uses it.
+Pass: the ask carries `retell_offer`, asks one question, never repeats the detail the check cut, and offers both choices; after two failures it says setting aside is fine; 8/8 answers labelled right; the rewrite uses her retelling and adds no action she did not give. Target: objective 100%.
 
 ### 3.4 Evaluation Process
 

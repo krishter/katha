@@ -80,7 +80,7 @@ Decided 2026-11-10 (Krish): every recommendation below.
 
 | # | Question | Decision |
 |---|---|---|
-| D-a | Does Krish review every Story before she hears it? | **Yes**, as for cards, with a flag to turn it off once the fidelity record is long enough. |
+| D-a | Does Krish review every Story before she hears it? | ~~**Yes**, as for cards, with a flag to turn it off once the fidelity record is long enough.~~ **Reversed 2026-11-15 (Krish): no.** Reading another family's stories is a privacy invasion by a stranger. No one at Katha reviews Stories or cards; see §6c. |
 | D-b | Do Stories and cards share the one-ask-per-session budget and the 2-in-7-days delivery cadence? | **Share both.** The waiting item that has been waiting longest goes first. Two systems each asking once a session would make two asks, which breaks cards' non-negotiable 7. |
 | D-c | Do we consolidate existing history for the current pilot families? | **Yes, once**, as a backfill script that writes threads and pending Stories through the same review and read-back. Otherwise the 9 open threads Phase A found are lost to Stage 4. |
 | D-d | Start now, or wait for the 2026-11-24 rerun? | **Build now, flag off. Turn it on after the rerun and a self-trial.** The schema, pipeline and dashboard are needed whatever the rerun shows; only the go-live depends on it. |
@@ -169,9 +169,29 @@ Built behind the same two switches, both off. Branch `feature/stories-readback`.
 
 **Regression, cards on:** TC-01 to TC-11 objective 13/15 and rubric 13/15, with TC-03 at 6/6. TC-08 was 1/3 and TC-11 1/3 (resurfacing Mr. Iyer), their known weaknesses. With Stories off, the turn's path is the same as `main`'s; pooled with the same day's gate run on `main`, they are 3/6 and 4/6. The cards cases TC-12 to TC-18: objective 5/5, rubric 2/2. TC-19 to TC-31 were not run: nothing they exercise changed.
 
+## 6c. No one at Katha reviews (2026-11-15)
+
+**Decision (Krish):** no one at Katha reads a family's Stories or cards before she hears them. "It feels like a privacy invasion by a complete stranger." This reverses D-a here and D3 in `CONVERSATION_CARDS.md`.
+
+- **Off by default:** `STORIES_OPERATOR_REVIEW` and `CARDS_OPERATOR_REVIEW`. A card or Story that passes its checks goes straight to her read-back. The safeguards before the family are the machine checks and her own yes on the exact words she heard.
+- **Alerts carry ids, never a title or story text.** Kept: the crisis alert, which includes her words so a person can check on her the same day, and the alert for a child's message that needs a person.
+- **A Story she never heard whose read-back fails its check** is set aside (`retired_reason = fidelity`), and its pieces go back to the card pool.
+- **When Katha can't write her correction** (the rewrite or its read-back fails its check, or her correction can't be used), she decides, not Katha:
+  - The card or Story keeps the words she last heard, and waits (`needs_retelling`).
+  - In a later session, one ask, never mid-story, Katha says as its own shortcoming that it couldn't write that part the way she told it. It names the part as a question from the check's reason, never repeating the cut sentence, and asks whether she'd like to tell it again or set it aside (`retell_offer`, classified by `parent_answers.RETELL`).
+  - **Tell it again:** Katha asks for that part in her own words (`retelling`); her answer becomes a source (`added_source_turn_ids`), and the rewrite runs after that turn's extraction settles its privacy.
+  - **Set it aside:** a Story retires (`set_aside`) and its pieces return to the card pool; a card becomes `kept_private`.
+  - **Not now / unclear:** asked again another day.
+  - From the second failed rewrite, Katha mentions that setting it aside is perfectly all right. There is no limit: it goes on until she chooses.
+  - The second-correction limit applies only with operator review on. Migration `b9d4f6a8c3e5`; TC-45.
+- **The spoken notice** (`consent_processing`, now `parent-1.2`) says no one at Katha reads her stories, except to check on her safety or to fix a problem with the service. A 1.1 agreement still stands, because 1.2 says less is done with her words. The 12 translations are machine-written and unread by native speakers. The privacy page is version 1.2. Counsel should see both.
+- **Still open:**
+  - A child's question screened "sensitive" still waits for an operator to release it (`cards/family_inbox.py`). That is reading family content too; Krish to decide.
+  - `/admin/cards/view` and `/admin/stories/view` still show full text.
+
 ## 7. Risks
 
-- **Words in her mouth.** This is the risk that matters most. Fidelity runs on the body and the read-back, operator review comes before she hears it, and her approval comes before the family sees it.
+- **Words in her mouth.** This is the risk that matters most. Fidelity runs on the body and the read-back, and her approval comes before the family sees it. With no operator review (§6c), a detail the checks miss is heard by her before anyone else: TC-41 is the case to watch.
 - **The read-back translation.** The family reads English; she approved her own language. The two texts are checked against each other (TC-43), and the label says "translated".
 - **Cost.** Consolidation roughly doubles a session's LLM cost. That's measured per session in `api_usage`, and D-e is the lever.
 - **Pending pile-up.** Stories wait if read-backs are skipped. Pending age goes on the ops console. If it grows, the read-back design needs work, not the approval rule.

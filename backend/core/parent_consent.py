@@ -40,7 +40,11 @@ logger = logging.getLogger(__name__)
 # 1.1 (P10, M-06): the welcome now says that AI companies, some outside
 # India, process her words, that a person at Katha may read them, and that
 # her family sees summaries.
-PARENT_CONSENT_VERSION = "parent-1.1"
+# 1.2 (2026-11-15): no one at Katha reads her stories, except to check on
+# her safety or fix a problem with the service (operator review removed).
+# It says less is done than 1.1 did, so a 1.1 agreement still stands and
+# she is not asked again.
+PARENT_CONSENT_VERSION = "parent-1.2"
 # A parent who agreed to the 1.0 wording is asked once more, on her next
 # message, before anything else (consent_update). For this change only; a
 # later wording change decides its own rule.

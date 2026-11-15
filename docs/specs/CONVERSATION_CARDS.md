@@ -52,7 +52,7 @@ It does not wait for the Stories build. Cards come from approved story atoms. Ap
 |---|---|---|
 | D1 | Where card content comes from | **Approved story atoms and their source turns**, not Stories. Approval happens per card at read-back (§6). |
 | D2 | The existing per-session memory card | **Replaced** for families with this feature on. Today's card reaches the child without the parent's agreement. The image and delivery code are reused. |
-| D3 | Operator review | **Every card is reviewed by Krish** before the parent hears it. A flag turns this off later. |
+| D3 | Operator review | ~~**Every card is reviewed by Krish** before the parent hears it. A flag turns this off later.~~ **Reversed 2026-11-15:** no one at Katha reads a family's cards. `CARDS_OPERATOR_REVIEW` is off by default; a card that passes its checks goes straight to her read-back. See `STORIES.md` §6c for a corrected card that can't be rewritten. |
 | D4 | Cadence | **Up to 2 cards in any rolling 7 days**, each sent before a call. |
 | D5 | Name | **"Conversation cards"** internally. The child sees "Did you know?" |
 | D6 | Approval timing | **At the next session, on the finished card text.** Not at the end of the session where the material was told, because the card is written afterwards and she would be agreeing to a topic, not to the words. |
