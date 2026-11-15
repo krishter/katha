@@ -55,8 +55,7 @@ def _back_to_operator(story: Story, note: str) -> None:
 async def _alert(story: Story, what: str) -> None:
     await send_operator_alert(
         "A story needs a correction resolved by hand",
-        f'Story "{story.title}" for user {story.user_id}: {what}. '
-        "See /admin/stories/view.",
+        f"Story {story.id} for user {story.user_id}: {what}.",
     )
 
 

@@ -463,7 +463,7 @@ async def _draft(session_id: str, user_id: str, db: AsyncSession) -> DraftOutcom
     if review:
         await send_operator_alert(
             "A conversation card is waiting for review",
-            f'Card "{card.title}" for user {user_id} is ready at /admin/cards/view. '
+            f"Card {card.id} for user {user_id} is ready at /admin/cards/view. "
             "Target: reviewed within 24 hours.",
         )
     return DraftOutcome("drafted", card.status, card.id)
@@ -515,8 +515,7 @@ async def _rewrite_for_correction(card_id, turn_id, db) -> None:
         await db.commit()
         await send_operator_alert(
             "A card needs a correction resolved by hand",
-            f'Card "{card.title}" for user {card.user_id} was corrected twice. '
-            "See /admin/cards/view.",
+            f"Card {card.id} for user {card.user_id} was corrected twice.",
         )
         return
 
@@ -566,6 +565,6 @@ async def _rewrite_for_correction(card_id, turn_id, db) -> None:
     if review:
         await send_operator_alert(
             "A corrected conversation card is waiting for review",
-            f'Card "{card.title}" for user {card.user_id} was corrected by her and '
+            f"Card {card.id} for user {card.user_id} was corrected by her and "
             "rewritten. See /admin/cards/view.",
         )

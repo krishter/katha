@@ -253,6 +253,14 @@ async def _consolidate(
 
     for row, thread in promoted:
         await write_readback_for(row, user_id, profile, db)
+        if (
+            not settings.STORIES_OPERATOR_REVIEW
+            and (row.readback_check or {}).get("result") != "passed"
+        ):
+            # No one reviews it, and she has never heard it: set it aside
+            # rather than leave it waiting for a review that won't come.
+            await set_aside_unheard(row, db)
+            continue
         outcome.promoted.append(row.id)
     logger.info(
         "Stories for session %s: %d incident(s), %d new thread(s), %d promoted",
@@ -262,6 +270,20 @@ async def _consolidate(
         len(outcome.promoted),
     )
     return outcome
+
+
+async def set_aside_unheard(row: Story, db: AsyncSession) -> None:
+    """A Story she never heard whose read-back failed its check. Retired,
+    and its pieces go back to the card pool."""
+    from sqlalchemy import update
+
+    row.status = "retired"
+    row.retired_reason = "fidelity"
+    row.notes = [*(row.notes or []), "Read-back failed its check; set aside unheard."]
+    await db.execute(
+        update(StoryAtom).where(StoryAtom.story_id == row.id).values(story_id=None)
+    )
+    await db.commit()
 
 
 async def write_readback_for(
