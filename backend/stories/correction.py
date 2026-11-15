@@ -176,7 +176,15 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
         "operator_review" if settings.STORIES_OPERATOR_REVIEW else "passed"
     )
     story.operator_reviewed_at = None
-    story.notes = [*(story.notes or []), f"Version {story.version}: her correction."]
+    note = f"Version {story.version}: her correction."
+    if redone.removed_sentences:
+        # A cut can take the moment the story turns on with it, and the arc
+        # test can still pass: the operator reads what was cut.
+        note += (
+            f" The check cut {len(redone.removed_sentences)} sentence(s); "
+            "read them before passing it."
+        )
+    story.notes = [*(story.notes or []), note]
     await db.commit()
 
     # Writes, checks and fingerprints the new read-back. A failed check

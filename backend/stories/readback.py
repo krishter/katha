@@ -101,6 +101,9 @@ a changed fact, person, place, number, feeling or certainty is not.
 - "unsupported": it says something the STORY does not, or says it \
 differently enough to change its meaning.
 
+For each sentence, write your reason first and decide the verdict after \
+it, so the verdict is the conclusion your reason reaches.
+
 Then list every sentence of the STORY whose content is missing from the \
 read-back, or changed in it.
 
@@ -111,8 +114,8 @@ READ-BACK ({language_name})
 {readback}
 
 Respond with ONLY this JSON object:
-{{"sentences": [{{"text": "", "verdict": "framing|supported|unsupported", \
-"reason": ""}}],
+{{"sentences": [{{"text": "", "reason": "", \
+"verdict": "framing|supported|unsupported"}}],
   "missing_from_readback": [""]}}"""
 
 

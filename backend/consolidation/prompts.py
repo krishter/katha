@@ -184,9 +184,11 @@ def correction_block(correction_turn_id: Optional[str], purpose: str) -> str:
     if purpose == "compose":
         return f"""
 THEIR CORRECTION. After hearing this story read back to them, they \
-corrected it in turn {correction_turn_id}. Where that turn contradicts an \
-earlier telling, follow the correction and leave out what it corrects. \
-Change nothing else.
+corrected it in turn {correction_turn_id}. Tell it the way the correction \
+says, in place of what it corrects, and change nothing else. Change only \
+the details it names: never give one person's words or actions to another \
+unless the correction says so. Where the correction makes an earlier detail \
+impossible, leave out just that detail and keep the rest of the sentence.
 """
     return f"""
 THEIR CORRECTION. Turn {correction_turn_id} is them correcting this story \

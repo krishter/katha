@@ -1,6 +1,6 @@
 # Stories (Phase B and C): build plan
 
-**Status:** Plan agreed 2026-11-10 (Krish took every recommendation in §3). Stage 1 built (§6a); Stage 2 next.
+**Status:** Plan agreed 2026-11-10 (Krish took every recommendation in §3). Stage 1 built (§6a, merged #67); Stage 2 built (§6b); Stage 3 next.
 **Branch:** `feature/stories`, one PR per stage (§6). Never commit to `main`; see `.claude/rules/git.md`.
 **Design:** `docs/proposals/first-person-stories.md` (the proposal; its decisions D1 to D5 stand). This document is how to build it on today's code, and where today's code changes the proposal.
 **Depends on:** Phase A (`consolidation/`, merged in October), conversation cards (`cards/`, merged in #46), finishing stories (#66, deployed 2026-11-10).
@@ -144,6 +144,30 @@ Built behind `STORIES_ENABLED` (off) and `user_profiles.stories_enabled` (off):
 **Evals.** TC-32 to TC-38, renumbered from Phase A, pass 7/7 on Sonnet 4.6.
 
 **D-e, the Haiku trial:** with `LLM_STORY_GROUP_MODEL=claude-haiku-5-5`, TC-36 failed. The thread finished in session 3 was never promoted, and carrying a thread across sessions is the case Stories need most. Haiku's grouping also wrote about twice the output tokens. Grouping stays on Sonnet. This was one sample; a later trial needs TC-36 at 3+ samples.
+
+## 6b. Stage 2 record (2026-11-15)
+
+Built behind the same two switches, both off. Branch `feature/stories-readback`.
+
+- **The ask** (`stories/asks.py`, wired into `cards/asks.py`): `story_readback_offer` and `story_readback`. A Story is offered only when the operator has passed it, its read-back passed its check, its fingerprint still matches its words, it has been offered fewer than 3 times, and her sharing preference isn't `never`. It shares the session's one ask with cards and child questions; whichever has waited longest goes first, and on a tie the order cards always used holds (D-b). The read-back is the stored text, spoken with `story_readback_tts`.
+- **Her answer:** `approve` counts only on the fingerprint she heard, and is refused otherwise. `keep_private` gives `kept_private`. `not_now` and unclear answers leave it `pending`. After 3 offers it stays `pending` and is never sent. Her answer and its turn are stored (`parent_answer`, `parent_answer_turn_id`, `parent_answered_at`; migration `a8c3e5f7b2d4`).
+- **Correction** (`stories/correction.py`): runs after the correction turn's extraction, so a private correction is never a source. The version she heard goes to `story_versions`. The Story is composed again from every telling plus her correction (an optional correction block in the compose and fidelity prompts; without one they are byte-identical to Phase A's), checked, given a new read-back, and sent back to the operator with its offer count reset. A second correction, or one that fails its check, goes to the operator by hand with an alert. If the check cut sentences, a note on the Story says so.
+- **Privacy after the fact** (`stories/privacy.py`): when a turn becomes private, every Story citing it becomes `kept_private`, at any stage, approved included.
+- **Read-back check:** gives its reason before its verdict. One Malayalam check had marked a sentence unsupported while its own reason concluded it was supported.
+- **Requires cards.** The ask lives in the cards flow, so a family needs conversation cards on for a Story to be offered. New families have them; the two current pilot families do not.
+
+**Evals** (`run_eval.py stories`, 3 runs, about ₹13 a run):
+
+| Case | Result |
+|---|---|
+| TC-39 private turns | 2/3; no leak in any run. The third promoted no Story (a fidelity cut broke the arc), so there was nothing to judge |
+| TC-40 family sees only approved | Integration tests, deterministic |
+| TC-41 correction | **0/3.** Her correction "it was my uncle who carried grandmother; Appa was away" makes compose say the uncle also woke them. Fidelity rightly cuts that sentence, and the Story loses its turn while the arc test still passes. Safe (no unsaid words, the operator is told), but incomplete. One run failed its check and went to the operator. Open |
+| TC-42 one ask | 3/3 |
+| TC-43 read-back, ml/ta/hi | 9/9 |
+| TC-32 to TC-38 consolidation | 7/7 |
+
+**Regression, cards on:** TC-01 to TC-11 objective 13/15 and rubric 13/15, with TC-03 at 6/6. TC-08 was 1/3 and TC-11 1/3 (resurfacing Mr. Iyer), their known weaknesses. With Stories off, the turn's path is the same as `main`'s; pooled with the same day's gate run on `main`, they are 3/6 and 4/6. The cards cases TC-12 to TC-18: objective 5/5, rubric 2/2. TC-19 to TC-31 were not run: nothing they exercise changed.
 
 ## 7. Risks
 
