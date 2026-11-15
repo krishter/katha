@@ -193,7 +193,10 @@ impossible, leave out just that detail and keep the rest of the sentence.
     return f"""
 THEIR CORRECTION. Turn {correction_turn_id} is them correcting this story \
 after hearing it read back. A sentence that contradicts that turn is \
-"unsupported", even if an earlier transcript says it.
+"unsupported", even if an earlier transcript says it. Where the correction \
+changes who did something, a sentence that gives that person anything else \
+to do or say is "unsupported" unless a transcript says that person did it: \
+the earlier telling's other actions do not move with the correction.
 """
 
 
