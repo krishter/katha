@@ -50,6 +50,7 @@ from prompts.system_prompt import (
 )
 from speech import catalogue
 from stories import consolidate as story_consolidation
+from stories import correction as story_correction
 
 logger = logging.getLogger(__name__)
 
@@ -1305,9 +1306,9 @@ async def process_voice_turn(
     # The prompt goes in two parts so its stable half (Layers 1-3) can be
     # cached across the session's turns (C3).
     if plan is not None and plan.readback_text:
-        # She said yes to hearing a card. The reply is the card's stored
+        # She said yes to hearing a card or a Story. The reply is its stored
         # read-back, exactly what the operator saw, never generated now
-        # (§6.2).
+        # (§6.2; STORIES.md §2.3).
         return await _record_and_send(
             session_id,
             state,
@@ -1322,7 +1323,11 @@ async def process_voice_turn(
             crisis_detected=False,
             plan=plan,
             asked=set(),
-            tts_purpose="card_readback_tts",
+            tts_purpose=(
+                "story_readback_tts"
+                if plan.readback_story_id is not None
+                else "card_readback_tts"
+            ),
             db=db,
         )
 
@@ -1521,6 +1526,15 @@ async def _record_and_send(
                 response_text,
                 db,
             )
+            # After extraction, which settles whether her correction turn is
+            # private: a private turn never becomes a Story's source.
+            if plan is not None and plan.correction_story_id is not None:
+                background_tasks.add_task(
+                    story_correction.rewrite_for_correction,
+                    plan.correction_story_id,
+                    turn.id,
+                    db,
+                )
 
         # 12. Synthesize the reply (or degrade to text if TTS/conversion fails).
         return await _send_or_degrade(

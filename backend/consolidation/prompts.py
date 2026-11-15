@@ -172,11 +172,35 @@ A Story needs at least {required}. Do not inflate an element to reach that \
 bar — an honest incomplete incident is useful, and a fabricated one is not."""
 
 
+def correction_block(correction_turn_id: Optional[str], purpose: str) -> str:
+    """
+    STORIES.md §2.3: she heard the story read back and corrected it. Her
+    correction is a transcript like any other, but where it contradicts an
+    earlier telling it wins. Empty without a correction, so the prompts are
+    exactly what Phase A evaluated.
+    """
+    if not correction_turn_id:
+        return ""
+    if purpose == "compose":
+        return f"""
+THEIR CORRECTION. After hearing this story read back to them, they \
+corrected it in turn {correction_turn_id}. Where that turn contradicts an \
+earlier telling, follow the correction and leave out what it corrects. \
+Change nothing else.
+"""
+    return f"""
+THEIR CORRECTION. Turn {correction_turn_id} is them correcting this story \
+after hearing it read back. A sentence that contradicts that turn is \
+"unsupported", even if an earlier transcript says it.
+"""
+
+
 def build_compose_prompt(
     *,
     incident: dict,
     turns: list[dict],
     source_language: str,
+    correction_turn_id: Optional[str] = None,
 ) -> str:
     """Step 2 (§6.3): write the first-person story, per §5.1 and §5.2."""
     return f"""You are writing one story the way the storyteller told it, \
@@ -228,7 +252,7 @@ WHAT THIS INCIDENT IS
 
 THE TRANSCRIPTS (the only source)
 {_render_turns(turns)}
-
+{correction_block(correction_turn_id, "compose")}
 Respond with ONLY this JSON object and nothing else:
 
 {{
@@ -249,7 +273,9 @@ ordering a timeline, or null if you cannot tell from what they said. It is \
 never shown to anyone as a fact."""
 
 
-def build_fidelity_prompt(*, body: str, turns: list[dict]) -> str:
+def build_fidelity_prompt(
+    *, body: str, turns: list[dict], correction_turn_id: Optional[str] = None
+) -> str:
     """Step 3 (§5.3): sentence-by-sentence check of the draft against source."""
     return f"""You are checking a draft story against the transcripts it was \
 written from. This is the check that stops us putting words in a real \
@@ -275,7 +301,7 @@ DRAFT
 
 TRANSCRIPTS (the only source of truth)
 {_render_turns(turns)}
-
+{correction_block(correction_turn_id, "fidelity")}
 Respond with ONLY this JSON object and nothing else:
 
 {{

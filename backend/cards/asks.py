@@ -7,6 +7,9 @@ An ask is one of:
     readback_offer   "I've written something … shall I read it to you?"
     readback         the card read to her, ending "shall I send this?"
     child_question   a question from her child, credited by name
+    story_readback_offer, story_readback
+                     the same two steps for a Story (stories/asks.py,
+                     STORIES.md §2.3)
 
 At most one a session, never mid-story (§4.7). The dialogue model writes
 the share question, the offer and the relayed question from a Layer 4
@@ -45,6 +48,7 @@ from models.conversation_card import ConversationCard
 from models.family_question import FamilyQuestion
 from models.session import Session
 from models.user_profile import UserProfileModel
+from stories import asks as story_asks
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +56,10 @@ SHARE = "share"
 READBACK_OFFER = "readback_offer"
 READBACK = "readback"
 CHILD_QUESTION = "child_question"
+STORY_READBACK_OFFER = "story_readback_offer"
+STORY_READBACK = "story_readback"
 REACTION = "reaction"  # not an ask (§9.2): it rides along with anything
-ASK_KINDS = (SHARE, READBACK_OFFER, CHILD_QUESTION)
+ASK_KINDS = (SHARE, READBACK_OFFER, CHILD_QUESTION, STORY_READBACK_OFFER)
 
 MAX_READBACK_OFFERS = 3  # D9
 QUESTION_EXPIRY = timedelta(days=21)  # §10.2
@@ -74,14 +80,19 @@ class TurnPlan:
     offered: Optional[str] = None
     offered_ref: Optional[uuid.UUID] = None
     reaction_ids: list[uuid.UUID] = field(default_factory=list)
-    # Set when she said yes to hearing a card: speak this, skip dialogue.
+    # Set when she said yes to hearing a card or a Story: speak this, skip
+    # dialogue.
     readback_text: Optional[str] = None
     readback_card_id: Optional[uuid.UUID] = None
+    readback_story_id: Optional[uuid.UUID] = None
     # Set when she corrected a card: rewrite it once the turn is saved.
     correction_card_id: Optional[uuid.UUID] = None
     # The card she answered this turn, and her sharing answer: both are
     # recorded with this turn as their evidence once it is saved.
     answered_card_id: Optional[uuid.UUID] = None
+    # The same for a Story (STORIES.md §2.3).
+    answered_story_id: Optional[uuid.UUID] = None
+    correction_story_id: Optional[uuid.UUID] = None
     share_decision: Optional[str] = None
     # How her answer came out ("readback_approve", "share_no", ...).
     outcome: Optional[str] = None
@@ -237,6 +248,63 @@ def _expire_if_done(card: ConversationCard) -> None:
         logger.info("Card %s expired after %d offers", card.id, card.readback_offers)
 
 
+async def _answer_story_offer(story, transcript, child, plan: TurnPlan) -> None:
+    label = await story_asks.classify_offer(transcript, child)
+    if label == "yes" and story_asks.readable(story):
+        plan.readback_text = story.readback_text
+        plan.readback_story_id = story.id
+        plan.outcome = "story_offer_yes"
+        return
+    if label == "not_now":
+        plan.outcome = "story_offer_not_now"
+        plan.layer4.append(
+            "The user would rather not hear the story now. Say that is fine in "
+            "a few words and carry on with the conversation."
+        )
+    else:
+        plan.outcome = "story_offer_other"
+
+
+async def _answer_story_readback(story, transcript, child, plan: TurnPlan) -> None:
+    if not story_asks.readable(story):
+        return
+    label = await story_asks.classify_readback(transcript, child)
+    try:
+        story_asks.record_answer(story, label)
+    except story_asks.NotApproved:
+        # Her yes was to other words than the Story holds now: record
+        # nothing, and it is offered again another day.
+        logger.exception("Story %s: approval refused", story.id)
+        label = "unclear"
+        story.parent_answer = None
+    plan.answered_story_id = story.id
+    plan.outcome = f"story_readback_{label}"
+    if label == "approve":
+        plan.layer4.append(
+            f"The user just agreed that their story may be shared with {child}. "
+            f"Thank them and confirm in one short sentence that you will share "
+            f"it with {child}, then carry on."
+        )
+    elif label == "correction":
+        plan.correction_story_id = story.id
+        plan.layer4.append(
+            "The user corrected something in the story. Thank them, say you "
+            "will put it right and read it to them again another day, then "
+            "carry on."
+        )
+    elif label == "keep_private":
+        plan.layer4.append(
+            "The user does not want the story shared. Confirm in one short "
+            "sentence that it stays between the two of you, without asking "
+            "why, then carry on."
+        )
+    elif label == "not_now":
+        plan.layer4.append(
+            "The user wants to decide about the story later. Say that is fine "
+            "in a few words and carry on."
+        )
+
+
 # ── what this turn should carry ──────────────────────────────────────────────
 
 
@@ -333,6 +401,11 @@ async def before_dialogue(
         session.pending_ask = None
         session.pending_ask_ref = None
         card = await _card(ref, db) if pending in (READBACK_OFFER, READBACK) else None
+        story = (
+            await story_asks.get(ref, db)
+            if pending in (STORY_READBACK_OFFER, STORY_READBACK)
+            else None
+        )
         if pending == SHARE:
             await _answer_share(profile, transcript, child, plan)
         elif pending == READBACK_OFFER:
@@ -342,6 +415,13 @@ async def before_dialogue(
                 session.pending_ask_ref = card.id
         elif pending == READBACK:
             await _answer_readback(card, transcript, child, plan)
+        elif pending == STORY_READBACK_OFFER:
+            await _answer_story_offer(story, transcript, child, plan)
+            if plan.readback_text:
+                session.pending_ask = STORY_READBACK
+                session.pending_ask_ref = story.id
+        elif pending == STORY_READBACK:
+            await _answer_story_readback(story, transcript, child, plan)
         # CHILD_QUESTION: her answer is ordinary conversation (§10.3).
         session.ask_outcome = plan.outcome
 
@@ -382,7 +462,8 @@ async def before_dialogue(
 
 async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
     """§9.2 priority: the sharing question when due; then whichever of a
-    read-back and a child's question has waited longer."""
+    card, a Story (STORIES.md D-b) and a child's question has waited
+    longest."""
     if _share_due(profile, session.session_number):
         if session.exchange_count >= 1 or session.goal_met:
             when = (
@@ -405,13 +486,40 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
         return
 
     card = await _waiting_card(profile.user_id, db)
+    story = await story_asks.waiting_story(profile, db)
     question = questions[0] if questions else None
-    if card and question:
-        card_since = card.operator_reviewed_at or card.created_at or now
-        if (question.created_at or now) < card_since:
-            card = None
-        else:
-            question = None
+    waiting = [
+        (card.operator_reviewed_at or card.created_at or now, "card") if card else None,
+        (story_asks.waiting_since(story) or now, "story") if story else None,
+        (question.created_at or now, "question") if question else None,
+    ]
+    # Oldest first; on a tie the earlier kind in this list goes first, so
+    # with no Story waiting the choice is the one cards always made.
+    chosen = min((w for w in waiting if w), key=lambda w: w[0], default=None)
+    kind = chosen[1] if chosen else None
+    card = card if kind == "card" else None
+    story = story if kind == "story" else None
+    question = question if kind == "question" else None
+
+    if story is not None:
+        what = (
+            "an offer to read them their story, the one about "
+            f'"{story.title}", written down as they told it, to share with '
+            f"{child} — for example: \"I've written down your story about "
+            "[the story, in a few words], just as you told it to me, to share "
+            f'with {child}. Shall I read it to you?"'
+        )
+        timing = _timing(session.exchange_count, session.goal_met, what)
+        if timing:
+            plan.offered = STORY_READBACK_OFFER
+            plan.offered_ref = story.id
+            plan.tag_kinds.append(STORY_READBACK_OFFER)
+            plan.layer4.append(
+                f"{timing} Name the story in the user's language. Only offer: "
+                "never read, quote or retell the story yourself. If you offer, "
+                f"add {STORY_READBACK_OFFER} to the <asked> tag."
+            )
+        return
 
     if card is not None:
         told = card.source_cutoff or card.created_at
@@ -476,6 +584,10 @@ async def after_dialogue(
             card = await _card(plan.offered_ref, db)
             if card is not None:
                 card.readback_offers = (card.readback_offers or 0) + 1
+        elif plan.offered == STORY_READBACK_OFFER:
+            story = await story_asks.get(plan.offered_ref, db)
+            if story is not None:
+                story.readback_offers = (story.readback_offers or 0) + 1
         elif plan.offered == CHILD_QUESTION:
             await _mark_asked(plan.offered_ref, session_id, now, db)
     if REACTION in asked:
@@ -504,6 +616,12 @@ async def after_turn_saved(
                     await schedule.schedule_card(card, db)
                 except Exception:
                     logger.exception("Could not schedule card %s", card.id)
+    if plan.answered_story_id is not None:
+        story = await story_asks.get(plan.answered_story_id, db)
+        if story is not None and story.parent_answer:
+            # The evidence for her answer. Telling the family about an
+            # approved Story is Stage 3 (STORIES.md §2.4).
+            story.parent_answer_turn_id = turn_id
     await db.commit()
     if plan.share_decision is not None:
         profile = await _profile(user_id, db)

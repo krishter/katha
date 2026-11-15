@@ -33,8 +33,13 @@ def approved_stories():
 def fingerprint(story: Story) -> str:
     """What she is agreeing to: this version's English body and the read-back
     she hears. Either changes after her yes and approval no longer holds."""
+    # A row not yet flushed has no version: the database will make it 1.
     joined = "\n".join(
-        [str(story.version), story.body_first_person or "", story.readback_text or ""]
+        [
+            str(story.version or 1),
+            story.body_first_person or "",
+            story.readback_text or "",
+        ]
     )
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 

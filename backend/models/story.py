@@ -142,6 +142,20 @@ class Story(Base):
     approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Her last answer to the read-back (core/parent_answers.py READBACK
+    # labels) and the turn that carried it: the evidence for her approval.
+    parent_answer: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    parent_answer_turn_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    parent_answered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Corrections she has made at read-back. The first is re-composed; a
+    # second goes to the operator to resolve by hand, as for cards.
+    correction_round: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
 
     operator_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     operator_reviewed_at: Mapped[Optional[datetime]] = mapped_column(
