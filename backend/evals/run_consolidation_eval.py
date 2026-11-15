@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 """
-TC-12 to TC-18: the consolidation cases from first-person-stories.md §10.
+TC-32 to TC-38: the consolidation cases from first-person-stories.md §10
+(numbered TC-12 to TC-18 there; renumbered in STORIES.md §5, since the
+cards cases took those numbers).
 
     DATABASE_URL=... ANTHROPIC_API_KEY=... \
       ./.venv/bin/python evals/run_consolidation_eval.py          # all
-      ./.venv/bin/python evals/run_consolidation_eval.py tc14 tc17
+      ./.venv/bin/python evals/run_consolidation_eval.py tc34 tc37
 
 These make real, billed Sonnet calls, like run_eval.py — that is the point,
 since what is under test is the model's judgement about grouping, voice and
@@ -29,7 +31,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from adapters import llm  # noqa: E402
 from adapters.llm import Message  # noqa: E402
 from consolidation.pipeline import Thread, Usage, consolidate_session  # noqa: E402
-from scripts.consolidate_stories import CONSOLIDATION_MODEL  # noqa: E402
+from stories.consolidate import _model_for  # noqa: E402
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / (
     "tests/fixtures/consolidation"
@@ -45,11 +47,13 @@ def _has_indic(text: str) -> bool:
 
 
 async def _call_llm(prompt: str, *, step: str, max_tokens: int):
+    # The models the live pass uses (stories/consolidate.py), so a run with
+    # LLM_STORY_GROUP_MODEL set tests that choice (STORIES.md D-e).
     response = await llm.chat(
         [Message(role="user", content=prompt)],
         system=None,
         max_tokens=max_tokens,
-        model=CONSOLIDATION_MODEL,
+        model=_model_for(step),
         purpose="eval",
     )
     return response.content, response.input_tokens, response.output_tokens
@@ -85,7 +89,7 @@ def _all_transcripts(fixture: dict) -> str:
     return "\n".join(t["transcript"] for s in fixture["sessions"] for t in s["turns"])
 
 
-def check_tc12(fixture, threads, results):
+def check_tc32(fixture, threads, results):
     """Exactly one Thread/Story; the detour atom is not included."""
     detour = fixture["expect"]["detour_atom_excluded"]
     incidents = sum(r.incidents_found for r in results)
@@ -97,7 +101,7 @@ def check_tc12(fixture, threads, results):
     )
 
 
-def check_tc13(fixture, threads, results):
+def check_tc33(fixture, threads, results):
     """Two separate Threads, no cross-contamination of source turns."""
     incidents = sum(r.incidents_found for r in results)
     turn_sets = [set(t.arc.source_turn_ids) for t in threads.values()]
@@ -112,7 +116,7 @@ def check_tc13(fixture, threads, results):
     )
 
 
-def check_tc14(fixture, threads, results):
+def check_tc34(fixture, threads, results):
     """Zero unsupported sentences in the final body."""
     stories = _stories(threads)
     if not stories:
@@ -129,7 +133,7 @@ def check_tc14(fixture, threads, results):
     )
 
 
-def check_tc15(fixture, threads, results):
+def check_tc35(fixture, threads, results):
     """Stays a thread; the missing element is `turn`."""
     stories = _stories(threads)
     thread = next(iter(threads.values())) if threads else None
@@ -138,7 +142,7 @@ def check_tc15(fixture, threads, results):
     return ok, f"stories={len(stories)} (want 0); missing={missing} (want 'turn' in it)"
 
 
-def check_tc16(fixture, threads, results):
+def check_tc36(fixture, threads, results):
     """Promoted in session 3; the body draws on turns from sessions 1 and 3."""
     promoted_in = [r.session_number for r in results if r.promoted_thread_ids]
     stories = _stories(threads)
@@ -154,7 +158,7 @@ def check_tc16(fixture, threads, results):
     )
 
 
-def check_tc17(fixture, threads, results):
+def check_tc37(fixture, threads, results):
     """Original-language quote preserved verbatim; native terms kept."""
     stories = _stories(threads)
     if not stories:
@@ -172,7 +176,7 @@ def check_tc17(fixture, threads, results):
     )
 
 
-def check_tc18(fixture, threads, results):
+def check_tc38(fixture, threads, results):
     """The hedge survives into the body."""
     stories = _stories(threads)
     if not stories:
@@ -192,13 +196,13 @@ def check_tc18(fixture, threads, results):
 
 
 CHECKS = {
-    "tc12": check_tc12,
-    "tc13": check_tc13,
-    "tc14": check_tc14,
-    "tc15": check_tc15,
-    "tc16": check_tc16,
-    "tc17": check_tc17,
-    "tc18": check_tc18,
+    "tc32": check_tc32,
+    "tc33": check_tc33,
+    "tc34": check_tc34,
+    "tc35": check_tc35,
+    "tc36": check_tc36,
+    "tc37": check_tc37,
+    "tc38": check_tc38,
 }
 
 

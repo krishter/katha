@@ -360,6 +360,7 @@ async def consolidate_session(
     significant_people: list[dict],
     call_llm: LLMCall,
     history_turns: Optional[list[dict]] = None,
+    private_topics: Optional[list[str]] = None,
 ) -> SessionResult:
     """
     Run the three steps over one session, updating `threads` in place.
@@ -399,6 +400,7 @@ async def consolidate_session(
             atoms=atoms,
             open_threads=open_threads,
             significant_people=significant_people,
+            private_topics=private_topics,
         ),
         STEP_GROUP,
         GROUPING_MAX_TOKENS,

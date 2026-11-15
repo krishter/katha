@@ -25,6 +25,14 @@ class StoryAtom(Base):
         ForeignKey("sessions.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # The incident this atom was grouped into (docs/specs/STORIES.md §4); at
+    # most one. Null until the consolidation pass has placed it.
+    story_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("stories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     turn_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("turns.id", ondelete="SET NULL"),
@@ -55,3 +63,8 @@ class StoryAtom(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+# story_id's foreign key names the stories table, so it has to be in the
+# metadata wherever atoms are.
+import models.story  # noqa: E402, F401

@@ -288,7 +288,12 @@ def _make_card_row():
 
 
 def _export_execute_results(
-    atoms=None, sessions=None, cards=None, conversation_cards=None, questions=None
+    atoms=None,
+    sessions=None,
+    cards=None,
+    conversation_cards=None,
+    stories=None,
+    questions=None,
 ):
     def rows(items):
         result = MagicMock()
@@ -302,6 +307,7 @@ def _export_execute_results(
         rows(atoms),
         rows(cards),
         rows(conversation_cards),  # CONVERSATION_CARDS.md §11
+        rows(stories),  # STORIES.md §2.4: approved only
         rows(questions),
     ]
 
@@ -362,6 +368,7 @@ def test_export_empty_account_still_returns_valid_shape(db):
     assert response.status_code == 200
     body = response.json()
     assert body["stories"] == []
+    assert body["first_person_stories"] == []
     assert body["sessions"] == []
     assert body["memory_cards"] == []
 

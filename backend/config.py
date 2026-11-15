@@ -206,6 +206,18 @@ class Settings(BaseSettings):
     # D3: every card is reviewed by the operator before she hears it.
     # false sends a card that passed the fidelity check straight to her.
     CARDS_OPERATOR_REVIEW: bool = True
+
+    # Stories (docs/specs/STORIES.md). Off: no consolidation after a session
+    # and nothing about a session changes. On: it runs only for parents whose
+    # profile has stories_enabled, turned on one family at a time.
+    STORIES_ENABLED: bool = False
+    # D-a: every Story is reviewed by the operator before she hears it.
+    STORIES_OPERATOR_REVIEW: bool = True
+    # The consolidation pass stays on the model it was evaluated on (Phase A).
+    # D-e: grouping is the largest share of its tokens, so it has its own
+    # setting for the Haiku trial; compose, fidelity and read-back do not.
+    LLM_STORY_GROUP_MODEL: str = "claude-sonnet-4-6"
+    LLM_STORY_MODEL: str = "claude-sonnet-4-6"
     # Where "a card is waiting for review" and "she said never share"
     # alerts go. Empty: logged only.
     OPERATOR_EMAIL: str = ""

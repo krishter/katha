@@ -38,6 +38,7 @@ from models.media_object import MediaObject
 from models.memory_card import MemoryCard
 from models.operator_alert import TurnFailure
 from models.session import Session
+from models.story import Story, StoryVersion
 from models.story_atom import StoryAtom
 from models.turn import Turn
 from models.user_profile import UserProfileModel
@@ -124,6 +125,13 @@ async def erase_user(user_id: str, db: AsyncSession, *, actor: str) -> ErasureRe
     for label, stmt in [
         ("memory_cards", delete(MemoryCard).where(MemoryCard.user_id == user_id)),
         ("story_atoms", delete(StoryAtom).where(StoryAtom.user_id == user_id)),
+        # Stories and their earlier versions, kept-private ones included
+        # (STORIES.md §2.4). After the atoms, which point at them.
+        (
+            "story_versions",
+            delete(StoryVersion).where(StoryVersion.user_id == user_id),
+        ),
+        ("stories", delete(Story).where(Story.user_id == user_id)),
         ("turns", delete(Turn).where(Turn.user_id == user_id)),
         ("facts", delete(Fact).where(Fact.user_id == user_id)),
         # crisis_events go with their sessions (ON DELETE CASCADE).

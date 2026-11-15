@@ -11,6 +11,7 @@ and self-check grades its own work.
 from __future__ import annotations
 
 import json
+from typing import Optional
 
 from consolidation.arc import REQUIRED_FOR_STORY
 
@@ -82,10 +83,25 @@ def build_grouping_prompt(
     atoms: list[dict],
     open_threads: list[dict],
     significant_people: list[dict],
+    private_topics: Optional[list[str]] = None,
 ) -> str:
     """Step 1 (§6.3): group this session's material by incident and assess
-    each incident's arc."""
+    each incident's arc.
+
+    `private_topics` are what she asked Katha to keep between them
+    (CONVERSATION_CARDS.md §5.2). A turn on one told before she named it is
+    not marked private, so only this prompt can keep it out of a story.
+    """
     required = " + ".join(REQUIRED_FOR_STORY)
+    private_block = ""
+    if private_topics:
+        listed = "\n".join(f"- {t}" for t in private_topics)
+        private_block = f"""
+6. The storyteller asked that these stay private. Never make an incident \
+about any of them, or put an atom about one in an incident; put such atoms \
+in `unassigned_atom_ids`:
+{listed}
+"""
     return f"""You are Katha's consolidation pass. You are given one \
 conversation session with an elderly storyteller: the transcripts of what \
 they said, and the per-turn fragments ("atoms") already extracted from them.
@@ -116,7 +132,7 @@ incident (detours, descriptions, chit-chat) go in `unassigned_atom_ids`.
 `extends_thread_id` to that thread's id. Otherwise set it to null.
 5. The same person may be referred to differently across turns ("Appa", \
 "my father", by name). Treat those as one person.
-
+{private_block}
 CONVERSATION TRANSCRIPTS
 {_render_turns(turns)}
 

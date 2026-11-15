@@ -23,10 +23,12 @@ from models.family_account import FamilyAccount
 from models.family_question import FamilyQuestion
 from models.memory_card import MemoryCard
 from models.session import Session
+from models.story import Story
 from models.story_atom import StoryAtom
 from models.user_profile import UserProfileModel
 from prompts.domains import domain_label, get_domain, get_domain_sequence
 from prompts.system_prompt import _language_name
+from stories.store import approved_stories
 
 # Long enough for "she/her", "they/them" or a short free-text answer, short
 # enough that the field cannot become a second notes box inside the prompt.
@@ -518,6 +520,20 @@ async def export_data(
         .scalars()
         .all()
     )
+    # Stories she approved (STORIES.md §2.4), as the version she approved.
+    # Never one waiting for her, or one she kept to herself.
+    approved = (
+        (
+            await db.execute(
+                select(Story)
+                .where(Story.user_id == user_id)
+                .where(approved_stories())
+                .order_by(Story.approved_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     questions = (
         (
             await db.execute(
@@ -569,6 +585,19 @@ async def export_data(
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             }
             for a in atoms
+        ],
+        "first_person_stories": [
+            {
+                "title": s.title,
+                "domain": s.domain,
+                "domain_label": domain_label(s.domain),
+                "when": s.when_approx,
+                "body": s.body_first_person,
+                "translated_from": s.source_language,
+                "quotes": s.quotes,
+                "approved_at": s.approved_at.isoformat() if s.approved_at else None,
+            }
+            for s in approved
         ],
         "memory_cards": [
             {
