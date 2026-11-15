@@ -138,7 +138,6 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
         await _alert(story, "her correction could not be read")
         return
 
-    thread = store.to_thread(story, [])
     incident = {
         "working_title": story.title,
         "when_approx": story.when_approx,
@@ -146,14 +145,34 @@ async def _rewrite(story_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession):
         "places": list(story.places or []),
     }
     usage = Usage()
-    redone = await compose_and_check(
-        incident=incident,
-        thread=thread,
-        all_turns=turns,
-        call_llm=consolidate._call_llm,
-        usage=usage,
-        correction_turn_id=correction,
-    )
+
+    async def compose(cut=None):
+        # A fresh thread each try: compose_and_check writes into it.
+        return await compose_and_check(
+            incident=incident,
+            thread=store.to_thread(story, []),
+            all_turns=turns,
+            call_llm=consolidate._call_llm,
+            usage=usage,
+            correction_turn_id=correction,
+            cut=cut,
+        )
+
+    redone = await compose()
+    if redone.removed_sentences:
+        # TC-41: a cut sentence can take the moment the story turns on with
+        # it. One more try, told what was cut and why; kept only if it is a
+        # Story with fewer cuts.
+        retry = await compose(cut=list(redone.removed_sentences))
+        if (
+            retry.status == "story"
+            and retry.body_first_person
+            and (
+                redone.status != "story"
+                or len(retry.removed_sentences) < len(redone.removed_sentences)
+            )
+        ):
+            redone = retry
     if redone.status != "story" or not redone.body_first_person:
         _back_to_operator(
             story,

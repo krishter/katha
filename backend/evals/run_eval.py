@@ -3868,7 +3868,8 @@ async def tc41(db):
         "uses_twelve": "twelve" in lower or "12" in lower,
         "uses_uncle": "uncle" in lower or "kunjappan" in lower,
         "drops_ten": not re.search(r"\bten\b", lower),
-        "drops_appa_carrying": not re.search(r"appa[^.]*carried", lower),
+        # A word boundary: "Kunjappan" contains "appa".
+        "drops_appa_carrying": not re.search(r"\bappa\b[^.]*carried", lower),
         "back_to_pending": story.approval_status == "pending"
         and story.review_status == "operator_review",
         "family_sees_nothing": exported["first_person_stories"] == [],

@@ -162,7 +162,7 @@ Built behind the same two switches, both off. Branch `feature/stories-readback`.
 |---|---|
 | TC-39 private turns | 2/3; no leak in any run. The third promoted no Story (a fidelity cut broke the arc), so there was nothing to judge |
 | TC-40 family sees only approved | Integration tests, deterministic |
-| TC-41 correction | **0/3.** Her correction "it was my uncle who carried grandmother; Appa was away" makes compose say the uncle also woke them. Fidelity rightly cuts that sentence, and the Story loses its turn while the arc test still passes. Safe (no unsaid words, the operator is told), but incomplete. One run failed its check and went to the operator. Open |
+| TC-41 correction | First build **0/3**: her correction "it was my uncle who carried grandmother; Appa was away" made compose say the uncle also woke them, the check cut that sentence, and the Story lost its turn while the arc test still passed. Option (b), chosen by Krish: when the check cuts sentences from a corrected Story, compose runs once more, told what was cut and why, and the second try is kept only if it is a Story with fewer cuts. After it, 3 runs: **1/3 right** (run 3: the retry ran, uncle carried her, Appa away, nothing invented). In the other 2 the fidelity check passed "My uncle Kunjappan woke us up", which she never said, so nothing was cut and no retry ran. The scorer scores those 3/3 (after fixing a bug: "Kunjappan" contains "appa"), because it has no check for an invented detail. Open: the fidelity check on corrections |
 | TC-42 one ask | 3/3 |
 | TC-43 read-back, ml/ta/hi | 9/9 |
 | TC-32 to TC-38 consolidation | 7/7 |

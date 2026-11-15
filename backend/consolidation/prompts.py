@@ -197,12 +197,30 @@ after hearing it read back. A sentence that contradicts that turn is \
 """
 
 
+def cut_block(cut: Optional[list[dict]]) -> str:
+    """
+    A second try at a corrected story (STORIES.md §6b, TC-41): the sentences
+    the check cut from the first draft, and why. Empty on a first try.
+    """
+    if not cut:
+        return ""
+    listed = "\n".join(f'- "{c.get("text", "")}" ({c.get("reason", "")})' for c in cut)
+    return f"""
+A CHECK OF YOUR LAST DRAFT CUT THESE SENTENCES, because each said something \
+the transcripts do not:
+{listed}
+Write the story again. Keep every part of those sentences that the \
+transcripts do say, and leave out only the part they did not say.
+"""
+
+
 def build_compose_prompt(
     *,
     incident: dict,
     turns: list[dict],
     source_language: str,
     correction_turn_id: Optional[str] = None,
+    cut: Optional[list[dict]] = None,
 ) -> str:
     """Step 2 (§6.3): write the first-person story, per §5.1 and §5.2."""
     return f"""You are writing one story the way the storyteller told it, \
@@ -254,7 +272,7 @@ WHAT THIS INCIDENT IS
 
 THE TRANSCRIPTS (the only source)
 {_render_turns(turns)}
-{correction_block(correction_turn_id, "compose")}
+{correction_block(correction_turn_id, "compose")}{cut_block(cut)}
 Respond with ONLY this JSON object and nothing else:
 
 {{

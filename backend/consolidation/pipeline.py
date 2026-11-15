@@ -258,13 +258,15 @@ async def compose_and_check(
     call_llm: LLMCall,
     usage: Usage,
     correction_turn_id: Optional[str] = None,
+    cut: Optional[list[dict]] = None,
 ) -> Thread:
     """
     Steps 2 and 3 for one promoted incident: compose, then check sentence
     by sentence, cutting anything unsupported and re-checking once.
 
     `correction_turn_id` is her correction at read-back (STORIES.md §2.3):
-    it joins the sources, and both prompts are told it wins.
+    it joins the sources, and both prompts are told it wins. `cut` is what
+    the check cut from a first try, for a second one.
     """
     source_turns = select_source_turns(thread.arc, all_turns)
     if correction_turn_id:
@@ -284,6 +286,7 @@ async def compose_and_check(
             turns=source_turns,
             source_language=language,
             correction_turn_id=correction_turn_id,
+            cut=cut,
         ),
         STEP_COMPOSE,
         COMPOSE_MAX_TOKENS,

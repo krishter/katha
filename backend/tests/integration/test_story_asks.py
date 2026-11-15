@@ -730,3 +730,94 @@ async def test_offer_read_back_and_correction_through_process_voice_turn(real_db
     assert names.index("run_extraction_for_turn") < names.index(
         "rewrite_for_correction"
     )
+
+
+class CutThenFixed:
+    """First draft: the check cuts the sentence that moved an action to the
+    wrong person. Second draft, told why: nothing cut."""
+
+    WRONG = "My uncle woke us and carried my grandmother to the temple steps."
+    RIGHT = "My uncle carried my grandmother to the temple steps."
+
+    def __init__(self, f, correction_id: str):
+        self.told = [str(t) for t in f.turns]
+        self.correction_id = correction_id
+        self.composes: list[str] = []
+
+    async def __call__(self, prompt, *, step, max_tokens):
+        if step == "compose":
+            self.composes.append(prompt)
+            moment = self.WRONG if len(self.composes) == 1 else self.RIGHT
+            reply = {
+                "title": "The night the river came in",
+                "body_first_person": f"I was twelve. The water came in. {moment}",
+                "quotes": [],
+            }
+        elif step == "fidelity":
+            first = len(self.composes) == 1
+            moment = self.WRONG if first else self.RIGHT
+            reply = {
+                "sentences": [
+                    {
+                        "text": "I was twelve.",
+                        "verdict": "supported",
+                        "turn_ids": [self.correction_id],
+                    },
+                    {
+                        "text": "The water came in.",
+                        "verdict": "supported",
+                        "turn_ids": self.told,
+                    },
+                    {
+                        "text": moment,
+                        "verdict": "unsupported" if first else "supported",
+                        "turn_ids": [self.correction_id],
+                        "reason": "she never said the uncle woke them",
+                    },
+                ]
+            }
+            if first and "THEIR CORRECTION" in prompt and moment not in prompt:
+                # The re-check of the cut draft: what remains is supported.
+                reply["sentences"] = reply["sentences"][:2]
+        elif step == "readback":
+            reply = {"readback_text": "എനിക്ക് പന്ത്രണ്ട് വയസ്സായിരുന്നു. ... ശരിയാണോ?"}
+        elif step == "readback_check":
+            reply = {"sentences": [{"text": "x", "verdict": "supported"}]}
+        else:
+            raise AssertionError(f"unexpected step {step}")
+        return json.dumps(reply, ensure_ascii=False), 10, 10
+
+
+async def test_a_cut_correction_is_composed_once_more_told_what_was_cut(real_db):
+    f = await seed(real_db)
+    story_id = await waiting_story(real_db, f)
+    await offered_and_heard(real_db, f, story_id)
+    _, turn_id = await answer(real_db, f, "correction", "ഇല്ല, അമ്മാവനാണ്")
+
+    model = CutThenFixed(f, str(turn_id))
+    with patch.object(consolidate, "_call_llm", model):
+        await correction.rewrite_for_correction(story_id, turn_id, real_db)
+
+    assert len(model.composes) == 2
+    assert "CUT THESE SENTENCES" not in model.composes[0]
+    second = model.composes[1]
+    assert "CUT THESE SENTENCES" in second
+    assert CutThenFixed.WRONG in second and "never said the uncle woke" in second
+    story = await get(real_db, Story, story_id)
+    assert story.version == 2
+    assert story.body_first_person.endswith(CutThenFixed.RIGHT)
+    assert story.removed_sentences == []
+    assert story.review_status == "operator_review"
+
+
+async def test_no_second_try_when_nothing_was_cut(real_db):
+    f = await seed(real_db)
+    story_id = await waiting_story(real_db, f)
+    await offered_and_heard(real_db, f, story_id)
+    _, turn_id = await answer(real_db, f, "correction", "ഇല്ല")
+
+    model = Recomposer(f, str(turn_id))
+    with patch.object(consolidate, "_call_llm", model):
+        await correction.rewrite_for_correction(story_id, turn_id, real_db)
+
+    assert [s for s, _ in model.prompts].count("compose") == 1
