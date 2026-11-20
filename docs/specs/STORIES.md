@@ -188,6 +188,10 @@ Built behind the same two switches, both off. Branch `feature/stories-readback`.
 - **Still open:**
   - A child's question screened "sensitive" still waits for an operator to release it (`cards/family_inbox.py`). That is reading family content too; Krish to decide.
   - `/admin/cards/view` and `/admin/stories/view` still show full text.
+- **Evals, 2026-11-20** (after rebasing on main):
+  - **TC-41, 3/3 right**, with the fidelity rule for corrections (693f812) run live for the first time: uncle carried her, Appa away, and no run invented "uncle woke us up" (the unscored check found it in none). This closes the open TC-41 line in §6b.
+  - **TC-45.** The first runs failed every ask on `no_unsaid_detail`, which banned the word "woke". This section tells Katha to name the part as a question from the check's reason ("she never said who woke them up"), so the scorer was banning what the spec asks for. With Krish's approval it now fails only the cut detail: uncle or Kunjappan in the same sentence as "woke". Rescored, the ask after one failure asked two questions in 3 of 6 samples ("Who was it that woke everyone up? Would you like to tell me that part again, or…"), because the prompt asked for the choice and, separately, for the part as a question. The prompt now puts the part inside the one question. After it, 3 runs: **every TC-45 check passed** (asks 6/6, her answer 8/8 each run, rewrite 3/3).
+  - **Regression (TC-01 to TC-31, 3 samples):** objective 91/102, rubric 48/54. TC-08 1/3 (known), TC-09 2/3, TC-30 en 0/3. The changed instruction only reaches a prompt when a Story or card needs retelling, which no regression case seeds.
 
 ## 7. Risks
 

@@ -697,8 +697,10 @@ def _plan_retell_offer(plan: TurnPlan, session, item, is_story: bool) -> None:
             hint = (
                 " Your notes on that part (never say them as a fact, never "
                 f"repeat what the story said there): {unclear}. Name the part "
-                "as a short question in their language, such as who did "
-                "something or what happened next."
+                "inside the one question you ask, such as whether they would "
+                "like to tell you again who did something or what happened "
+                "next, or set it aside. Never ask about the part as a "
+                "separate question."
             )
     what = (
         f"telling them, as your own shortcoming and never theirs, that you "

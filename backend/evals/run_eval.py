@@ -4055,7 +4055,15 @@ async def tc45(db):
                 checks = {
                     "asked": "retell_offer" in r["asked"],
                     "one_question": _questions(reply) <= 1,
-                    "no_unsaid_detail": "woke" not in lower,
+                    # §6c: Katha names the part as a question from the
+                    # check's reason ("who woke them up?"), so "woke" alone is
+                    # allowed. What she must not say is the cut detail: that
+                    # the uncle woke them.
+                    "no_unsaid_detail": not re.search(
+                        r"(uncle|kunjappan)[^.?!]*\bwoke\b"
+                        r"|\bwoke\b[^.?!]*(uncle|kunjappan)",
+                        lower,
+                    ),
                     "offers_both": any(w in lower for w in ("again", "retell"))
                     and "aside" in lower,
                 }
