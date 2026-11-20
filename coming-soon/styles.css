@@ -357,7 +357,10 @@ fieldset { border: 0; min-width: 0; }
 .invite { padding-block: 14vh 8vh; outline: none; }
 .invite-inner { max-width: 760px; }
 .invite h2 { font-size: clamp(1.9rem, 4vw, 3.1rem); }
-.pilot-form { display: grid; gap: 18px; margin-top: 40px; }
+.invite-lede { margin-top: 20px; color: var(--ink-soft); }
+.updates-form { display: grid; gap: 14px; margin-top: 36px; }
+.updates-row { display: grid; gap: 12px; }
+@media (min-width: 640px) { .updates-row { grid-template-columns: 1fr auto; align-items: stretch; } }
 .row-2 { display: grid; gap: 18px; }
 @media (min-width: 640px) { .row-2 { grid-template-columns: 1fr 1fr; } }
 .f { display: grid; gap: 6px; }

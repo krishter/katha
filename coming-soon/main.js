@@ -7,8 +7,8 @@
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 
-  // ---- Pilot form: fetch submit with an inline status; posts normally without JS ----
-  const form = $('#pilot-form');
+  // ---- Updates form: fetch submit with an inline status; posts normally without JS ----
+  const form = $('#updates-form');
   if (form) {
     const status = $('#form-status');
     const button = $('.submit', form);
@@ -21,7 +21,7 @@
       try {
         const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error(String(res.status));
-        status.textContent = "Thank you. We have your request, and we'll write to you personally.";
+        status.textContent = "Thank you. We'll write when there's news.";
         status.classList.add('ok');
         form.reset();
       } catch {
@@ -29,7 +29,7 @@
         status.classList.add('err');
       } finally {
         button.disabled = false;
-        button.textContent = 'Request a pilot spot';
+        button.textContent = 'Keep me updated';
       }
     });
   }

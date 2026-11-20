@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Katha · Your parent's stories, in their own words</title>
-<meta name="description" content="Katha listens to your parent on WhatsApp, in their own language, and shares the stories they choose with you. We're inviting a small number of families to try it with us.">
+<meta name="description" content="Katha listens to your parent on WhatsApp, in their own language, and shares the stories they choose with you. Cohort 1 of our pilot is full; leave your email to hear when the next one opens.">
 <meta property="og:title" content="Katha · Your parent's stories, in their own words">
-<meta property="og:description" content="We're inviting a small number of families to try Katha with us.">
+<meta property="og:description" content="Cohort 1 of the Katha pilot is full. Leave your email to hear when the next one opens.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://katha.life">
 <meta property="og:image" content="https://katha.life/og.png">
@@ -386,7 +386,10 @@ fieldset { border: 0; min-width: 0; }
 .invite { padding-block: 14vh 8vh; outline: none; }
 .invite-inner { max-width: 760px; }
 .invite h2 { font-size: clamp(1.9rem, 4vw, 3.1rem); }
-.pilot-form { display: grid; gap: 18px; margin-top: 40px; }
+.invite-lede { margin-top: 20px; color: var(--ink-soft); }
+.updates-form { display: grid; gap: 14px; margin-top: 36px; }
+.updates-row { display: grid; gap: 12px; }
+@media (min-width: 640px) { .updates-row { grid-template-columns: 1fr auto; align-items: stretch; } }
 .row-2 { display: grid; gap: 18px; }
 @media (min-width: 640px) { .row-2 { grid-template-columns: 1fr 1fr; } }
 .f { display: grid; gap: 6px; }
@@ -441,7 +444,7 @@ fieldset { border: 0; min-width: 0; }
 <script defer src="main.js"></script>
 </head>
 <body>
-<a class="skip" href="#join">Skip to the pilot sign-up</a>
+<a class="skip" href="#join">Skip to updates sign-up</a>
 
 <!-- art:characters -->
 <svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true" focusable="false">
@@ -1498,60 +1501,21 @@ fieldset { border: 0; min-width: 0; }
   <section class="act-vi invite" id="join" aria-labelledby="join-title" tabindex="-1">
     <div class="wrap invite-inner lift">
       <!-- COPY: draft -->
-      <h2 id="join-title" class="display">We're inviting a small number of families to try Katha with us.</h2>
+      <h2 id="join-title" class="display">Cohort 1 of the Katha pilot is full.</h2>
+      <p class="body invite-lede">Thank you to every family who wrote to us. Leave your email and we'll let you know when the next cohort opens, and what's new with Katha.</p>
 
-      <form class="pilot-form" id="pilot-form" action="https://formspree.io/f/maqrorwa" method="POST">
-        <input type="hidden" name="_subject" value="Katha pilot request">
-        <div class="row-2">
-          <div class="f">
-            <label for="f-name">Your name</label>
-            <input id="f-name" name="name" type="text" autocomplete="name" required>
-          </div>
-          <div class="f">
-            <label for="f-email">Email</label>
+      <form class="updates-form" id="updates-form" action="https://formspree.io/f/maqrorwa" method="POST">
+        <input type="hidden" name="_subject" value="Katha updates sign-up">
+        <input type="hidden" name="list" value="updates (pilot cohort 1 full)">
+        <div class="f">
+          <label for="f-email">Email</label>
+          <div class="updates-row">
             <input id="f-email" name="email" type="email" autocomplete="email" required>
+            <button type="submit" class="submit">Keep me updated</button>
           </div>
         </div>
-        <div class="row-2">
-          <div class="f">
-            <label for="f-wa">Your WhatsApp number <span class="opt">(optional)</span></label>
-            <input id="f-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel">
-          </div>
-          <div class="f">
-            <label for="f-lang">Your parent's preferred language</label>
-            <select id="f-lang" name="parent_language" required>
-              <option value="">Choose a language</option>
-              <option>Tamil</option><option>Hindi</option><option>Malayalam</option><option>Kannada</option>
-              <option>Telugu</option><option>Bengali</option><option>Marathi</option><option>Gujarati</option>
-              <option>English</option><option>Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="f">
-          <label for="f-city">City where your parent lives</label>
-          <input id="f-city" name="parent_city" type="text" autocomplete="off" required>
-        </div>
-        <fieldset class="f">
-          <legend>Where you live, relative to them</legend>
-          <div class="choices">
-            <label><input type="radio" name="relative_location" value="Same home" required> Same home</label>
-            <label><input type="radio" name="relative_location" value="Same city"> Same city</label>
-            <label><input type="radio" name="relative_location" value="Different city"> Different city</label>
-            <label><input type="radio" name="relative_location" value="Abroad"> Abroad</label>
-          </div>
-        </fieldset>
-        <div class="f">
-          <!-- COPY: draft -->
-          <label for="f-call">When do you usually call your parent? <span class="opt">(optional)</span></label>
-          <input id="f-call" name="call_time" type="text" autocomplete="off" placeholder="e.g. Sundays around 11">
-        </div>
-        <div class="f">
-          <label for="f-notes">Anything you'd like us to know <span class="opt">(optional)</span></label>
-          <textarea id="f-notes" name="notes" rows="4"></textarea>
-        </div>
-        <button type="submit" class="submit">Request a pilot spot</button>
         <!-- COPY: draft -->
-        <p class="form-note">We'll write to you personally. We'll only contact your parent after you both agree.</p>
+        <p class="form-note">We'll only write when there's something to tell you.</p>
         <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
       </form>
     </div>
