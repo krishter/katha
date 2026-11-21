@@ -257,6 +257,24 @@ One row per storyteller, sorted by last conversation (most recent first, never-t
 `last_conversation_at_ist`, `atoms_total`, `avg_completeness`, `domains_covered`
 (`"5/8"`), `cards_delivered`, `cards_failed`, `cost_30d_inr`, `cost_per_conversation_30d_inr`.
 
+### 6.12 API keys *(added 2026-11-21, `core/key_health.py`)*
+
+`api_keys`: one row per key (Anthropic, Sarvam, Gemini, Twilio, AWS). None of these keys
+expire by themselves, so there is no provider expiry date to show. Each row carries:
+
+| Field | Source |
+|---|---|
+| `fingerprint` | The last four characters of the key. Never more. |
+| `last_success` | Newest `api_usage` row for the vendor in the last 60 days (Twilio: outbound only; AWS: SES emails). |
+| `last_failure` | Newest HTTP refusal the adapters noted (`key_health.failed`), in memory since the last restart. Network errors are not noted. |
+| `check` | A free authenticated request made when the page loads: list models (Anthropic, Gemini), read the balance (Twilio, shown), STS `GetCallerIdentity` (AWS). Sarvam has none. |
+| `renew_by` | From `KEY_RENEW_BY` (`anthropic=2027-01-15,twilio=…`), the operator's date for a balance, free tier or rotation. |
+| `state` | `bad`: not set, refused (401/402/403) by the check or by its last call with nothing working since, or renew-by passed. `warn`: renew-by within 14 days, an unreadable entry, a check that did not complete, or a non-refusal failure with nothing working since. Otherwise `ok`. |
+
+The scheduler's `check_keys` (hourly at :41, production only) emails `OPERATOR_EMAIL` once a
+day per key that is `bad`, or `warn` because of its renew-by date. Other failures are left to
+the turn-failure alert.
+
 ## 7. Response shape
 
 ```json
@@ -283,8 +301,8 @@ Key names as in §6. Report `excluded_user_count`, never the excluded IDs themse
 ## 8. HTML page layout (`/admin/metrics/view`)
 
 Top to bottom: generated-at time (IST) and excluded count → **health strip**
-(empty sessions 7d, failed cards 7d, crisis events 7d, active now, ₹ per conversation 7d,
-wasted outbound 7d) → funnel as a vertical
+(API keys to look at, empty sessions 7d, failed cards 7d, crisis events 7d, active now, ₹ per conversation 7d,
+wasted outbound 7d) → API keys (§6.12) → funnel as a vertical
 list with counts and step-to-step % → conversations (headline numbers + the 30-day daily
 table, with a CSS width bar per row) → engagement and retention (rates **with** cohort
 sizes) → atoms → cards → dashboard → stories placeholder → cost, with `by_component` as a CSS-bar list

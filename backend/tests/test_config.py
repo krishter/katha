@@ -26,6 +26,7 @@ _SAFE_KWARGS = dict(
     # Unset means the operator metrics routes 404 — safe.
     ADMIN_API_TOKEN="",
     TTS_VENDOR="gemini",
+    DEFAULT_PLAN="pilot",
     GEMINI_API_KEY="AIza-real",
     OPERATOR_EMAIL="ops@katha.life",
 )
@@ -220,3 +221,8 @@ def test_conversation_card_template_needs_the_media_host():
             TWILIO_TEMPLATE_MEDIA_HOST="katha-media.s3.ap-south-1.amazonaws.com",
         )
     )
+
+
+def test_an_unknown_default_plan_refuses_to_boot():
+    with pytest.raises(RuntimeError, match="DEFAULT_PLAN"):
+        validate_production_config(_settings(DEFAULT_PLAN="trial"))

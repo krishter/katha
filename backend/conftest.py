@@ -195,3 +195,20 @@ def _fresh_rate_limits():
     ratelimit.limiter.reset()
     yield
     ratelimit.limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _no_key_probes(monkeypatch):
+    """The metrics page asks each provider whether its key still works
+    (core/key_health.py). Tests never call a provider: the live checks
+    report nothing, and failures noted by one test do not leak into the
+    next. tests/test_key_health.py exercises the probes with a fake."""
+    from core import key_health
+
+    async def _none(_settings, _names):
+        return {}
+
+    monkeypatch.setattr(key_health, "_probe_all", _none)
+    key_health.reset_failures()
+    yield
+    key_health.reset_failures()

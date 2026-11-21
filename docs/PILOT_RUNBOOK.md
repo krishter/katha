@@ -30,9 +30,12 @@ The parent never touches a browser. Everything she sees arrives on WhatsApp.
    It is the only thing standing between you and a repeat of the webhook `ImportError`.
 4. **Check sender health.** `python backend/scripts/verify_whatsapp_sender.py` — real send,
    real number. Template approvals expire and quality ratings drop silently.
-5. **Put the family on the pilot plan** as soon as their account exists, before her first
-   message: `python -m scripts.set_plan --user-id … --plan pilot --by <you>` (dry run), then
-   add `--apply`. Pilots are not a payment test; on `free`, conversation 11 is refused.
+5. **Check the family is on the pilot plan.** New accounts start on `DEFAULT_PLAN`, which
+   is `pilot` until charging starts, so this is a check, not a step:
+   `python -m scripts.set_plan --user-id … --plan pilot --by <you>` prints UNCHANGED. If it
+   prints a dry-run change, add `--apply`. On `free`, conversation 11 is refused.
+6. **Look at the API keys** at the top of `/admin/metrics/view`: every key "Working", and
+   no renew-by date inside the pilot's next month.
 
 **Gate:** rehearsal green + sender verified. Do not proceed on a red rehearsal.
 

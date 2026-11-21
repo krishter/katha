@@ -11,7 +11,7 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client as TwilioClient
 
 from config import settings
-from core import redact, twilio_cleanup, usage
+from core import key_health, redact, twilio_cleanup, usage
 from media import storage
 
 if TYPE_CHECKING:
@@ -177,6 +177,14 @@ class TwilioWhatsAppAdapter:
             return {}
         return {"status_callback": f"{settings.PUBLIC_BASE_URL}/webhook/twilio/status"}
 
+    async def _create(self, **kwargs):
+        """Send one message, noting a refusal for the key-health panel."""
+        try:
+            return await asyncio.to_thread(self._client.messages.create, **kwargs)
+        except Exception as exc:
+            key_health.failed("twilio", key_health.status_of(exc))
+            raise
+
     async def send_voice_note(
         self, to_number: str, audio_bytes: bytes, mime_type: str = "audio/ogg"
     ) -> tuple[str, str]:
@@ -185,8 +193,7 @@ class TwilioWhatsAppAdapter:
         key = f"audio/katha-{uuid.uuid4().hex[:12]}.ogg"
         s3_key = await storage.upload_media(audio_bytes, key, mime_type)
         presigned_url = await storage.generate_presigned_url(s3_key)
-        msg = await asyncio.to_thread(
-            self._client.messages.create,
+        msg = await self._create(
             **self._sender(),
             to=f"whatsapp:{to_number}",
             media_url=[presigned_url],
@@ -228,7 +235,7 @@ class TwilioWhatsAppAdapter:
         else:
             kwargs["media_url"] = [presigned_url]
             kwargs["body"] = caption
-        msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
+        msg = await self._create(**kwargs)
         logger.info(
             "Sent image to %s: %s (template=%s)",
             redact.phone(to_number),
@@ -262,7 +269,7 @@ class TwilioWhatsAppAdapter:
                 kwargs["content_variables"] = json.dumps(template_variables)
         else:
             kwargs["body"] = text
-        msg = await asyncio.to_thread(self._client.messages.create, **kwargs)
+        msg = await self._create(**kwargs)
         logger.info("Sent text to %s: %s", redact.phone(to_number), msg.sid)
         await usage.record_outbound(
             "outbound_template" if template_sid else "outbound_text",

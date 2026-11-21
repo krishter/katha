@@ -80,7 +80,7 @@ async def onboarding_start(
             FamilyAccount(
                 email=auth.normalize_email(email),
                 user_id=f"user_{uuid.uuid4().hex}",
-                plan="free",
+                plan=settings.DEFAULT_PLAN,
                 onboarding_complete=False,
             )
         )

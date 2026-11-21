@@ -38,7 +38,7 @@ import httpx
 from adapters.retry import post_with_backoff
 from adapters.sarvam_tts import speakable
 from config import settings
-from core import usage
+from core import key_health, usage
 from media import tts_check, voices
 
 logger = logging.getLogger(__name__)
@@ -157,6 +157,7 @@ async def _request(
             json=request_body(text, voice, style, model),
         )
     if response.status_code != 200:
+        key_health.failed("gemini", response.status_code)
         raise RuntimeError(
             f"Gemini TTS error {response.status_code}: {response.text[:500]}"
         )

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from core import metrics, metrics_page
+from core import key_health, metrics, metrics_page
 from core.auth import require_admin_token, require_admin_token_browser
 from models.db import get_db
 
@@ -37,13 +37,18 @@ async def _read_only_metrics(db: AsyncSession) -> dict:
         logger.exception("Could not make the metrics transaction read-only")
         raise HTTPException(status_code=500, detail="Metrics unavailable")
     try:
-        return await metrics.compute_metrics(
+        now = datetime.now(timezone.utc)
+        m = await metrics.compute_metrics(
             db,
-            now=datetime.now(timezone.utc),
+            now=now,
             excluded_user_ids=metrics.parse_excluded(
                 settings.METRICS_EXCLUDED_USER_IDS
             ),
         )
+        # Ids and dates only, like the rest: a key shows its last four
+        # characters (core/key_health.py).
+        m["api_keys"] = [r.as_dict() for r in await key_health.report(db, now=now)]
+        return m
     finally:
         await db.rollback()
 

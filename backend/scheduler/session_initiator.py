@@ -340,6 +340,22 @@ async def check_spend() -> None:
         logger.exception("Scheduler: checking spend failed")
 
 
+async def check_keys() -> None:
+    """Tell the operator about an API key that is refused, or near or past
+    its renew-by date (core/key_health.py). Production only."""
+    from config import settings
+    from core import key_health
+    from models.db import AsyncSessionLocal
+
+    if settings.ENVIRONMENT != "production":
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            await key_health.check_keys(db)
+    except Exception:
+        logger.exception("Scheduler: checking API keys failed")
+
+
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
@@ -357,6 +373,14 @@ def create_scheduler(db_session_factory) -> AsyncIOScheduler:
         trigger="cron",
         minute=7,
         id="check_backups",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+    scheduler.add_job(
+        check_keys,
+        trigger="cron",
+        minute=41,
+        id="check_keys",
         replace_existing=True,
         misfire_grace_time=1800,
     )
