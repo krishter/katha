@@ -52,7 +52,7 @@ It does not wait for the Stories build. Cards come from approved story atoms. Ap
 |---|---|---|
 | D1 | Where card content comes from | **Approved story atoms and their source turns**, not Stories. Approval happens per card at read-back (§6). |
 | D2 | The existing per-session memory card | **Replaced** for families with this feature on. Today's card reaches the child without the parent's agreement. The image and delivery code are reused. |
-| D3 | Operator review | **Every card is reviewed by Krish** before the parent hears it. A flag turns this off later. |
+| D3 | Operator review | ~~**Every card is reviewed by Krish** before the parent hears it. A flag turns this off later.~~ **Reversed 2026-11-15:** no one at Katha reads a family's cards. `CARDS_OPERATOR_REVIEW` is off by default; a card that passes its checks goes straight to her read-back. See `STORIES.md` §6c for a corrected card that can't be rewritten. |
 | D4 | Cadence | **Up to 2 cards in any rolling 7 days**, each sent before a call. |
 | D5 | Name | **"Conversation cards"** internally. The child sees "Did you know?" |
 | D6 | Approval timing | **At the next session, on the finished card text.** Not at the end of the session where the material was told, because the card is written afterwards and she would be agreeing to a topic, not to the words. |
@@ -301,7 +301,7 @@ Each question goes through one `claude-haiku-5-5` call:
 | Label | Examples | What happens | Reply to the child (free-form, inside the window) |
 |---|---|---|---|
 | `ok` | "Which film was it?" "What was Ammachi like?" | Queued | *"Thank you. I'll ask Amma when we next talk. If she's happy to share her answer, it will come to you as a card."* |
-| `sensitive` | Property, money, inheritance, health, old family conflicts | Held for the operator, who releases or drops it | Same as `ok`. The child isn't told it was held |
+| `sensitive` | Property, money, inheritance, health, old family conflicts | Held. With operator review off (the default since 2026-11-15), Katha asks her, without saying what it is, whether she would like to hear it (`docs/specs/STORIES.md` §6c); with review on, the operator releases or drops it | Same as `ok`. The child isn't told it was held, or whether she heard it |
 | `correction` | "It was Chennai, not Kumbakonam" | Not relayed | *"Katha keeps Amma's stories in her own words, so we don't pass on corrections, but it could be a lovely thing to ask her about on your call."* |
 | `reaction` | "I never knew this!" "❤️" | Relayed as a reaction (§10.3) | *"I'll let Amma know."* |
 | `other` | Support questions, "stop" | Not relayed. "Stop" turns off cards for that channel | A short helpful reply, or the opt-out confirmation |

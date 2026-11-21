@@ -622,3 +622,54 @@ async def test_a_second_correction_goes_to_the_operator_by_hand(real_db, alert):
     assert card.fidelity_json["note"].startswith("Second correction")
     assert model.calls == []
     alert.assert_awaited_once()
+
+
+# ── with no operator review (STORIES.md §6c) ─────────────────────────────────
+
+
+async def test_with_no_review_a_failed_correction_waits_for_her(
+    real_db, alert, monkeypatch
+):
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    s = await seed(real_db)
+    card_id, correction = await _corrected_card(real_db, s, round_=1)
+    heard = (await cards_of(real_db, s.user_id))[0].readback_hash
+    wrong = dict(GOOD_CARD, hook="Did you know Amma's uncle drove her to the film?")
+    bad = {
+        "sentences": [
+            {
+                "field": "hook",
+                "text": wrong["hook"],
+                "verdict": "unsupported",
+                "turn_ids": [],
+                "reason": "she never said he drove",
+            }
+        ]
+    }
+    model = Model(card_write=[wrong, wrong], card_fidelity=[bad, bad])
+    with patch("cards.write.llm.chat", new=model):
+        await write.rewrite_for_correction(card_id, correction, real_db)
+
+    [card] = await cards_of(real_db, s.user_id)
+    assert card.status == "correction" and card.needs_retelling
+    assert card.failed_rewrites == 1
+    # Back to the words she heard, not the failed rewrite.
+    assert card.hook == GOOD_CARD["hook"] and card.readback_hash == heard
+    alert.assert_not_awaited()
+
+
+async def test_with_no_review_a_second_correction_is_rewritten_not_handed_over(
+    real_db, alert, monkeypatch
+):
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    s = await seed(real_db)
+    card_id, correction = await _corrected_card(real_db, s, round_=2)
+    model = Model(
+        card_write=[GOOD_CARD], card_fidelity=[all_supported(str(s.turns[0]))]
+    )
+    with patch("cards.write.llm.chat", new=model):
+        await write.rewrite_for_correction(card_id, correction, real_db)
+
+    [card] = await cards_of(real_db, s.user_id)
+    assert card.status == "awaiting_parent" and not card.needs_retelling
+    alert.assert_not_awaited()

@@ -374,7 +374,10 @@ async def test_a_childs_question_is_relayed_credited_and_marked(real_db):
     assert str(asked.asked_in_session_id) == session_id
 
 
-async def test_a_held_question_is_never_relayed(real_db):
+async def test_with_review_on_a_held_question_waits_for_the_operator(
+    real_db, monkeypatch
+):
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
     user_id, session_id = await seed(real_db, exchange_count=2)
     real_db.add(
         FamilyQuestion(
@@ -387,6 +390,113 @@ async def test_a_held_question_is_never_relayed(real_db):
     )
     await real_db.commit()
     assert (await plan(real_db, session_id, user_id)).offered is None
+
+
+# ── a sensitive question: she decides (STORIES.md §6c) ──────────────────────
+
+
+async def held_question(db, user_id, offers=0) -> uuid.UUID:
+    q = FamilyQuestion(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        channel="whatsapp",
+        raw_text="Who gets the house?",
+        screening="sensitive",
+        status="held",
+        parent_offers=offers,
+    )
+    db.add(q)
+    await db.commit()
+    return q.id
+
+
+async def offered(db, session_id, user_id, q_id):
+    """Katha has asked whether she would like to hear it."""
+    session = await get(db, Session, uuid.UUID(session_id))
+    session.pending_ask, session.pending_ask_ref = asks.QUESTION_OFFER, q_id
+    session.ask_made = True
+    await db.commit()
+
+
+async def test_a_sensitive_question_is_offered_without_saying_what_it_is(real_db):
+    user_id, session_id = await seed(real_db, exchange_count=0)
+    q_id = await held_question(real_db, user_id)
+    p = await plan(real_db, session_id, user_id, "Good morning!")
+    assert p.offered == asks.QUESTION_OFFER and p.offered_ref == q_id
+    layer4 = " ".join(p.layer4)
+    assert "house" not in layer4.lower(), "the offer gave away what it is about"
+    assert "Priya" in layer4 and "personal" in layer4
+    assert "say nothing about what the question is about" in layer4.lower()
+    await asks.after_dialogue(
+        p, {asks.QUESTION_OFFER}, session_id=session_id, user_id=user_id, db=real_db
+    )
+    q = await get(real_db, FamilyQuestion, q_id)
+    assert q.status == "held" and q.parent_offers == 1
+
+
+async def test_her_yes_releases_it_and_it_is_asked_in_the_same_reply(real_db):
+    user_id, session_id = await seed(real_db, exchange_count=1)
+    q_id = await held_question(real_db, user_id, offers=1)
+    await offered(real_db, session_id, user_id, q_id)
+    with labels(("yes", "haan, batao")):
+        p = await plan(real_db, session_id, user_id, "haan, batao")
+    assert p.outcome == "question_offer_yes"
+    assert p.offered == asks.CHILD_QUESTION and p.offered_ref == q_id
+    assert any(
+        "Who gets the house?" in line and "from Priya" in line for line in p.layer4
+    )
+    assert (await get(real_db, FamilyQuestion, q_id)).status == "released"
+    await asks.after_dialogue(
+        p, {asks.CHILD_QUESTION}, session_id=session_id, user_id=user_id, db=real_db
+    )
+    assert (await get(real_db, FamilyQuestion, q_id)).status == "asked"
+
+
+async def test_her_no_closes_it_and_it_is_never_offered_again(real_db):
+    user_id, session_id = await seed(real_db, exchange_count=1)
+    q_id = await held_question(real_db, user_id, offers=1)
+    await offered(real_db, session_id, user_id, q_id)
+    with labels(("no", "mujhe nahi sunna")):
+        p = await plan(real_db, session_id, user_id, "mujhe nahi sunna")
+    assert p.outcome == "question_offer_no"
+    assert not any("house" in line.lower() for line in p.layer4)
+    assert (await get(real_db, FamilyQuestion, q_id)).status == "declined"
+    _, later = await seed(real_db, exchange_count=0)
+    later_session = await get(real_db, Session, uuid.UUID(later))
+    later_session.user_id = user_id
+    await real_db.commit()
+    assert (await plan(real_db, later, user_id, "Hello")).offered is None
+
+
+async def test_not_now_keeps_it_for_another_day_and_three_offers_end_it(real_db):
+    user_id, session_id = await seed(real_db, exchange_count=1)
+    q_id = await held_question(real_db, user_id, offers=1)
+    await offered(real_db, session_id, user_id, q_id)
+    with labels(("not_now", "baad mein")):
+        p = await plan(real_db, session_id, user_id, "baad mein")
+    assert p.outcome == "question_offer_not_now"
+    assert (await get(real_db, FamilyQuestion, q_id)).status == "held"
+
+    q = await get(real_db, FamilyQuestion, q_id)
+    q.parent_offers = asks.MAX_QUESTION_OFFERS
+    await real_db.commit()
+    _, later = await seed(real_db, exchange_count=0)
+    later_session = await get(real_db, Session, uuid.UUID(later))
+    later_session.user_id = user_id
+    await real_db.commit()
+    assert (await plan(real_db, later, user_id, "Hello")).offered is None
+    assert (await get(real_db, FamilyQuestion, q_id)).status == "expired"
+
+
+async def test_an_unclear_answer_changes_nothing(real_db):
+    user_id, session_id = await seed(real_db, exchange_count=1)
+    q_id = await held_question(real_db, user_id, offers=1)
+    await offered(real_db, session_id, user_id, q_id)
+    with labels(("unclear", "")):
+        p = await plan(real_db, session_id, user_id, "We had a mango tree...")
+    assert p.outcome == "question_offer_unclear"
+    assert p.offered is None
+    assert (await get(real_db, FamilyQuestion, q_id)).status == "held"
 
 
 async def test_an_old_question_expires(real_db):

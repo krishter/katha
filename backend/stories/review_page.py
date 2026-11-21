@@ -4,6 +4,10 @@ The operator's Story review page, /admin/stories/view (docs/specs/STORIES.md
 
 Every value from the database is escaped: a Story is model output drawn from
 what a parent said.
+
+With STORIES_OPERATOR_REVIEW off (the default since 2026-11-15, STORIES.md
+§6c), no one at Katha reads a family's Stories, so the page shows ids,
+states and dates only: no title, body, quotes, read-back or what she said.
 """
 
 from __future__ import annotations
@@ -91,12 +95,40 @@ def _item(item: dict, csrf: str) -> str:
 </div></section>"""
 
 
-def render(queue: dict, csrf: str, flash: str = "") -> str:
-    waiting = "".join(_item(i, csrf) for i in queue["waiting"]) or (
-        "<p class=note>Nothing waiting.</p>"
+def _waiting_ids(items) -> str:
+    """Review is off: which Stories wait, never what they say."""
+    if not items:
+        return "<p class=note>Nothing waiting.</p>"
+    rows = "".join(
+        f"<tr><td>{_e(i['story'].user_id)}</td><td>{_e(i['story'].id)}</td>"
+        f"<td>{_e(i['story'].fidelity_status)}</td>"
+        f"<td>{_e(i['story'].updated_at)}</td></tr>"
+        for i in items
     )
+    return (
+        "<p class=note>Operator review is off, so these are not read here.</p>"
+        "<div class=scroll><table><tr><th>user</th><th>story</th><th>fidelity</th>"
+        f"<th>updated</th></tr>{rows}</table></div>"
+    )
+
+
+def render(queue: dict, csrf: str, flash: str = "", show_content: bool = True) -> str:
+    if show_content:
+        waiting = "".join(_item(i, csrf) for i in queue["waiting"]) or (
+            "<p class=note>Nothing waiting.</p>"
+        )
+        first_col, intro = "title", ""
+    else:
+        waiting = _waiting_ids(queue["waiting"])
+        first_col = "story"
+        intro = (
+            "<p class=meta>Operator review is off (STORIES_OPERATOR_REVIEW): no "
+            "one at Katha reads a family's Stories, so this page shows ids and "
+            "states only.</p>"
+        )
     recent = "".join(
-        f"<tr><td>{_e(s.title)}</td><td>{_e(s.status)}</td><td>{_e(s.review_status)}</td>"
+        f"<tr><td>{_e(s.title if show_content else s.id)}</td><td>{_e(s.status)}</td>"
+        f"<td>{_e(s.review_status)}</td>"
         f"<td>{_e(s.approval_status)}</td><td>{_e(s.retired_reason)}</td>"
         f"<td>{_e(s.updated_at)}</td></tr>"
         for s in queue["recent"]
@@ -107,9 +139,9 @@ def render(queue: dict, csrf: str, flash: str = "") -> str:
 <title>Story review</title><style>{_CSS}</style></head><body><main>
 <h1>Story review</h1>
 <p class=meta>{len(queue["waiting"])} waiting · {queue["threads"]} open thread(s)</p>
-{banner}
+{intro}{banner}
 <h2>Waiting for review</h2>{waiting}
 <h2>Recently reviewed</h2>
-<div class=scroll><table><tr><th>title</th><th>status</th><th>review</th>
+<div class=scroll><table><tr><th>{first_col}</th><th>status</th><th>review</th>
 <th>her answer</th><th>retired</th><th>updated</th></tr>{recent}</table></div>
 </main></body></html>"""

@@ -270,6 +270,11 @@ async def apply_private_request(
                 turn.private_topic = topic_of[turn.id]
         if cards_on:
             await withdraw_cards_using(user_id, private_ids, db)
+        # Stories, whatever her cards setting: a Story from these turns is
+        # never read back or shown (STORIES.md §2.3).
+        from stories.privacy import keep_stories_private
+
+        await keep_stories_private(user_id, private_ids, db)
         await _alert_if_already_sent(user_id, private_ids, db)
         logger.info(
             "Marked %d turn(s) private for %s (%s)",

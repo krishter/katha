@@ -436,3 +436,52 @@ async def test_erasure_removes_her_stories_and_versions(real_db):
         )
     ).scalar_one()
     assert left == 0
+
+
+async def test_with_no_review_a_checked_story_goes_straight_to_her(
+    real_db, monkeypatch
+):
+    monkeypatch.setattr("config.settings.STORIES_OPERATOR_REVIEW", False)
+    user_id = await seed_family(real_db)
+    s, model = await _one_story_session(real_db, user_id)
+
+    outcome = await _run(real_db, user_id, s.session, model)
+
+    (story,) = await _stories(real_db, user_id)
+    assert outcome.promoted == [story.id]
+    assert story.review_status == "passed" and story.approval_status == "pending"
+    from stories import asks as story_asks
+
+    assert story_asks.readable(story)
+
+
+class FailingReadback(ScriptedModel):
+    async def __call__(self, prompt, *, step, max_tokens):
+        if step == "readback_check":
+            self.prompts.append((step, prompt))
+            reply = {
+                "sentences": [{"text": "x", "reason": "adds", "verdict": "unsupported"}]
+            }
+            return json.dumps(reply), 10, 10
+        return await super().__call__(prompt, step=step, max_tokens=max_tokens)
+
+
+async def test_with_no_review_a_failed_readback_is_set_aside_unheard(
+    real_db, monkeypatch
+):
+    monkeypatch.setattr("config.settings.STORIES_OPERATOR_REVIEW", False)
+    user_id = await seed_family(real_db)
+    s, model = await _one_story_session(real_db, user_id)
+    model = FailingReadback(model.grouping, model.cited)
+
+    outcome = await _run(real_db, user_id, s.session, model)
+
+    (story,) = await _stories(real_db, user_id)
+    assert outcome.promoted == []
+    assert story.status == "retired" and story.retired_reason == "fidelity"
+    placed = (
+        await real_db.execute(
+            select(func.count(StoryAtom.id)).where(StoryAtom.story_id == story.id)
+        )
+    ).scalar_one()
+    assert placed == 0  # its pieces are back in the card pool

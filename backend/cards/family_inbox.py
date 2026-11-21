@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import cards
 from cards.context import family_of
+from config import settings
 from core import question_screen
 from core.email import send_operator_alert
 from models.conversation_card import ConversationCard
@@ -267,11 +268,13 @@ async def receive(
         held = label == "sensitive"
         db.add(question("question", label, "held" if held else "pending"))
         await db.commit()
-        if held:
+        if held and settings.CARDS_OPERATOR_REVIEW:
             await send_operator_alert(
                 "A child's question was held for review",
                 f"user {profile.user_id}: release or drop it at /admin/cards/view.",
             )
+        # With review off (the default), no one at Katha reads it: Katha asks
+        # her whether she would like to hear it (cards/asks.py, STORIES.md §6c).
         # The child is not told it was held (§10.2).
         return replies.queued
 

@@ -32,6 +32,7 @@ Results are written to evals/results/<timestamp>.json.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import pathlib
@@ -65,6 +66,7 @@ from models.family_account import FamilyAccount  # noqa: E402
 from models.family_question import FamilyQuestion  # noqa: E402
 from models.memory_card import MemoryCard  # noqa: E402
 from models.session import Session  # noqa: E402
+from models.story import Story, StoryVersion  # noqa: E402
 from models.story_atom import StoryAtom  # noqa: E402
 from models.turn import Turn  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
@@ -146,7 +148,9 @@ async def cleanup(db, user_id: str) -> None:
         FamilyQuestion,
         FamilyAccount,
         MemoryCard,
+        StoryVersion,
         StoryAtom,
+        Story,
         Turn,
         Fact,
         Session,
@@ -1902,6 +1906,194 @@ async def tc16(db):
     await cleanup(db, uid)
 
 
+# TC-46 (STORIES.md §6c): a child's question screened sensitive is hers to
+# hear or decline. Words that would give away this question's topic.
+_HOUSE_WORDS = (
+    "house",
+    "property",
+    "inherit",
+    "घर",
+    "मकान",
+    "जायदाद",
+    "संपत्ति",
+    "वसीयत",
+)
+# After her no, Katha may well ask about her childhood home (the session's
+# domain is "Childhood & Home"), so "house"/"घर" cannot tell a leak from the
+# conversation going on. These words only this question brings up (Krish,
+# 2026-11-21).
+_THIS_QUESTION_WORDS = (
+    "kumbakonam",
+    "कुंभकोणम",
+    "property",
+    "जायदाद",
+    "संपत्ति",
+    "inherit",
+    "वसीयत",
+)
+
+_QUESTION_OFFER_ANSWERS = [
+    ("Yes, tell me what she asked.", "yes"),
+    ("हाँ, बताइए क्या पूछा है।", "yes"),
+    ("சரி, சொல்லுங்க.", "yes"),
+    ("enti chodichathu? parayu.", "yes"),
+    ("No, I don't want to hear it.", "no"),
+    ("नहीं, मुझे नहीं सुनना।", "no"),
+    ("வேண்டாம், விடுங்க.", "no"),
+    ("rehne do beta, nahi sunna.", "no"),
+    ("Not today, maybe another day.", "not_now"),
+    ("आज नहीं, बाद में।", "not_now"),
+    ("We had a big mango tree behind the house, you know.", "unclear"),
+    ("Hmm.", "unclear"),
+]
+
+
+async def _held_question(db, uid) -> uuid.UUID:
+    q = FamilyQuestion(
+        id=uuid.uuid4(),
+        user_id=uid,
+        channel="whatsapp",
+        raw_text="Who will get the house in Kumbakonam after you?",
+        screening="sensitive",
+        status="held",
+    )
+    db.add(q)
+    await db.commit()
+    return q.id
+
+
+async def tc46(db):
+    from core import parent_answers
+
+    saved = settings.CARDS_OPERATOR_REVIEW
+    settings.CARDS_OPERATOR_REVIEW = False
+    try:
+        # (1) The offer, at a greeting: names the child, says it is personal,
+        # never what it is about; one question; in her language.
+        uid = "eval-tc46-offer"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+        await _held_question(db, uid)
+        state = await session_manager.start_session(uid, db)
+        r = await real_turn(db, uid, state.session_id, state, pp, "नमस्ते!")
+        offer = r["response_text"]
+        lower = offer.lower()
+        checks = {
+            "offered": "question_offer" in r["asked"],
+            "credits_child": CHILD in offer or "प्रिया" in offer,
+            "no_topic": not any(w in lower for w in _HOUSE_WORDS),
+            "one_question": _questions(offer) <= 1,
+            "in_hindi": bool(re.search(r"[ऀ-ॿ]", offer)),
+        }
+        record(
+            "TC-46 offer",
+            "rubric",
+            all(checks.values()),
+            f"checks={checks}\nreply: {offer!r}",
+        )
+        await cleanup(db, uid)
+
+        # (2) Her answer, read right: no false yes, 85%+ correct (as TC-15).
+        right, false_yes, misses = 0, 0, []
+        question = (
+            "Priya has sent you a question about something personal. Would you "
+            "like to hear it now, another day, or would you rather not?"
+        )
+        for said, want in _QUESTION_OFFER_ANSWERS:
+            got = (
+                await parent_answers.classify(
+                    parent_answers.QUESTION_OFFER, question, said
+                )
+            ).label
+            right += got == want
+            false_yes += got == "yes" and want != "yes"
+            if got != want:
+                misses.append(f"{said!r}: want {want}, got {got}")
+        record(
+            "TC-46 her answer",
+            "objective",
+            false_yes == 0 and right / len(_QUESTION_OFFER_ANSWERS) >= 0.85,
+            f"{right}/{len(_QUESTION_OFFER_ANSWERS)} right, {false_yes} false yes\n"
+            + "\n".join(misses),
+        )
+
+        # (3) Her yes: the question is asked in that reply, credited to the
+        # child, as one question.
+        uid = "eval-tc46-yes"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+        q_id = await _held_question(db, uid)
+        state = await session_manager.start_session(uid, db)
+        state = await set_session(
+            db,
+            state.session_id,
+            exchange_count=1,
+            pending_ask="question_offer",
+            pending_ask_ref=q_id,
+            ask_made=True,
+        )
+        r = await real_turn(
+            db, uid, state.session_id, state, pp, "हाँ, बताइए क्या पूछा है।"
+        )
+        relay = r["response_text"]
+        lower = relay.lower()
+        checks = {
+            "relayed": "child_question" in r["asked"],
+            "asks_it": any(w in lower for w in _HOUSE_WORDS)
+            or "कुंभकोणम" in relay
+            or "kumbakonam" in lower,
+            "credits_child": CHILD in relay or "प्रिया" in relay,
+            "one_question": _questions(relay) <= 1,
+        }
+        record(
+            "TC-46 after yes",
+            "rubric",
+            all(checks.values()),
+            f"checks={checks}\nreply: {relay!r}",
+        )
+        await cleanup(db, uid)
+
+        # (4) Her no: accepted, nothing said about the question, no why.
+        uid = "eval-tc46-no"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+        q_id = await _held_question(db, uid)
+        state = await session_manager.start_session(uid, db)
+        state = await set_session(
+            db,
+            state.session_id,
+            exchange_count=1,
+            pending_ask="question_offer",
+            pending_ask_ref=q_id,
+            ask_made=True,
+        )
+        r = await real_turn(db, uid, state.session_id, state, pp, "नहीं, मुझे नहीं सुनना।")
+        after = r["response_text"]
+        lower = after.lower()
+        status = (
+            await db.execute(
+                select(FamilyQuestion.status).where(FamilyQuestion.id == q_id)
+            )
+        ).scalar_one()
+        checks = {
+            "declined": status == "declined",
+            "no_topic": not any(w in lower for w in _THIS_QUESTION_WORDS),
+            # After a no, the question is not even in what the model is given.
+            "question_not_in_prompt": "Kumbakonam" not in r["dialogue_prompt"],
+            "no_why": not any(w in lower for w in ("why", "क्यों")),
+            "not_relayed": "child_question" not in r["asked"],
+        }
+        record(
+            "TC-46 after no",
+            "rubric",
+            all(checks.values()),
+            f"checks={checks}\nreply: {after!r}",
+        )
+        await cleanup(db, uid)
+    finally:
+        settings.CARDS_OPERATOR_REVIEW = saved
+
+
 async def tc18(db):
     from core import question_screen
 
@@ -3599,6 +3791,576 @@ async def tc30(db):
             await cleanup(db, uid)
 
 
+# ── Stories, Stage 2 (docs/specs/STORIES.md §5) ──────────────────────────────
+#
+# TC-40 (the family sees only approved Stories) is code, not judgement: it
+# is held by stories.store.approved_stories() and the CHECK constraint, and
+# tested in tests/integration/test_story_asks.py and test_stories.py rather
+# than here.
+
+_RIVER_SETTING = (
+    "We lived in a small house by the river in Kottayam. I was ten years old "
+    "then, and my grandmother lived with us."
+)
+_RIVER_EVENT = (
+    "One night in the monsoon the water came into the house. Appa woke us up "
+    "and carried my grandmother out on his back to the temple steps, and we "
+    "all sat there until morning."
+)
+_RIVER_BODY = (
+    "We lived in a small house by the river in Kottayam. I was ten years old "
+    "then, and my grandmother lived with us. One night in the monsoon the "
+    "water came into the house. Appa woke us up and carried my grandmother "
+    "out on his back to the temple steps. We all sat there until morning."
+)
+
+
+@contextlib.contextmanager
+def stories_switched_on():
+    saved = settings.STORIES_ENABLED, settings.CONVERSATION_CARDS_ENABLED
+    settings.STORIES_ENABLED = True
+    settings.CONVERSATION_CARDS_ENABLED = True
+    try:
+        yield
+    finally:
+        settings.STORIES_ENABLED, settings.CONVERSATION_CARDS_ENABLED = saved
+
+
+async def seed_story_family(db, uid, *, language="en-IN"):
+    profile, pp = await seed_cards_profile(db, uid, language=language)
+    profile.stories_enabled = True
+    await db.commit()
+    return profile, pp
+
+
+async def seed_told_session(db, uid, number, said: list[tuple[str, bool]]):
+    """A completed session whose turns are `said` (transcript, is_private),
+    each with privacy settled, as extraction leaves them."""
+    session = Session(
+        id=uuid.uuid4(),
+        user_id=uid,
+        session_number=number,
+        domain="childhood",
+        status="completed",
+    )
+    db.add(session)
+    await db.flush()
+    turns = []
+    for i, (transcript, private) in enumerate(said, start=1):
+        turn = Turn(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            user_id=uid,
+            turn_number=i,
+            transcript=transcript,
+            detected_language="en-IN",
+            response_text="And then what happened?",
+            extraction_status="done",
+            is_private=private,
+        )
+        db.add(turn)
+        await db.flush()
+        db.add(
+            StoryAtom(
+                id=uuid.uuid4(),
+                session_id=session.id,
+                turn_id=turn.id,
+                user_id=uid,
+                domain="childhood",
+                narrative=transcript[:120],
+                who=[],
+                completeness_score=3,
+            )
+        )
+        turns.append(turn.id)
+    session_id = session.id  # before the commit expires the row
+    await db.commit()
+    return session_id, turns
+
+
+async def seed_passed_story(db, uid, turn_ids, *, since=None, readback="…"):
+    """A Story the operator has passed, waiting for her."""
+    from stories import store as story_store
+
+    def element(ids):
+        return {"present": True, "summary": "x", "turn_ids": [str(i) for i in ids]}
+
+    story = Story(
+        id=uuid.uuid4(),
+        user_id=uid,
+        status="story",
+        review_status="passed",
+        approval_status="pending",
+        title="The night the river came in",
+        domain="childhood",
+        when_approx="when I was ten",
+        arc={
+            "setting": element(turn_ids[:1]),
+            "event": element(turn_ids[1:2]),
+            "turn": element(turn_ids[1:2]),
+            "resolution": {"present": False, "summary": "", "turn_ids": []},
+        },
+        people=["Appa", "grandmother"],
+        places=["Kottayam"],
+        sessions_seen=[1],
+        last_seen_session=1,
+        body_first_person=_RIVER_BODY,
+        source_language="en-IN",
+        sentence_sources=[
+            {
+                "text": _RIVER_BODY,
+                "verdict": "supported",
+                "turn_ids": [str(t) for t in turn_ids],
+            }
+        ],
+        readback_text=readback,
+        readback_language="en-IN",
+        readback_check={"result": "passed"},
+        promoted_at=since or datetime.now(timezone.utc),
+        operator_reviewed_at=since or datetime.now(timezone.utc),
+    )
+    story.readback_hash = story_store.fingerprint(story)
+    db.add(story)
+    await db.commit()
+    return story.id
+
+
+async def tc39(db):
+    """§5 TC-39: a thread whose turns are partly private never uses a private
+    turn in its body, read-back or quotes. Real consolidation."""
+    from stories import consolidate
+
+    uid = "eval-tc39"
+    await cleanup(db, uid)
+    with stories_switched_on():
+        await seed_story_family(db, uid)
+        private = (
+            "Please don't tell anyone this. My brother Ravi lost all the "
+            "family's money gambling in Madras that same year."
+        )
+        session_id, _ = await seed_told_session(
+            db,
+            uid,
+            1,
+            [
+                (_RIVER_SETTING, False),
+                (private, True),
+                (
+                    "One night in the monsoon the water came into the house, "
+                    "up to our knees, and it kept rising.",
+                    False,
+                ),
+                (
+                    "Then Appa lifted my grandmother onto his back and we "
+                    "waded through the water to the temple steps.",
+                    False,
+                ),
+                (
+                    "In the morning the water went down and we went back. "
+                    "Everything was covered in mud, but we were all safe.",
+                    False,
+                ),
+            ],
+        )
+        with usage.usage_scope(user_id=uid):
+            outcome = await consolidate.consolidate_for_session(
+                str(session_id), uid, db
+            )
+        rows = (
+            (await db.execute(select(Story).where(Story.user_id == uid)))
+            .scalars()
+            .all()
+        )
+    stories = [r for r in rows if r.status == "story"]
+    leaked = []
+    for story in stories:
+        said = " ".join(
+            [
+                story.body_first_person or "",
+                story.readback_text or "",
+                json.dumps(story.quotes or [], ensure_ascii=False),
+            ]
+        ).lower()
+        leaked += [w for w in ("ravi", "gambl", "money", "madras") if w in said]
+    passed = bool(stories) and not leaked
+    evidence = (
+        f"outcome={outcome.result} promoted={len(outcome.promoted)} "
+        f"stories={len(stories)} leaked={leaked}\n"
+        + "\n".join(
+            f"  body: {s.body_first_person!r}\n  readback: {s.readback_text!r}"
+            for s in stories
+        )
+        + ("\nNo Story was promoted: the case cannot judge." if not stories else "")
+        + "".join(
+            f"\n  {r.status}: {r.title!r} arc={ {k: bool((v or {}).get('turn_ids')) for k, v in (r.arc or {}).items()} } "
+            f"fidelity={r.fidelity_status} notes={r.notes} removed={r.removed_sentences}"
+            for r in rows
+        )
+    )
+    record("TC-39", "objective", passed, evidence)
+    await cleanup(db, uid)
+
+
+async def tc41(db):
+    """§5 TC-41: a correction at read-back produces a new version that uses
+    it and goes back to pending; the family sees nothing meanwhile. Real
+    re-composition."""
+    from api.routes.family import export_data
+    from stories import correction
+
+    uid = "eval-tc41"
+    await cleanup(db, uid)
+    with stories_switched_on():
+        _, _ = await seed_story_family(db, uid)
+        _, turns = await seed_told_session(
+            db, uid, 1, [(_RIVER_SETTING, False), (_RIVER_EVENT, False)]
+        )
+        story_id = await seed_passed_story(db, uid, turns)
+        said = (
+            "No, no, I was not ten then, I was twelve. And it was my uncle "
+            "Kunjappan who carried grandmother out, not Appa. Appa was away "
+            "in Madras that week."
+        )
+        today = Session(
+            id=uuid.uuid4(), user_id=uid, session_number=2, domain="childhood"
+        )
+        db.add(today)
+        await db.flush()
+        turn = Turn(
+            id=uuid.uuid4(),
+            session_id=today.id,
+            user_id=uid,
+            turn_number=1,
+            transcript=said,
+            detected_language="en-IN",
+            response_text="Thank you, I'll put that right.",
+            extraction_status="done",
+        )
+        db.add(turn)
+        turn_id = turn.id
+        story = await db.get(Story, story_id)
+        story.parent_answer = "correction"
+        story.correction_round = 1
+        await db.commit()
+
+        with usage.usage_scope(user_id=uid):
+            await correction.rewrite_for_correction(story_id, turn_id, db)
+        db.expire_all()
+        story = await db.get(Story, story_id)
+        exported = await export_data(current_user={"user_id": uid}, db=db)
+
+    body = story.body_first_person or ""
+    lower = body.lower()
+    checks = {
+        "new_version": story.version == 2,
+        "uses_twelve": "twelve" in lower or "12" in lower,
+        "uses_uncle": "uncle" in lower or "kunjappan" in lower,
+        "drops_ten": not re.search(r"\bten\b", lower),
+        # A word boundary: "Kunjappan" contains "appa".
+        "drops_appa_carrying": not re.search(r"\bappa\b[^.]*carried", lower),
+        # §5: "goes back to pending". With no operator review it is passed
+        # straight back to her read-back.
+        "back_to_pending": story.approval_status == "pending"
+        and story.review_status
+        == ("operator_review" if settings.STORIES_OPERATOR_REVIEW else "passed"),
+        "family_sees_nothing": exported["first_person_stories"] == [],
+    }
+    # Reported, not scored: a new criterion is Krish's call (§3.3).
+    invented = bool(re.search(r"uncle[^.]*\bwoke\b|\bwoke\b[^.]*uncle", lower))
+    evidence = (
+        f"checks={checks}\nNOT SCORED uncle_woke_us_invented={invented}\n"
+        f"new body: {body!r}\n"
+        f"read-back check: {(story.readback_check or {}).get('result')}\n"
+        f"removed by fidelity: {story.removed_sentences}\n"
+        f"notes: {story.notes}"
+    )
+    record("TC-41", "objective", all(checks.values()), evidence)
+    await cleanup(db, uid)
+
+
+async def tc42(db):
+    """§5 TC-42: with a Story and a card both waiting, a session makes one
+    ask, never mid-story. Judged by the <asked> tag, as TC-14 is."""
+    from datetime import timedelta
+
+    scenarios = {
+        "after_greeting": ("Good morning Katha! How are you today?", {}, True),
+        "not_mid_story": (
+            "Let me tell you what happened when the floods came in 1977. The "
+            "water rose so fast that we carried the goats up to the roof.",
+            {},
+            False,
+        ),
+        "at_closing": (
+            "That's all I remember about the floods.",
+            {"goal_met": True, "exchange_count": 6},
+            True,
+        ),
+    }
+    checks, evidence = {}, []
+    with stories_switched_on():
+        for name, (line, values, expect_offer) in scenarios.items():
+            uid = f"eval-tc42-{name}"
+            await cleanup(db, uid)
+            _, pp = await seed_story_family(db, uid)
+            _, turns = await seed_told_session(
+                db, uid, 1, [(_RIVER_SETTING, False), (_RIVER_EVENT, False)]
+            )
+            # The Story has waited longer, so it is the one offered.
+            await seed_passed_story(
+                db, uid, turns, since=datetime.now(timezone.utc) - timedelta(days=3)
+            )
+            await _waiting_card(db, uid)
+            state = await session_manager.start_session(uid, db)
+            if values:
+                state = await set_session(db, state.session_id, **values)
+            r = await real_turn(db, uid, state.session_id, state, pp, line)
+            asks_made = r["asked"] & {"readback_offer", "story_readback_offer"}
+            questions = _questions(r["response_text"])
+            if expect_offer:
+                ok = asks_made == {"story_readback_offer"} and questions <= 1
+            else:
+                ok = not asks_made
+            checks[name] = ok
+            evidence.append(
+                f"[{name}] expect_offer={expect_offer} asked={sorted(r['asked'])} "
+                f"questions={questions} :: {r['response_text']!r}"
+            )
+            await cleanup(db, uid)
+    record("TC-42", "objective", all(checks.values()), "\n".join(evidence))
+
+
+_SCRIPTS = {
+    "ml-IN": (0x0D00, 0x0D7F),
+    "ta-IN": (0x0B80, 0x0BFF),
+    "hi-IN": (0x0900, 0x097F),
+}
+
+
+async def tc43(db):
+    """§5 TC-43: the read-back in her language says nothing the English body
+    does not. Run in Malayalam, Tamil and Hindi.
+
+    Scored on the read-back's own two-way check (stories/readback.py) and on
+    the read-back being in her script. The check is the system grading
+    itself, so this is not independent: the rubric is Krish listening to
+    the Malayalam read-backs before go-live (§5)."""
+    from stories import consolidate
+
+    for language, (lo, hi) in _SCRIPTS.items():
+        row = Story(
+            id=uuid.uuid4(),
+            user_id="eval-tc43",
+            status="story",
+            title="The night the river came in",
+            body_first_person=_RIVER_BODY,
+            quotes=[],
+            version=1,
+        )
+        with usage.usage_scope(user_id="eval-tc43"):
+            await consolidate.apply_readback(
+                row,
+                language=language,
+                parent_title="Amma",
+                child_name=CHILD,
+                db=SimpleNamespace(commit=_no_commit),
+            )
+        text = row.readback_text or ""
+        letters = [c for c in text if c.isalpha()]
+        in_script = sum(lo <= ord(c) <= hi for c in letters)
+        script_share = in_script / len(letters) if letters else 0.0
+        result = (row.readback_check or {}).get("result")
+        passes = row.readback_check.get("passes") or []
+        record(
+            f"TC-43 {language}",
+            "objective",
+            result == "passed" and script_share >= 0.8,
+            f"check={result} after {len(passes)} pass(es); "
+            f"script_share={script_share:.2f}\n"
+            f"problems: {[p.get('problems') for p in passes]}\n"
+            f"read-back: {text!r}",
+        )
+    await capture_usage(db, "eval-tc43")
+
+
+async def _no_commit():
+    return None
+
+
+_RETELL_ANSWERS = [
+    ("Yes, I'll tell you again, listen.", "retell"),
+    ("ശരി, ഞാൻ ഒന്നുകൂടി പറയാം.", "retell"),
+    ("हाँ, मैं फिर से बताती हूँ।", "retell"),
+    ("Leave it, it doesn't matter.", "set_aside"),
+    ("അത് വിട്ടേക്കൂ, സാരമില്ല.", "set_aside"),
+    ("रहने दो, कोई बात नहीं।", "set_aside"),
+    ("Not today, maybe another time.", "not_now"),
+    ("ഇന്ന് വേണ്ട, പിന്നെ നോക്കാം.", "not_now"),
+]
+
+
+async def tc45(db):
+    """STORIES.md §6c, TC-45: when Katha could not write her correction, she
+    decides. (1) Katha's ask: one question, its own shortcoming, never the
+    detail the check cut; from the second failure, setting aside offered.
+    (2) Her answer read right. (3) A rewrite from her retelling uses it."""
+    from core import parent_answers
+    from stories import asks as story_asks
+    from stories import correction
+
+    with stories_switched_on():
+        saved = settings.STORIES_OPERATOR_REVIEW
+        settings.STORIES_OPERATOR_REVIEW = False
+        try:
+            # (1) the ask, after one failed rewrite and after two
+            for failures in (1, 2):
+                uid = f"eval-tc45-ask{failures}"
+                await cleanup(db, uid)
+                _, pp = await seed_story_family(db, uid)
+                _, turns = await seed_told_session(
+                    db, uid, 1, [(_RIVER_SETTING, False), (_RIVER_EVENT, False)]
+                )
+                story_id = await seed_passed_story(db, uid, turns)
+                story = await db.get(Story, story_id)
+                story.needs_retelling = True
+                story.failed_rewrites = failures
+                story.parent_answer = "correction"
+                story.parent_answered_at = datetime.now(timezone.utc)
+                story.removed_sentences = [
+                    {
+                        "text": "My uncle Kunjappan woke us up and carried my "
+                        "grandmother out.",
+                        "reason": "she never said who woke them up",
+                    }
+                ]
+                await db.commit()
+                state = await session_manager.start_session(uid, db)
+                r = await real_turn(
+                    db, uid, state.session_id, state, pp, "Good morning Katha!"
+                )
+                reply = r["response_text"]
+                lower = reply.lower()
+                checks = {
+                    "asked": "retell_offer" in r["asked"],
+                    "one_question": _questions(reply) <= 1,
+                    # §6c: Katha names the part as a question from the
+                    # check's reason ("who woke them up?"), so "woke" alone is
+                    # allowed. What she must not say is the cut detail: that
+                    # the uncle woke them.
+                    "no_unsaid_detail": not re.search(
+                        r"(uncle|kunjappan)[^.?!]*\bwoke\b"
+                        r"|\bwoke\b[^.?!]*(uncle|kunjappan)",
+                        lower,
+                    ),
+                    "offers_both": any(w in lower for w in ("again", "retell"))
+                    and "aside" in lower,
+                }
+                if failures >= 2:
+                    checks["setting_aside_is_fine"] = any(
+                        w in lower
+                        for w in (
+                            "all right",
+                            "alright",
+                            "perfectly fine",
+                            "okay",
+                            "still your",
+                        )
+                    )
+                record(
+                    f"TC-45 ask after {failures} failure(s)",
+                    "objective",
+                    all(checks.values()),
+                    f"checks={checks}\nreply: {reply!r}",
+                )
+                await cleanup(db, uid)
+
+            # (2) her answer
+            right, misses = 0, []
+            for said, want in _RETELL_ANSWERS:
+                got = (
+                    await parent_answers.classify(
+                        parent_answers.RETELL, story_asks.retell_question(), said
+                    )
+                ).label
+                right += got == want
+                if got != want:
+                    misses.append(f"{said!r}: want {want}, got {got}")
+            record(
+                "TC-45 her answer",
+                "objective",
+                right == len(_RETELL_ANSWERS),
+                f"{right}/{len(_RETELL_ANSWERS)} right\n" + "\n".join(misses),
+            )
+
+            # (3) the rewrite from her retelling
+            uid = "eval-tc45-retold"
+            await cleanup(db, uid)
+            await seed_story_family(db, uid)
+            _, turns = await seed_told_session(
+                db, uid, 1, [(_RIVER_SETTING, False), (_RIVER_EVENT, False)]
+            )
+            story_id = await seed_passed_story(db, uid, turns)
+            today = Session(
+                id=uuid.uuid4(), user_id=uid, session_number=2, domain="childhood"
+            )
+            db.add(today)
+            await db.flush()
+            retold = (
+                "That night I was twelve, not ten. Appa was away in Madras. It "
+                "was my uncle Kunjappan who put grandmother on his back and took "
+                "her to the temple steps."
+            )
+            turn = Turn(
+                id=uuid.uuid4(),
+                session_id=today.id,
+                user_id=uid,
+                turn_number=1,
+                transcript=retold,
+                detected_language="en-IN",
+                response_text="Thank you, I'll write it again.",
+                extraction_status="done",
+            )
+            db.add(turn)
+            turn_id = turn.id
+            story = await db.get(Story, story_id)
+            story.needs_retelling = True
+            story.failed_rewrites = 1
+            story.parent_answer = "retelling"
+            await db.commit()
+            with usage.usage_scope(user_id=uid):
+                await correction.rewrite_for_correction(story_id, turn_id, db)
+            db.expire_all()
+            story = await db.get(Story, story_id)
+            body = (story.body_first_person or "").lower()
+            checks = {
+                "rewritten": story.version == 2 and not story.needs_retelling,
+                "uses_retelling": ("twelve" in body or "12" in body)
+                and ("uncle" in body or "kunjappan" in body),
+                "no_unsaid_waking": not re.search(
+                    r"uncle[^.]*\bwoke\b|\bwoke\b[^.]*uncle", body
+                ),
+            }
+            record(
+                "TC-45 rewrite from her retelling",
+                "objective",
+                all(checks.values()),
+                f"checks={checks}\nbody: {story.body_first_person!r}\n"
+                f"notes: {story.notes}",
+            )
+            await cleanup(db, uid)
+        finally:
+            settings.STORIES_OPERATOR_REVIEW = saved
+
+
+STORY_CASES = {
+    "tc39": tc39,
+    "tc41": tc41,
+    "tc42": tc42,
+    "tc43": tc43,
+    "tc45": tc45,
+}
+
+
 CARD_CASES = {
     "tc12": tc12,
     "tc13": tc13,
@@ -3607,6 +4369,7 @@ CARD_CASES = {
     "tc16": tc16,
     "tc17": tc17,
     "tc18": tc18,
+    "tc46": tc46,
 }
 
 
@@ -3654,9 +4417,12 @@ async def main():
     selected = sys.argv[1:] or list(ALL_CASES.keys())
     if selected == ["cards"]:
         selected = list(CARD_CASES.keys())
+    if selected == ["stories"]:
+        selected = list(STORY_CASES.keys())
     cases = {
         **ALL_CASES,
         **CARD_CASES,
+        **STORY_CASES,
         "consent": consent,
         "withdraw": withdraw,
         "privacy": privacy,

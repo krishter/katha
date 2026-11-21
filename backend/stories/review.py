@@ -87,12 +87,11 @@ async def rewrite_readback(story_id: uuid.UUID, db: AsyncSession) -> Story:
 
 
 async def source_turns(story: Story, db: AsyncSession) -> list[Turn]:
-    """Every turn the arc cites, for the page: the operator reads the body
-    against what she said."""
-    ids = set()
-    for element in (story.arc or {}).values():
-        if isinstance(element, dict):
-            ids |= set(element.get("turn_ids") or [])
+    """Every turn the Story was told from, for the page: the operator reads
+    the body against what she said, her correction included."""
+    from stories.correction import source_turn_ids
+
+    ids = source_turn_ids(story)
     wanted = []
     for value in ids:
         try:

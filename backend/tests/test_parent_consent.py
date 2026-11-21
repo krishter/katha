@@ -296,6 +296,26 @@ async def test_status_reflects_a_granted_record():
     assert state.status is ConsentStatus.GRANTED
 
 
+async def test_an_agreement_to_the_1_1_notice_still_stands():
+    # 1.2 says less is done with her words than 1.1 did: no re-ask.
+    granted = SimpleNamespace(
+        consent_version="parent-1.1",
+        consented_at="2026-10-30",
+        whatsapp_number=_NUMBER,
+    )
+    state = await get_status(_USER_ID, _status_db([granted], times_asked=1))
+    assert state.status is ConsentStatus.GRANTED
+
+
+def test_the_notice_no_longer_says_a_person_reads_her_stories():
+    from speech import catalogue
+
+    text = catalogue.text("consent_processing", "en-IN")
+    assert "A person at Katha may read" not in text
+    assert "No one at Katha reads your stories" in text
+    assert "safety" in text  # the crisis exception is still named
+
+
 async def test_status_reflects_a_decline():
     declined = SimpleNamespace(
         consent_version="parent-1.0-declined", consented_at="2026-08-30"

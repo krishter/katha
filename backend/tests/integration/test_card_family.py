@@ -275,7 +275,11 @@ async def test_knew_and_ask(real_db):
 # ── screening (§10.2) ────────────────────────────────────────────────────────
 
 
-async def test_a_sensitive_question_is_held_and_the_child_is_not_told(real_db, alert):
+async def test_a_sensitive_question_is_held_and_the_child_is_not_told(
+    real_db, alert, monkeypatch
+):
+    """With operator review on, the operator is told."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
     s = await seed(real_db)
     async with Webhook() as w:
         with screened("sensitive"):
@@ -284,6 +288,21 @@ async def test_a_sensitive_question_is_held_and_the_child_is_not_told(real_db, a
     assert q.status == "held"
     assert "I'll ask Amma" in w.replies()[0]
     alert.assert_awaited_once()
+
+
+async def test_with_review_off_a_sensitive_question_alerts_no_one(
+    real_db, alert, monkeypatch
+):
+    """STORIES.md §6c: she decides whether to hear it; no one at Katha does."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    s = await seed(real_db)
+    async with Webhook() as w:
+        with screened("sensitive"):
+            await w.send(s.child, Body="Who gets the house?")
+    [q] = await questions(real_db, s.user_id)
+    assert q.status == "held"
+    assert "I'll ask Amma" in w.replies()[0]
+    alert.assert_not_awaited()
 
 
 async def test_a_correction_is_not_relayed(real_db):

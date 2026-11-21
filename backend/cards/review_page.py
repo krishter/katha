@@ -4,6 +4,13 @@ The operator's card review page, /admin/cards/view (CONVERSATION_CARDS.md
 
 Every value from the database is escaped: card text is model output drawn
 from what a parent said, and a child's question is whatever they typed.
+
+With CARDS_OPERATOR_REVIEW off (the default since 2026-11-15, STORIES.md
+§6c), no one at Katha reads a family's cards, so the page shows ids, states
+and dates only: no title, card text, image, fidelity sentences or what she
+said. The full review view returns only if review is turned back on.
+Held child questions are listed by id only too: she decides whether to
+hear each one.
 """
 
 from __future__ import annotations
@@ -143,9 +150,22 @@ def _waiting(item: dict, image_url: str | None, csrf: str) -> str:
 </div></section>"""
 
 
-def _held(questions, csrf: str) -> str:
+def _held(questions, csrf: str, show_content: bool = True) -> str:
     if not questions:
         return "<p class=note>None.</p>"
+    if not show_content:
+        # She decides whether to hear it (STORIES.md §6c): never read here.
+        rows = "".join(
+            f"<tr><td>{_e(q.user_id)}</td><td>{_e(q.id)}</td><td>{_e(q.channel)}</td>"
+            f"<td>{_e(q.created_at)}</td><td>{_e(q.parent_offers or 0)}</td></tr>"
+            for q in questions
+        )
+        return (
+            "<p class=note>Katha asks her whether she would like to hear each one; "
+            "nobody here reads them.</p><div class=scroll><table><tr><th>user</th>"
+            "<th>question</th><th>via</th><th>received</th><th>times offered</th>"
+            f"</tr>{rows}</table></div>"
+        )
     rows = []
     for q in questions:
         base = f"/admin/questions/{escape(str(q.id))}"
@@ -163,7 +183,7 @@ def _held(questions, csrf: str) -> str:
     )
 
 
-def _recent(cards, csrf: str) -> str:
+def _recent(cards, csrf: str, show_content: bool = True) -> str:
     if not cards:
         return "<p class=note>None yet.</p>"
     rows = []
@@ -179,11 +199,24 @@ def _recent(cards, csrf: str) -> str:
                 f"{_hidden(csrf)}<select name=tag>{options}</select>"
                 "<button>Tag</button></form>"
             )
-        rows.append(
-            f"<tr><td>{_e(c.updated_at)}</td><td>{_e(c.user_id)}</td>"
-            f"<td>{_e(c.status)}</td><td>{_e(c.title)}</td>"
-            f"<td>{_e(c.parent_answer)}</td><td>{_e(c.operator_reason)}</td>"
-            f"<td>{tag}</td></tr>"
+        if show_content:
+            rows.append(
+                f"<tr><td>{_e(c.updated_at)}</td><td>{_e(c.user_id)}</td>"
+                f"<td>{_e(c.status)}</td><td>{_e(c.title)}</td>"
+                f"<td>{_e(c.parent_answer)}</td><td>{_e(c.operator_reason)}</td>"
+                f"<td>{tag}</td></tr>"
+            )
+        else:
+            rows.append(
+                f"<tr><td>{_e(c.updated_at)}</td><td>{_e(c.user_id)}</td>"
+                f"<td>{_e(c.id)}</td><td>{_e(c.status)}</td>"
+                f"<td>{_e(c.parent_answer)}</td><td>{tag}</td></tr>"
+            )
+    if not show_content:
+        return (
+            "<div class=scroll><table><tr><th>updated</th><th>user</th>"
+            "<th>card</th><th>status</th><th>her answer</th>"
+            f"<th>did the call happen?</th></tr>{''.join(rows)}</table></div>"
         )
     return (
         "<div class=scroll><table><tr><th>updated</th><th>user</th><th>status</th>"
@@ -192,14 +225,49 @@ def _recent(cards, csrf: str) -> str:
     )
 
 
-def render(queue: dict, image_urls: dict, csrf: str, flash: str = "") -> str:
-    waiting = (
-        "".join(
-            _waiting(item, image_urls.get(item["card"].id), csrf)
-            for item in queue["waiting"]
-        )
-        or "<p class=note>Nothing waiting for review.</p>"
+def _waiting_ids(items) -> str:
+    """Review is off: which cards wait and why, never what they say."""
+    if not items:
+        return "<p class=note>Nothing waiting.</p>"
+    rows = "".join(
+        f"<tr><td>{_e(i['card'].user_id)}</td><td>{_e(i['card'].id)}</td>"
+        f"<td>{_e(i['card'].created_at)}</td>"
+        f"<td>{_e((i['card'].fidelity_json or {}).get('result'))}</td></tr>"
+        for i in items
     )
+    return (
+        "<p class=note>Operator review is off, so these are not read here. "
+        "A card left in review from before needs a decision another way.</p>"
+        "<div class=scroll><table><tr><th>user</th><th>card</th><th>drafted</th>"
+        f"<th>fidelity</th></tr>{rows}</table></div>"
+    )
+
+
+def render(
+    queue: dict,
+    image_urls: dict,
+    csrf: str,
+    flash: str = "",
+    show_content: bool = True,
+) -> str:
+    if show_content:
+        waiting = (
+            "".join(
+                _waiting(item, image_urls.get(item["card"].id), csrf)
+                for item in queue["waiting"]
+            )
+            or "<p class=note>Nothing waiting for review.</p>"
+        )
+        intro = (
+            "Approving sends nothing to the family: the parent hears each card\n"
+            "read back and decides. Target: reviewed within 24 hours."
+        )
+    else:
+        waiting = _waiting_ids(queue["waiting"])
+        intro = (
+            "Operator review is off (CARDS_OPERATOR_REVIEW): no one at Katha reads\n"
+            "a family's cards, so this page shows ids and states only."
+        )
     flash_html = f"<p class=flash>{_e(flash)}</p>" if flash else ""
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -208,11 +276,10 @@ def render(queue: dict, image_urls: dict, csrf: str, flash: str = "") -> str:
 <title>Katha · card review</title><style>{_CSS}</style></head>
 <body><main>
 <h1>Conversation cards: review</h1>
-<p class=meta>Approving sends nothing to the family: the parent hears each card
-read back and decides. Target: reviewed within 24 hours.</p>
+<p class=meta>{intro}</p>
 {flash_html}
 <h2>Waiting for review ({len(queue["waiting"])})</h2>{waiting}
 <h2>Child questions held by screening ({len(queue["held_questions"])})</h2>
-{_held(queue["held_questions"], csrf)}
-<h2>Recent cards</h2>{_recent(queue["recent"], csrf)}
+{_held(queue["held_questions"], csrf, show_content)}
+<h2>Recent cards</h2>{_recent(queue["recent"], csrf, show_content)}
 </main></body></html>"""

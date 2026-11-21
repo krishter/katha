@@ -157,7 +157,11 @@ async def test_a_post_without_the_csrf_token_is_refused(real_db, client):
 # ── the page ─────────────────────────────────────────────────────────────────
 
 
-async def test_the_page_shows_the_card_its_sources_and_escapes_them(real_db, client):
+async def test_the_page_shows_the_card_its_sources_and_escapes_them(
+    real_db, client, monkeypatch
+):
+    """With operator review on, the page is the full review view."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
     made = await make_card(real_db)
     page = await client.get("/admin/cards/view", headers=AUTH)
     assert page.status_code == 200
@@ -170,6 +174,32 @@ async def test_the_page_shows_the_card_its_sources_and_escapes_them(real_db, cli
     # Her words are shown, escaped.
     assert "&lt;b&gt;and&lt;/b&gt;" in html and "<b>and</b>" not in html
     assert review.csrf_token() in html
+
+
+async def test_with_review_off_the_page_shows_no_family_content(
+    real_db, client, monkeypatch
+):
+    """STORIES.md §6c: no one at Katha reads a family's cards. With review
+    off (the default) the page lists ids, states and dates, never what a
+    card says or what she said, and presigns no image."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    waiting = await make_card(real_db)
+    recent = await make_card(real_db, status="awaiting_parent")
+    page = await client.get("/admin/cards/view", headers=AUTH)
+    assert page.status_code == 200
+    html = page.text
+    for words in (
+        "The walk to the talkies",  # title
+        "six kilometres",  # hook and excerpt
+        "What do you remember",  # call prompt
+        "நீங்கள்",  # read-back
+        "Left out which film.",  # held-back note
+        "talkies",  # her transcript
+        "s3.test",  # the card image
+    ):
+        assert words not in html, f"{words!r} is on the page with review off"
+    assert str(waiting.card_id) in html and str(recent.card_id) in html
+    assert "Operator review is off" in html
 
 
 # ── approve / reject ─────────────────────────────────────────────────────────
@@ -306,7 +336,9 @@ async def test_once_she_has_it_the_operator_cannot_change_it(real_db, client):
 # ── held questions and the call tag ──────────────────────────────────────────
 
 
-async def test_a_held_question_is_released_or_dropped(real_db, client):
+async def test_a_held_question_is_released_or_dropped(real_db, client, monkeypatch):
+    """With operator review on, the operator reads and releases it."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
     ids = []
     for _ in range(2):
         q = FamilyQuestion(
@@ -335,6 +367,26 @@ async def test_a_held_question_is_released_or_dropped(real_db, client):
         for i in ids
     ]
     assert statuses == ["released", "dropped"]
+
+
+async def test_with_review_off_a_held_question_is_not_shown(
+    real_db, client, monkeypatch
+):
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    q = FamilyQuestion(
+        id=uuid.uuid4(),
+        user_id="rev-q2",
+        channel="whatsapp",
+        raw_text="Who gets the farm?",
+        screening="sensitive",
+        status="held",
+    )
+    real_db.add(q)
+    await real_db.commit()
+    html = (await client.get("/admin/cards/view", headers=AUTH)).text
+    assert "Who gets the farm?" not in html
+    assert str(q.id) in html
+    assert f"/admin/questions/{q.id}/release" not in html
 
 
 async def test_only_a_sent_card_can_be_tagged(real_db, client):

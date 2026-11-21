@@ -203,16 +203,20 @@ class Settings(BaseSettings):
     # new families get conversation cards, so change it with this. Needs
     # CONVERSATION_CARDS_ENABLED on, and ADMIN_API_TOKEN for card review.
     CONVERSATION_CARDS_FOR_NEW_FAMILIES: bool = True
-    # D3: every card is reviewed by the operator before she hears it.
-    # false sends a card that passed the fidelity check straight to her.
-    CARDS_OPERATOR_REVIEW: bool = True
+    # Off (decided 2026-11-15, reversing D3): no one at Katha reads a
+    # family's cards. A card that passed its fidelity check goes straight
+    # to her read-back, and only her yes sends it. True puts it back with
+    # the operator first.
+    CARDS_OPERATOR_REVIEW: bool = False
 
     # Stories (docs/specs/STORIES.md). Off: no consolidation after a session
     # and nothing about a session changes. On: it runs only for parents whose
     # profile has stories_enabled, turned on one family at a time.
     STORIES_ENABLED: bool = False
-    # D-a: every Story is reviewed by the operator before she hears it.
-    STORIES_OPERATOR_REVIEW: bool = True
+    # Off (decided 2026-11-15, reversing D-a): no one at Katha reads a
+    # family's Stories. A Story that passed its checks goes straight to her
+    # read-back.
+    STORIES_OPERATOR_REVIEW: bool = False
     # The consolidation pass stays on the model it was evaluated on (Phase A).
     # D-e: grouping is the largest share of its tokens, so it has its own
     # setting for the Haiku trial; compose, fidelity and read-back do not.

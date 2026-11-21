@@ -137,6 +137,14 @@ class ConversationCard(Base):
     correction_round: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )
+    # STORIES.md §6c, for cards too: a corrected card Katha could not write
+    # waits in "correction" for her to tell that part again or set it aside.
+    needs_retelling: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    failed_rewrites: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
     parent_answer: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     parent_answer_turn_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True

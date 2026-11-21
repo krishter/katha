@@ -463,7 +463,7 @@ async def _draft(session_id: str, user_id: str, db: AsyncSession) -> DraftOutcom
     if review:
         await send_operator_alert(
             "A conversation card is waiting for review",
-            f'Card "{card.title}" for user {user_id} is ready at /admin/cards/view. '
+            f"Card {card.id} for user {user_id} is ready at /admin/cards/view. "
             "Target: reviewed within 24 hours.",
         )
     return DraftOutcome("drafted", card.status, card.id)
@@ -473,10 +473,16 @@ async def rewrite_for_correction(
     card_id: uuid.UUID, turn_id: uuid.UUID, db: AsyncSession
 ) -> None:
     """
-    She corrected the card after hearing it (§6.3). Her correction turn
-    becomes a source, the card is rewritten and checked, and it goes back
-    to the operator and then to her once more. A second correction goes to
-    the operator to resolve by hand. Never raises.
+    She corrected the card after hearing it (§6.3), or told a part of it
+    again (STORIES.md §6c). Her turn becomes a source, the card is
+    rewritten and checked, and it goes back to her once more (through the
+    operator, with CARDS_OPERATOR_REVIEW on).
+
+    With no operator review, a rewrite that fails its check waits for her:
+    the card keeps the words she heard, and Katha asks whether she would
+    like to tell that part again or set the card aside (cards/asks.py).
+    With review on, a second correction goes to the operator by hand and a
+    failed rewrite is dropped, as before. Never raises.
     """
     try:
         await _rewrite_for_correction(card_id, turn_id, db)
@@ -506,7 +512,8 @@ async def _rewrite_for_correction(card_id, turn_id, db) -> None:
     card.parent_answer = None
     card.approved_hash = None
 
-    if (card.correction_round or 0) >= 2:
+    review = settings.CARDS_OPERATOR_REVIEW
+    if review and (card.correction_round or 0) >= 2:
         card.fidelity_json = {
             **(card.fidelity_json or {}),
             "note": "Second correction from her: resolve by hand.",
@@ -515,8 +522,7 @@ async def _rewrite_for_correction(card_id, turn_id, db) -> None:
         await db.commit()
         await send_operator_alert(
             "A card needs a correction resolved by hand",
-            f'Card "{card.title}" for user {card.user_id} was corrected twice. '
-            "See /admin/cards/view.",
+            f"Card {card.id} for user {card.user_id} was corrected twice.",
         )
         return
 
@@ -554,18 +560,24 @@ async def _rewrite_for_correction(card_id, turn_id, db) -> None:
         "correction": said,
     }
     if not passed:
-        state.transition(card, "failed_fidelity")
+        card.failed_rewrites = (card.failed_rewrites or 0) + 1
+        if review:
+            state.transition(card, "failed_fidelity")
+        else:
+            # Back to the words she heard; she decides what happens next.
+            state.set_text(card, **current)
+            card.needs_retelling = True
         await db.commit()
         logger.info("Corrected card %s failed its fidelity check", card.id)
         return
 
+    card.needs_retelling = False
     await card_image.try_render(card, parent_title)
-    review = settings.CARDS_OPERATOR_REVIEW
     state.transition(card, "operator_review" if review else "awaiting_parent")
     await db.commit()
     if review:
         await send_operator_alert(
             "A corrected conversation card is waiting for review",
-            f'Card "{card.title}" for user {card.user_id} was corrected by her and '
+            f"Card {card.id} for user {card.user_id} was corrected by her and "
             "rewritten. See /admin/cards/view.",
         )

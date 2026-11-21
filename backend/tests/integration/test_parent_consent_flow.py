@@ -407,7 +407,7 @@ async def test_a_clear_yes_is_confirmed_then_recorded_once(real_db):
 
     records = await _records(real_db, user_id)
     assert len(records) == 1
-    assert records[0].consent_version == "parent-1.1"
+    assert records[0].consent_version == parent_consent.PARENT_CONSENT_VERSION
     assert records[0].whatsapp_number == _NUMBER
     assert parent_consent.granted_text("hi-IN") in h3.everything_said()
     assert (await parent_consent.get_status(user_id, real_db)).status is (
@@ -605,7 +605,7 @@ async def test_a_1_0_parent_hears_the_update_then_agrees_to_1_1(real_db):
         await _post_inbound(h2.client, with_audio=True)
 
     versions = [r.consent_version for r in await _records(real_db, user_id)]
-    assert sorted(versions) == ["parent-1.0", "parent-1.1"]
+    assert sorted(versions) == ["parent-1.0", parent_consent.PARENT_CONSENT_VERSION]
     assert (await parent_consent.get_status(user_id, real_db)).status is (
         ConsentStatus.GRANTED
     )

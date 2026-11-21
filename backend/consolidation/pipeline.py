@@ -257,12 +257,21 @@ async def compose_and_check(
     all_turns: list[dict],
     call_llm: LLMCall,
     usage: Usage,
+    correction_turn_id: Optional[str] = None,
+    cut: Optional[list[dict]] = None,
 ) -> Thread:
     """
     Steps 2 and 3 for one promoted incident: compose, then check sentence
     by sentence, cutting anything unsupported and re-checking once.
+
+    `correction_turn_id` is her correction at read-back (STORIES.md §2.3):
+    it joins the sources, and both prompts are told it wins. `cut` is what
+    the check cut from a first try, for a second one.
     """
     source_turns = select_source_turns(thread.arc, all_turns)
+    if correction_turn_id:
+        wanted = {str(t["id"]) for t in source_turns} | {str(correction_turn_id)}
+        source_turns = [t for t in all_turns if str(t["id"]) in wanted]
     if not source_turns:
         thread.notes.append("no source transcripts for the arc's turn ids")
         return thread
@@ -273,7 +282,11 @@ async def compose_and_check(
     composed = await _call(
         call_llm,
         build_compose_prompt(
-            incident=incident, turns=source_turns, source_language=language
+            incident=incident,
+            turns=source_turns,
+            source_language=language,
+            correction_turn_id=correction_turn_id,
+            cut=cut,
         ),
         STEP_COMPOSE,
         COMPOSE_MAX_TOKENS,
@@ -294,7 +307,9 @@ async def compose_and_check(
     for _ in range(_MAX_FIDELITY_PASSES):
         checked = await _call(
             call_llm,
-            build_fidelity_prompt(body=body, turns=source_turns),
+            build_fidelity_prompt(
+                body=body, turns=source_turns, correction_turn_id=correction_turn_id
+            ),
             STEP_FIDELITY,
             FIDELITY_MAX_TOKENS,
             usage,

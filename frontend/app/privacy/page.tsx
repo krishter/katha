@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <main id="main" className="mx-auto max-w-2xl px-6 py-12 text-ink">
       <h1 className="font-display text-2xl font-semibold">Katha Privacy Policy</h1>
-      <p className="mt-2 text-sm text-ink-mid">Version 1.1 · 21 October 2026</p>
+      <p className="mt-2 text-sm text-ink-mid">Version 1.2 · 15 November 2026</p>
 
       <section className="mt-8">
         <h2 className="font-display text-lg font-semibold">What we collect</h2>
@@ -76,10 +76,13 @@ export default function PrivacyPage() {
       <section className="mt-8">
         <h2 className="font-display text-lg font-semibold">Who reads it</h2>
         <p className="mt-2 text-sm">
-          A member of the Katha team may read what your parent says: to review
-          a conversation card before it is offered to her, to check on her if
-          something she says suggests she may be in danger, and to fix a
-          problem with the service. If she says something that may mean she
+          No one on the Katha team reads your parent&apos;s cards or stories
+          before she hears them: Katha writes them, checks every sentence
+          against what she said, and reads them to her, and nothing reaches
+          you without her yes. A member of the Katha team may read what she
+          says in two cases only: to check on her if something she says
+          suggests she may be in danger, and to fix a problem with the
+          service. If she says something that may mean she
           is in crisis, Katha gives her the iCall India helpline (9152987821)
           and emails the Katha team at once, with what she said, so a person
           can read it the same day.
