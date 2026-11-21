@@ -183,12 +183,17 @@ gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to s
    its media from Twilio: her voice note once it is transcribed, its own messages at a final
    status, and anything left by the `delete_twilio_messages` job every 5 minutes. Check the
    account in the Twilio console and write the answers here:
-   - Media retention: is there an account-level setting, and what is it? `______`
-   - PII redaction for message bodies: available on this account? Turned on? `______`
+   - Media and message retention: the account's "days to retain" is **400 days** for anything
+     not deleted (checked 2026-10-21). Katha deletes everything well inside that, so it only
+     matters if a delete keeps failing; lower it to the minimum if the console allows.
+     HTTP Basic Auth on media URLs: `______` (turn it on).
+   - PII redaction for message bodies: **not available on this account** (checked
+     2026-10-21). Deletion is the control.
    - Message log retention after a delete: does anything survive (billing records, Messaging
-     Insights)? `______`
+     Insights)? `______` (ask Twilio support; record their answer and the date).
 5. **After the first self-trial voice note**, open the message in the Twilio console a minute
-   later and confirm it and its media are gone. If not, read the `delete_twilio_messages` and
+   later and confirm it and its media are gone. *Confirmed 2026-10-21: body and media gone
+   within a couple of minutes.* If not, read the `delete_twilio_messages` and
    `Could not delete … from Twilio` lines in the backend log.
 
 ## Step 7 — Frontend
