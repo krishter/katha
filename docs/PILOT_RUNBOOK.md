@@ -260,7 +260,8 @@ listen.
 For families with cards on (`scripts/cards.py --show` lists them):
 
 - **Review waiting cards within 24 hours** at `/admin/cards/view` (same token as the
-  metrics page). An alert goes to `OPERATOR_EMAIL` when one is waiting. Read the card
+  metrics page), opened through the SSH tunnel: the public host refuses `/admin`
+  (`docs/DEPLOYMENT.md`, "Operator pages"). An alert goes to `OPERATOR_EMAIL` when one is waiting. Read the card
   against her words beside it; approve, edit (it is checked again), or reject with a
   reason. Approving sends nothing to the family: she hears it read first.
 - **Held questions** from the child are on the same page. Release a question you are
