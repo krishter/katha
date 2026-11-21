@@ -1,6 +1,8 @@
 # Katha — Production cutover (pre-pilot)
 
 **Status: Steps 0–5 complete as of 2026-09-20; `api.katha.life/health` live in production.**
+*(Checked again 2026-11-21: `/health` returns 200. The box was stopped from outside on
+2026-11-02 and was down for four days; the uptime check in `.github/workflows` now watches it.)*
 
 **Why this doc exists** *(written 2026-09-06, before the cutover — describes the state it
 started from, not the state today)*: there is no deployed backend today. `katha.life`
