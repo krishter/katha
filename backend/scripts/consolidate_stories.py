@@ -1,8 +1,17 @@
 #!/usr/bin/env python
 """
-Phase A: run the consolidation pass offline and write a report for review.
+Phase A: run the consolidation pass offline and report what it found.
 
     python scripts/consolidate_stories.py --user-id user_7f3a2b
+    python scripts/consolidate_stories.py --user-id user_7f3a2b --from-session 12
+
+For a pilot family it reports **counts only**: incidents, Stories, open
+threads and which part of the arc each is missing, and token use. No one
+at Katha reads a family's stories or transcripts (privacy page; parent
+consent 1.2), so nothing she said is printed or written. The full report,
+with her words, titles and drafts, is written only for an account in
+METRICS_EXCLUDED_USER_IDS (the team's own self-trial accounts) or one
+whose id starts with "eval". --counts-only gives the counts for those too.
 
 Reads one user's sessions, turns and story atoms, runs the three steps of
 docs/proposals/first-person-stories.md §6.3 over each session in order, and
@@ -13,8 +22,10 @@ mode before any query, so an accidental write fails loudly rather than
 quietly changing pilot data. This is Phase A of §11: no schema change, no
 production behaviour change, output reviewed by hand.
 
-Run it against a restore of production, not against production itself.
-The LLM calls are real and billed; that is the point, since the per-session
+For a pilot family, run it on the box (`docker compose -f
+docker-compose.prod.yml exec backend python scripts/consolidate_stories.py
+...`): the connection is read-only, and her data never leaves it. The LLM
+calls are real and billed; that is the point, since the per-session
 token cost is one of the things Phase A exists to measure.
 """
 
@@ -34,6 +45,7 @@ from sqlalchemy import select, text  # noqa: E402
 
 from adapters import llm  # noqa: E402
 from adapters.llm import Message  # noqa: E402
+from config import settings  # noqa: E402
 from consolidation.pipeline import (  # noqa: E402
     STEP_COMPOSE,
     STEP_FIDELITY,
@@ -43,6 +55,7 @@ from consolidation.pipeline import (  # noqa: E402
     Usage,
     consolidate_session,
 )
+from core.metrics import parse_excluded  # noqa: E402
 from memory import fact_store  # noqa: E402
 from models.db import AsyncSessionLocal  # noqa: E402
 from models.session import Session  # noqa: E402
@@ -180,6 +193,57 @@ async def load_user(db, user_id: str) -> list[dict]:
     return sessions
 
 
+ARC_PARTS = ("setting", "event", "turn", "resolution")
+
+
+def may_show_content(user_id: str) -> bool:
+    """Only the team's own self-trial accounts, and eval accounts, may have
+    their words in a report. Everyone else is a family."""
+    return user_id.startswith("eval") or user_id in parse_excluded(
+        settings.METRICS_EXCLUDED_USER_IDS
+    )
+
+
+def counts(
+    user_id: str,
+    sessions: list[dict],
+    threads: dict[str, Thread],
+    results: list[SessionResult],
+    usage: Usage,
+) -> dict:
+    """What Phase A measures (FINISHING_STORIES.md §5), as numbers only:
+    no titles, no people, no places, no ids of turns."""
+    spoken = [s for s in sessions if not s["empty"]]
+    stories = [t for t in threads.values() if t.status == "story"]
+    open_threads = [t for t in threads.values() if t.status != "story"]
+    incidents = sum(r.incidents_found for r in results)
+    total = usage.totals
+    return {
+        "user_id": user_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "sessions_total": len(sessions),
+        "sessions_with_transcripts": len(spoken),
+        "sessions_consolidated": len(results),
+        "incidents": incidents,
+        "stories": len(stories),
+        "complete_arc_share": round(len(stories) / incidents, 3) if incidents else None,
+        "stories_per_session": round(len(stories) / len(results), 3)
+        if results
+        else None,
+        "open_threads": len(open_threads),
+        "open_threads_missing": {
+            part: sum(1 for t in open_threads if part in t.arc.missing)
+            for part in ARC_PARTS
+        },
+        "errors": sum(len(r.errors) for r in results),
+        "usage": {
+            "calls": total.calls,
+            "input_tokens": total.input_tokens,
+            "output_tokens": total.output_tokens,
+        },
+    }
+
+
 def _render_markdown(
     user_id: str,
     sessions: list[dict],
@@ -297,6 +361,12 @@ def _render_markdown(
 
 
 async def run(args) -> int:
+    show_content = may_show_content(args.user_id) and not args.counts_only
+    if not show_content:
+        logger.info(
+            "%s: counts only. Her words, titles and drafts are not reported.",
+            args.user_id,
+        )
     rates = None
     if args.input_price is not None and args.output_price is not None:
         rates = (args.input_price, args.output_price)
@@ -322,12 +392,17 @@ async def run(args) -> int:
             return 1
         significant_people = await fact_store.get_significant_people(args.user_id, db)
 
-    spoken = [s for s in sessions if not s["empty"]]
+    spoken = [
+        s
+        for s in sessions
+        if not s["empty"] and (s["session_number"] or 0) >= args.from_session
+    ]
     logger.info(
-        "%s: %d session(s), %d with transcripts",
+        "%s: %d session(s), %d with transcripts from session %d",
         args.user_id,
         len(sessions),
         len(spoken),
+        args.from_session,
     )
 
     history: list[dict] = []
@@ -354,13 +429,26 @@ async def run(args) -> int:
         )
         usage.merge(result.usage)
         results.append(result)
-        for note in result.errors:
-            logger.warning("session %s: %s", session["id"][:8], note)
+        if show_content:
+            for note in result.errors:
+                logger.warning("session %s: %s", session["id"][:8], note)
+        elif result.errors:
+            logger.warning(
+                "session %s: %d error(s)", session["id"][:8], len(result.errors)
+            )
 
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     base = out_dir / f"{args.user_id}-{stamp}"
+
+    summary = counts(args.user_id, sessions, threads, results, usage)
+    if not show_content:
+        path = base.with_name(base.name + "-counts.json")
+        path.write_text(json.dumps(summary, indent=2))
+        print(json.dumps(summary, indent=2))
+        logger.info("Counts only (a family's words are never reported): %s", path)
+        return 0
 
     payload = {
         "user_id": args.user_id,
@@ -405,6 +493,18 @@ def main() -> int:
     parser.add_argument("--user-id", required=True)
     parser.add_argument("--out-dir", default="consolidation_reports")
     parser.add_argument("--max-sessions", type=int, default=0, help="0 = all sessions")
+    parser.add_argument(
+        "--from-session",
+        type=int,
+        default=0,
+        help="consolidate only sessions numbered this or later (a rerun over new "
+        "sessions)",
+    )
+    parser.add_argument(
+        "--counts-only",
+        action="store_true",
+        help="numbers only, even for a self-trial account (always so for a family)",
+    )
     parser.add_argument(
         "--input-price",
         type=float,

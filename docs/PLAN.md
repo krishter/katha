@@ -339,7 +339,7 @@ From `docs/PRD.md` Section 12.1 — all must pass before pilot launch:
 
 - [ ] ≥50% of pilot users (20–30 families) complete 10+ sessions
 - [ ] ≥70% of adult child accounts open at least one memory card
-- [ ] Story extraction accuracy ≥75% (manual validation of first 50 story atoms)
+- [ ] Story extraction accuracy ≥75% (manual validation of first 50 story atoms). *Changed 2026-11-21: measured on the eval cases and the team's self-trial conversations; no one at Katha reads a family's atoms (privacy page, consent 1.2).*
 - [ ] No critical WhatsApp API or Sarvam STT failures in normal operation
 - [ ] Eval regression set: 80%+ pass on TC-01 through TC-10
 

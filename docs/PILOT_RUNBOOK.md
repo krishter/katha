@@ -41,6 +41,24 @@ The parent never touches a browser. Everything she sees arrives on WhatsApp.
 
 ---
 
+## Reading what she said — the rule
+
+No one at Katha reads a family's conversations, cards or Stories. The privacy page and her
+consent (1.2) allow a person to read what she says in two cases only:
+
+1. **Her safety.** A crisis alert email carries what she said; read it the same day.
+2. **Fixing a problem with the service.** Only when the numbers show something is broken:
+   a session with turn failures, turns heard in the wrong language, messages that came
+   through nearly empty, or a parent or child reporting that something went wrong. Open
+   only the turns of that session, only to find the fault, and write down who looked,
+   when, which session and why, in the family's notes (outside the repo).
+
+Everything routine — tone, extraction quality, Layer 3, Phase A — is answered from counts
+(`scripts/session_health.py`, the metrics page, `scripts/consolidate_stories.py`, which
+reports only counts for a family) or from evals and self-trial conversations.
+
+---
+
 ## Phase 1 · Day -1 — Setup with the adult child (PO + Child, ~30 min call)
 
 Do this on a call, not by email. Family #1–#5 are hand-held; you are testing the flow as
@@ -156,12 +174,17 @@ and your clearest proof-of-value signal — note whether it happens unprompted.
 
 **PO — within 2 hours of the session, manually:** 🔧
 
-- Turn count and whether the session completed, or which `FailureStage` was hit.
-- STT sanity: did Sarvam actually transcribe her, or did it return mush? Elderly speech in a
-  regional language is where this breaks first.
-- Story atoms extracted > 0, and the memory card generated *and delivered*.
-- Read the transcript end to end. Once per family, on day 1. You are looking for tone, not
-  metrics — did it feel like a conversation or an intake form?
+Run `python -m scripts.session_health --user-id …` on the box (numbers only; see
+"Reading what she said" below) and check:
+
+- Turn count and how the session ended, and any turn failures by stage.
+- STT sanity, from the counts: her messages have a sensible length (an average of a few
+  characters means Sarvam heard little), and most turns were heard in her own language.
+  Elderly speech in a regional language is where this breaks first.
+- Story atoms extracted > 0, with a 5W average, and the memory card generated *and
+  delivered*.
+- Whether it felt like a conversation is not judged by reading her. Ask the child on the
+  day-2 call how she found it, and ask her the same, through the child.
 
 *Replaced by: T1 cohort table + family detail.*
 
@@ -215,8 +238,9 @@ said. A survey from the operator breaks the fiction that Katha is her conversati
 
 **Session ~5 — the Layer 3 thinning.** `retrieve_relevant` returns `top_k=5` by recency, so
 once atoms span more than five domains the earliest domain drops out of the prompt entirely.
-🔧 Read the assembled Layer 3 block at session 5 and check `childhood` is still in it. If it
-has vanished, that is T5's trigger firing — do T5 before family #2.
+🔧 At session 5, run `scripts.session_health`: its last line says which life domains have
+dropped out of the newest five atoms Layer 3 receives. If any have, that is T5's trigger
+firing — do T5 before more families join. No one reads the Layer 3 block itself.
 
 **Session 10 — the free limit.** Pilot families are on the `pilot` plan (pre-flight step 5)
 and never reach it; check with `python -m scripts.set_plan --user-id … --plan pilot --by
@@ -237,9 +261,10 @@ answered until tomorrow.
 
 - Sessions completed this week vs scheduled; note the trend, not the number.
 - Domain spread — is Katha circling one chapter?
-- 🔧 Validate 10 story atoms against their source transcript, correct/incorrect. Across the
-  cohort this accumulates toward the **50-atom manual validation** the go/no-go gate needs.
-  *Replaced by: T6 review queue.*
+- Atoms per session and their 5W average (`session_health`). Extraction accuracy is not
+  checked by reading her atoms against her transcripts: it is measured on the eval cases
+  (TC-01, TC-02, TC-06, TC-08) and on the team's own self-trial conversations (see the
+  gate below).
 - One line in the family's notes: what changed this week, in plain language.
 
 **Child:** dashboard visit at least once; forwards at least one card. If she has not opened
@@ -260,18 +285,19 @@ listen.
 
 ## Conversation cards — the operator's daily part
 
-For families with cards on (`scripts/cards.py --show` lists them):
+For families with cards on (`scripts/cards.py --show` lists them). No one at Katha reads a
+card: Katha writes it, checks it against her words, reads it to her, and only her "yes"
+sends it (operator review is off, `CARDS_OPERATOR_REVIEW=false`).
 
-- **Review waiting cards within 24 hours** at `/admin/cards/view` (same token as the
-  metrics page), opened through the SSH tunnel: the public host refuses `/admin`
-  (`docs/DEPLOYMENT.md`, "Operator pages"). An alert goes to `OPERATOR_EMAIL` when one is waiting. Read the card
-  against her words beside it; approve, edit (it is checked again), or reject with a
-  reason. Approving sends nothing to the family: she hears it read first.
-- **Held questions** from the child are on the same page. Release a question you are
-  comfortable with her hearing; drop the rest. The child is never told one was held.
-- **Tag the calls.** When she mentions, unprompted, that her child called about a card,
-  tag that card "brought_up" on the same page. It is the metric that matters most and
-  the only one a person has to record.
+- **Watch the counts**, not the cards: the conversation cards section of the metrics page
+  shows how many were written, offered, approved, declined and delivered, and any that
+  failed. A card stuck unoffered for days, or deliveries failing, is a fault to fix.
+- **Questions from the child** that the screen marks sensitive are not shown to you. She is
+  asked, without the topic, whether she would like to hear a question her child sent, and
+  decides. `/admin/cards/view` shows only their ids and how many times she was asked.
+- **Calls she brought up.** The "brought_up" tag needed someone to notice in her
+  conversation that she mentioned the call, so it is not recorded any more. Ask the child
+  instead, on the weekly check-in: "did a card start a call this week?"
 - **"Never share."** If she says not to share, every unsent card is withdrawn and you get
   an email. Talk to the family; nothing automatic tells them (spec Q2).
 
@@ -312,7 +338,7 @@ Tracked per family, decided across the cohort (`docs/PLAN.md` §MVP Go/No-Go):
 |---|---|
 | ≥50% complete 10+ sessions | Did she reach session 10 |
 | ≥70% of children open a card | Did the child open at least one |
-| ≥75% extraction accuracy | Their share of the 50 validated atoms |
+| ≥75% extraction accuracy | Not from this family: measured on the eval cases and the team's self-trial conversations (no one reads a family's atoms) |
 | No critical WhatsApp/STT failures | Failure log for the month |
 | Evals ≥80% TC-01–TC-10 | Re-run after any prompt change made for this family |
 
