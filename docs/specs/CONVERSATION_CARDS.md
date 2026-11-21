@@ -301,7 +301,7 @@ Each question goes through one `claude-haiku-5-5` call:
 | Label | Examples | What happens | Reply to the child (free-form, inside the window) |
 |---|---|---|---|
 | `ok` | "Which film was it?" "What was Ammachi like?" | Queued | *"Thank you. I'll ask Amma when we next talk. If she's happy to share her answer, it will come to you as a card."* |
-| `sensitive` | Property, money, inheritance, health, old family conflicts | Held for the operator, who releases or drops it | Same as `ok`. The child isn't told it was held |
+| `sensitive` | Property, money, inheritance, health, old family conflicts | Held. With operator review off (the default since 2026-11-15), Katha asks her, without saying what it is, whether she would like to hear it (`docs/specs/STORIES.md` §6c); with review on, the operator releases or drops it | Same as `ok`. The child isn't told it was held, or whether she heard it |
 | `correction` | "It was Chennai, not Kumbakonam" | Not relayed | *"Katha keeps Amma's stories in her own words, so we don't pass on corrections, but it could be a lovely thing to ask her about on your call."* |
 | `reaction` | "I never knew this!" "❤️" | Relayed as a reaction (§10.3) | *"I'll let Amma know."* |
 | `other` | Support questions, "stop" | Not relayed. "Stop" turns off cards for that channel | A short helpful reply, or the opt-out confirmation |

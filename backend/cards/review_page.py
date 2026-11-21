@@ -9,7 +9,8 @@ With CARDS_OPERATOR_REVIEW off (the default since 2026-11-15, STORIES.md
 §6c), no one at Katha reads a family's cards, so the page shows ids, states
 and dates only: no title, card text, image, fidelity sentences or what she
 said. The full review view returns only if review is turned back on.
-Held child questions are shown either way (a separate decision).
+Held child questions are listed by id only too: she decides whether to
+hear each one.
 """
 
 from __future__ import annotations
@@ -149,9 +150,22 @@ def _waiting(item: dict, image_url: str | None, csrf: str) -> str:
 </div></section>"""
 
 
-def _held(questions, csrf: str) -> str:
+def _held(questions, csrf: str, show_content: bool = True) -> str:
     if not questions:
         return "<p class=note>None.</p>"
+    if not show_content:
+        # She decides whether to hear it (STORIES.md §6c): never read here.
+        rows = "".join(
+            f"<tr><td>{_e(q.user_id)}</td><td>{_e(q.id)}</td><td>{_e(q.channel)}</td>"
+            f"<td>{_e(q.created_at)}</td><td>{_e(q.parent_offers or 0)}</td></tr>"
+            for q in questions
+        )
+        return (
+            "<p class=note>Katha asks her whether she would like to hear each one; "
+            "nobody here reads them.</p><div class=scroll><table><tr><th>user</th>"
+            "<th>question</th><th>via</th><th>received</th><th>times offered</th>"
+            f"</tr>{rows}</table></div>"
+        )
     rows = []
     for q in questions:
         base = f"/admin/questions/{escape(str(q.id))}"
@@ -266,6 +280,6 @@ def render(
 {flash_html}
 <h2>Waiting for review ({len(queue["waiting"])})</h2>{waiting}
 <h2>Child questions held by screening ({len(queue["held_questions"])})</h2>
-{_held(queue["held_questions"], csrf)}
+{_held(queue["held_questions"], csrf, show_content)}
 <h2>Recent cards</h2>{_recent(queue["recent"], csrf, show_content)}
 </main></body></html>"""

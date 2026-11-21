@@ -336,7 +336,9 @@ async def test_once_she_has_it_the_operator_cannot_change_it(real_db, client):
 # ── held questions and the call tag ──────────────────────────────────────────
 
 
-async def test_a_held_question_is_released_or_dropped(real_db, client):
+async def test_a_held_question_is_released_or_dropped(real_db, client, monkeypatch):
+    """With operator review on, the operator reads and releases it."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
     ids = []
     for _ in range(2):
         q = FamilyQuestion(
@@ -365,6 +367,26 @@ async def test_a_held_question_is_released_or_dropped(real_db, client):
         for i in ids
     ]
     assert statuses == ["released", "dropped"]
+
+
+async def test_with_review_off_a_held_question_is_not_shown(
+    real_db, client, monkeypatch
+):
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    q = FamilyQuestion(
+        id=uuid.uuid4(),
+        user_id="rev-q2",
+        channel="whatsapp",
+        raw_text="Who gets the farm?",
+        screening="sensitive",
+        status="held",
+    )
+    real_db.add(q)
+    await real_db.commit()
+    html = (await client.get("/admin/cards/view", headers=AUTH)).text
+    assert "Who gets the farm?" not in html
+    assert str(q.id) in html
+    assert f"/admin/questions/{q.id}/release" not in html
 
 
 async def test_only_a_sent_card_can_be_tagged(real_db, client):

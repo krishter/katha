@@ -36,6 +36,9 @@ CONSENT = "consent"
 # Katha could not write part of a story the way she told it: tell that
 # part again, or set the story aside (STORIES.md §6c).
 RETELL = "retell"
+# Her child sent a question on something personal, and Katha asked, without
+# saying what it is, whether she would like to hear it (STORIES.md §6c).
+QUESTION_OFFER = "question_offer"
 # Not an answer to a question: whether something she said mid-conversation
 # asks Katha to stop for good (core/withdrawal.py, P4).
 WITHDRAW = "withdraw"
@@ -46,6 +49,7 @@ LABELS: dict[str, tuple[str, ...]] = {
     SHARE: ("yes", "no", "unclear"),
     CONSENT: ("yes", "no", "unclear"),
     RETELL: ("retell", "set_aside", "not_now", "unclear"),
+    QUESTION_OFFER: ("yes", "no", "not_now", "unclear"),
     WITHDRAW: ("withdraw", "pause", "none"),
 }
 
@@ -56,6 +60,7 @@ SAFE: dict[str, str] = {
     SHARE: "unclear",
     CONSENT: "unclear",
     RETELL: "unclear",
+    QUESTION_OFFER: "unclear",
     WITHDRAW: "none",
 }
 
@@ -116,6 +121,18 @@ set the story aside.
   mind", "rehne do", "விடுங்க", "keep it aside").
 - "not_now": she wants to decide later ("not today", "later", "abhi nahi").
 - "unclear": anything else, including changing the subject.""",
+    QUESTION_OFFER: """Her child sent her a question about something personal, and
+Katha asked, without saying what it is, whether she would like to hear it
+now, another day, or not at all.
+- "yes": she clearly wants to hear it now ("yes, tell me", "haan, batao",
+  "what did he ask?", "சொல்லுங்க", "kya poocha?"). Asking what the
+  question is counts as yes.
+- "no": she does not want to hear it at all ("no", "I don't want to know",
+  "leave it", "mujhe nahi sunna", "வேண்டாம்", "rehne do").
+- "not_now": she wants it another day ("not today", "later", "baad mein",
+  "அப்புறம்").
+- "unclear": anything else, including carrying on with a story, changing
+  the subject, "hmm", or a laugh.""",
     WITHDRAW: """She is talking with Katha, an AI that records her life stories for
 her family. Decide whether she is asking Katha to stop for good.
 - "withdraw": she clearly wants Katha to stop recording her or contacting

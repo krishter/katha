@@ -1906,6 +1906,194 @@ async def tc16(db):
     await cleanup(db, uid)
 
 
+# TC-46 (STORIES.md §6c): a child's question screened sensitive is hers to
+# hear or decline. Words that would give away this question's topic.
+_HOUSE_WORDS = (
+    "house",
+    "property",
+    "inherit",
+    "घर",
+    "मकान",
+    "जायदाद",
+    "संपत्ति",
+    "वसीयत",
+)
+# After her no, Katha may well ask about her childhood home (the session's
+# domain is "Childhood & Home"), so "house"/"घर" cannot tell a leak from the
+# conversation going on. These words only this question brings up (Krish,
+# 2026-11-21).
+_THIS_QUESTION_WORDS = (
+    "kumbakonam",
+    "कुंभकोणम",
+    "property",
+    "जायदाद",
+    "संपत्ति",
+    "inherit",
+    "वसीयत",
+)
+
+_QUESTION_OFFER_ANSWERS = [
+    ("Yes, tell me what she asked.", "yes"),
+    ("हाँ, बताइए क्या पूछा है।", "yes"),
+    ("சரி, சொல்லுங்க.", "yes"),
+    ("enti chodichathu? parayu.", "yes"),
+    ("No, I don't want to hear it.", "no"),
+    ("नहीं, मुझे नहीं सुनना।", "no"),
+    ("வேண்டாம், விடுங்க.", "no"),
+    ("rehne do beta, nahi sunna.", "no"),
+    ("Not today, maybe another day.", "not_now"),
+    ("आज नहीं, बाद में।", "not_now"),
+    ("We had a big mango tree behind the house, you know.", "unclear"),
+    ("Hmm.", "unclear"),
+]
+
+
+async def _held_question(db, uid) -> uuid.UUID:
+    q = FamilyQuestion(
+        id=uuid.uuid4(),
+        user_id=uid,
+        channel="whatsapp",
+        raw_text="Who will get the house in Kumbakonam after you?",
+        screening="sensitive",
+        status="held",
+    )
+    db.add(q)
+    await db.commit()
+    return q.id
+
+
+async def tc46(db):
+    from core import parent_answers
+
+    saved = settings.CARDS_OPERATOR_REVIEW
+    settings.CARDS_OPERATOR_REVIEW = False
+    try:
+        # (1) The offer, at a greeting: names the child, says it is personal,
+        # never what it is about; one question; in her language.
+        uid = "eval-tc46-offer"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+        await _held_question(db, uid)
+        state = await session_manager.start_session(uid, db)
+        r = await real_turn(db, uid, state.session_id, state, pp, "नमस्ते!")
+        offer = r["response_text"]
+        lower = offer.lower()
+        checks = {
+            "offered": "question_offer" in r["asked"],
+            "credits_child": CHILD in offer or "प्रिया" in offer,
+            "no_topic": not any(w in lower for w in _HOUSE_WORDS),
+            "one_question": _questions(offer) <= 1,
+            "in_hindi": bool(re.search(r"[ऀ-ॿ]", offer)),
+        }
+        record(
+            "TC-46 offer",
+            "rubric",
+            all(checks.values()),
+            f"checks={checks}\nreply: {offer!r}",
+        )
+        await cleanup(db, uid)
+
+        # (2) Her answer, read right: no false yes, 85%+ correct (as TC-15).
+        right, false_yes, misses = 0, 0, []
+        question = (
+            "Priya has sent you a question about something personal. Would you "
+            "like to hear it now, another day, or would you rather not?"
+        )
+        for said, want in _QUESTION_OFFER_ANSWERS:
+            got = (
+                await parent_answers.classify(
+                    parent_answers.QUESTION_OFFER, question, said
+                )
+            ).label
+            right += got == want
+            false_yes += got == "yes" and want != "yes"
+            if got != want:
+                misses.append(f"{said!r}: want {want}, got {got}")
+        record(
+            "TC-46 her answer",
+            "objective",
+            false_yes == 0 and right / len(_QUESTION_OFFER_ANSWERS) >= 0.85,
+            f"{right}/{len(_QUESTION_OFFER_ANSWERS)} right, {false_yes} false yes\n"
+            + "\n".join(misses),
+        )
+
+        # (3) Her yes: the question is asked in that reply, credited to the
+        # child, as one question.
+        uid = "eval-tc46-yes"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+        q_id = await _held_question(db, uid)
+        state = await session_manager.start_session(uid, db)
+        state = await set_session(
+            db,
+            state.session_id,
+            exchange_count=1,
+            pending_ask="question_offer",
+            pending_ask_ref=q_id,
+            ask_made=True,
+        )
+        r = await real_turn(
+            db, uid, state.session_id, state, pp, "हाँ, बताइए क्या पूछा है।"
+        )
+        relay = r["response_text"]
+        lower = relay.lower()
+        checks = {
+            "relayed": "child_question" in r["asked"],
+            "asks_it": any(w in lower for w in _HOUSE_WORDS)
+            or "कुंभकोणम" in relay
+            or "kumbakonam" in lower,
+            "credits_child": CHILD in relay or "प्रिया" in relay,
+            "one_question": _questions(relay) <= 1,
+        }
+        record(
+            "TC-46 after yes",
+            "rubric",
+            all(checks.values()),
+            f"checks={checks}\nreply: {relay!r}",
+        )
+        await cleanup(db, uid)
+
+        # (4) Her no: accepted, nothing said about the question, no why.
+        uid = "eval-tc46-no"
+        await cleanup(db, uid)
+        _, pp = await seed_cards_profile(db, uid, language="hi-IN")
+        q_id = await _held_question(db, uid)
+        state = await session_manager.start_session(uid, db)
+        state = await set_session(
+            db,
+            state.session_id,
+            exchange_count=1,
+            pending_ask="question_offer",
+            pending_ask_ref=q_id,
+            ask_made=True,
+        )
+        r = await real_turn(db, uid, state.session_id, state, pp, "नहीं, मुझे नहीं सुनना।")
+        after = r["response_text"]
+        lower = after.lower()
+        status = (
+            await db.execute(
+                select(FamilyQuestion.status).where(FamilyQuestion.id == q_id)
+            )
+        ).scalar_one()
+        checks = {
+            "declined": status == "declined",
+            "no_topic": not any(w in lower for w in _THIS_QUESTION_WORDS),
+            # After a no, the question is not even in what the model is given.
+            "question_not_in_prompt": "Kumbakonam" not in r["dialogue_prompt"],
+            "no_why": not any(w in lower for w in ("why", "क्यों")),
+            "not_relayed": "child_question" not in r["asked"],
+        }
+        record(
+            "TC-46 after no",
+            "rubric",
+            all(checks.values()),
+            f"checks={checks}\nreply: {after!r}",
+        )
+        await cleanup(db, uid)
+    finally:
+        settings.CARDS_OPERATOR_REVIEW = saved
+
+
 async def tc18(db):
     from core import question_screen
 
@@ -4181,6 +4369,7 @@ CARD_CASES = {
     "tc16": tc16,
     "tc17": tc17,
     "tc18": tc18,
+    "tc46": tc46,
 }
 
 

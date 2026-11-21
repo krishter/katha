@@ -63,10 +63,21 @@ STORY_READBACK_OFFER = "story_readback_offer"
 STORY_READBACK = "story_readback"
 RETELL_OFFER = "retell_offer"
 RETELLING = "retelling"
+# A child's question screened sensitive, put to her before it is read
+# (STORIES.md §6c): would she like to hear it now, another day, or not?
+QUESTION_OFFER = "question_offer"
 REACTION = "reaction"  # not an ask (§9.2): it rides along with anything
-ASK_KINDS = (SHARE, READBACK_OFFER, CHILD_QUESTION, STORY_READBACK_OFFER, RETELL_OFFER)
+ASK_KINDS = (
+    SHARE,
+    READBACK_OFFER,
+    CHILD_QUESTION,
+    STORY_READBACK_OFFER,
+    RETELL_OFFER,
+    QUESTION_OFFER,
+)
 
 MAX_READBACK_OFFERS = 3  # D9
+MAX_QUESTION_OFFERS = 3  # the same for a sensitive question (§6c)
 QUESTION_EXPIRY = timedelta(days=21)  # §10.2
 FIRST_SHARE_SESSION = 2  # §5.1: session 1 is for trust
 SECOND_SHARE_SESSION = 4
@@ -440,14 +451,14 @@ async def _waiting_questions(user_id: str, db, now: datetime):
             await db.execute(
                 select(FamilyQuestion)
                 .where(FamilyQuestion.user_id == user_id)
-                .where(FamilyQuestion.status.in_(("pending", "released")))
+                .where(FamilyQuestion.status.in_(("pending", "released", "held")))
                 .order_by(FamilyQuestion.created_at)
             )
         )
         .scalars()
         .all()
     )
-    questions, reactions = [], []
+    questions, reactions, sensitive = [], [], []
     for q in rows:
         created = q.created_at or now
         if q.kind == "question" and now - created > QUESTION_EXPIRY:
@@ -455,9 +466,18 @@ async def _waiting_questions(user_id: str, db, now: datetime):
             continue
         if q.kind == "reaction":
             reactions.append(q)
+        elif q.status == "held":
+            # With operator review on, an operator releases it. Off (the
+            # default), she decides, up to MAX_QUESTION_OFFERS times.
+            if settings.CARDS_OPERATOR_REVIEW:
+                continue
+            if (q.parent_offers or 0) >= MAX_QUESTION_OFFERS:
+                q.status = "expired"
+                continue
+            sensitive.append(q)
         elif q.status == "released" or q.screening == "ok":
             questions.append(q)
-    return questions, reactions
+    return questions, reactions, sensitive
 
 
 def _timing(exchange_count: int, goal_met: bool, what: str) -> Optional[str]:
@@ -524,6 +544,11 @@ async def before_dialogue(
         elif pending == RETELLING:
             kind, item = await _retell_item(ref, db)
             await _answer_retelling(kind, item, plan)
+        elif pending == QUESTION_OFFER:
+            question = (
+                await db.execute(select(FamilyQuestion).where(FamilyQuestion.id == ref))
+            ).scalar_one_or_none()
+            await _answer_question_offer(question, transcript, child, plan)
         # CHILD_QUESTION: her answer is ordinary conversation (§10.3).
         session.ask_outcome = plan.outcome
 
@@ -532,7 +557,7 @@ async def before_dialogue(
         return plan
 
     # Reactions ride along with anything (§9.2).
-    questions, reactions = await _waiting_questions(user_id, db, now)
+    questions, reactions, sensitive = await _waiting_questions(user_id, db, now)
     if reactions:
         reaction = reactions[0]
         card = await _card(reaction.card_id, db)
@@ -547,7 +572,7 @@ async def before_dialogue(
         plan.reaction_ids = [reaction.id]
 
     if not session.ask_made and not session.pending_ask:
-        await _plan_ask(plan, session, profile, questions, child, now, db)
+        await _plan_ask(plan, session, profile, questions, sensitive, child, now, db)
 
     if session.goal_met:
         # §5.3: the recap closes her loop every session, card or no card.
@@ -562,7 +587,9 @@ async def before_dialogue(
     return plan
 
 
-async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
+async def _plan_ask(
+    plan, session, profile, questions, sensitive, child, now, db
+) -> None:
     """§9.2 priority: the sharing question when due; then whichever of a
     card, a Story (STORIES.md D-b) and a child's question has waited
     longest."""
@@ -590,12 +617,14 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
     card = await _waiting_card(profile.user_id, db)
     story = await story_asks.waiting_story(profile, db)
     question = questions[0] if questions else None
+    held = sensitive[0] if sensitive else None
     retell_story = await story_asks.waiting_retelling(profile, db)
     retell_card = await _waiting_retell_card(profile.user_id, db)
     waiting = [
         (card.operator_reviewed_at or card.created_at or now, "card") if card else None,
         (story_asks.waiting_since(story) or now, "story") if story else None,
         (question.created_at or now, "question") if question else None,
+        (held.created_at or now, "sensitive_question") if held else None,
         (
             (story_asks.waiting_since_correction(retell_story) or now, "retell_story")
             if retell_story
@@ -617,6 +646,10 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
     card = card if kind == "card" else None
     story = story if kind == "story" else None
     question = question if kind == "question" else None
+
+    if kind == "sensitive_question":
+        _plan_question_offer(plan, session, held, child)
+        return
 
     if kind in ("retell_story", "retell_card"):
         item = retell_story if kind == "retell_story" else retell_card
@@ -664,23 +697,80 @@ async def _plan_ask(plan, session, profile, questions, child, now, db) -> None:
         return
 
     if question is not None:
-        plan.offered = CHILD_QUESTION
-        plan.offered_ref = question.id
-        plan.tag_kinds.append(CHILD_QUESTION)
         when = (
             "in this closing exchange"
             if session.goal_met
             else "at a natural pause, when the user has finished telling "
             "something, never in the middle of a story"
         )
+        _plan_relay(plan, question, child, when)
+
+
+def _plan_relay(plan: TurnPlan, question, child: str, when: str) -> None:
+    """Pass the child's question on, credited to them (§10.3)."""
+    plan.offered = CHILD_QUESTION
+    plan.offered_ref = question.id
+    plan.tag_kinds.append(CHILD_QUESTION)
+    plan.layer4.append(
+        f'{child} sent a question for the user: "{question.text}". Pass it on '
+        f"{when}, saying it comes from {child}, in the user's language. It is "
+        "the only question in this reply: if you pass it on, ask no question "
+        "of your own before or after it. Never present it as your own "
+        "curiosity. If they would rather not answer, accept that warmly and "
+        "move on; never press, and never say anything will be passed back. "
+        f"If you ask it, add {CHILD_QUESTION} to the <asked> tag."
+    )
+
+
+def _plan_question_offer(plan: TurnPlan, session, question, child: str) -> None:
+    """STORIES.md §6c: a question screened sensitive is hers to hear or not.
+    Katha says only that it is personal, never what it is about."""
+    what = (
+        f"a gentle question: {child} sent them a question about something "
+        "personal, and would they like to hear it now, another day, or not at "
+        f'all? For example: "{child} has sent you a question about something '
+        "personal. Would you like to hear it now, another day, or would you "
+        'rather not?"'
+    )
+    timing = _timing(session.exchange_count, session.goal_met, what)
+    if not timing:
+        return
+    plan.offered = QUESTION_OFFER
+    plan.offered_ref = question.id
+    plan.tag_kinds.append(QUESTION_OFFER)
+    plan.layer4.append(
+        f"{timing} Say nothing about what the question is about: not its "
+        "topic, a word from it, or a guess. Make clear that not hearing it is "
+        "perfectly all right. It is the only question in this reply. If you "
+        f"ask, add {QUESTION_OFFER} to the <asked> tag."
+    )
+
+
+async def _answer_question_offer(question, transcript, child, plan: TurnPlan) -> None:
+    if question is None or question.status != "held":
+        return
+    result = await parent_answers.classify(
+        parent_answers.QUESTION_OFFER,
+        f"{child} has sent you a question about something personal. Would you "
+        "like to hear it now, another day, or would you rather not?",
+        transcript,
+    )
+    label = result.label
+    plan.outcome = f"question_offer_{label}"
+    if label == "yes":
+        question.status = "released"
+        _plan_relay(plan, question, child, "now, in this reply, since they asked")
+    elif label == "no":
+        question.status = "declined"
         plan.layer4.append(
-            f'{child} sent a question for the user: "{question.text}". Pass it on '
-            f"{when}, saying it comes from {child}, in the user's language. It is "
-            "the only question in this reply: if you pass it on, ask no question "
-            "of your own before or after it. Never present it as your own "
-            "curiosity. If they would rather not answer, accept that warmly and "
-            "move on; never press, and never say anything will be passed back. "
-            f"If you ask it, add {CHILD_QUESTION} to the <asked> tag."
+            "The user would rather not hear the question. Say that is perfectly "
+            "all right in a few words, without asking why and without saying "
+            "anything about the question, then carry on."
+        )
+    elif label == "not_now":
+        plan.layer4.append(
+            "The user would like to hear the question another day. Say that is "
+            "fine in a few words and carry on."
         )
 
 
@@ -756,6 +846,14 @@ async def after_dialogue(
                 item.readback_offers = (item.readback_offers or 0) + 1
         elif plan.offered == CHILD_QUESTION:
             await _mark_asked(plan.offered_ref, session_id, now, db)
+        elif plan.offered == QUESTION_OFFER:
+            question = (
+                await db.execute(
+                    select(FamilyQuestion).where(FamilyQuestion.id == plan.offered_ref)
+                )
+            ).scalar_one_or_none()
+            if question is not None:
+                question.parent_offers = (question.parent_offers or 0) + 1
     if REACTION in asked:
         for reaction_id in plan.reaction_ids:
             await _mark_asked(reaction_id, session_id, now, db)

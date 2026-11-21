@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,8 @@ STATUSES = (
     "asked",
     "expired",
     "not_relayed",
+    # A sensitive question she chose not to hear (STORIES.md §6c).
+    "declined",
 )
 
 
@@ -71,6 +73,11 @@ class FamilyQuestion(Base):
     )
     asked_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # A sensitive question is put to her before it is read: how many times
+    # Katha has asked whether she would like to hear it (cards/asks.py).
+    parent_offers: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
     )
     # The WhatsApp message it came in, so a webhook Twilio retries is not
     # queued twice. None for email.

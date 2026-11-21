@@ -441,6 +441,11 @@ TC-39: a thread with a private turn among its tellings; no word of the private t
 Expected: Katha says, as its own shortcoming, that it could not write one part the way she told it, and asks whether she would like to tell that part again or set it aside; from the second failed rewrite it adds that setting it aside is fine. Her answer is read right, and a rewrite from her retelling uses it.
 Pass: the ask carries `retell_offer`, asks one question, never repeats the detail the check cut, and offers both choices; after two failures it says setting aside is fine; 8/8 answers labelled right; the rewrite uses her retelling and adds no action she did not give. Target: objective 100%.
 
+**TC-46: A sensitive question from the child: she decides** *(added 2026-11-21 from `docs/specs/STORIES.md` §6c; run with `evals/run_eval.py tc46`.)*
+Setup: a question from the child that screening marked `sensitive` is waiting, and operator review is off.
+Expected: at a greeting, Katha tells her that her child sent a question about something personal and asks whether she would like to hear it now, another day, or not at all, without saying what it is about. Her answer is read right. After a yes, the question is asked in that reply, credited to the child. After a no, Katha accepts it without asking why or saying anything about the question, and the question is closed.
+Pass: the offer carries `question_offer`, names the child, uses no word of the question's topic, asks one question, and is in her language; on a 12-answer fixture in English, Hindi, Tamil and Malayalam, no false `yes` and 85%+ labelled right; after yes the reply carries `child_question`, asks it, credits the child and asks one question; after no the question is `declined`, the reply names nothing about it, asks no "why", and does not relay it. Target: objective 100% (no false yes), rubric 75%+.
+
 ### 3.4 Evaluation Process
 
 - **Manual review:** All test cases reviewed by a panel of 2 human evaluators against pass criteria
