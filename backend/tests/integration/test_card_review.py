@@ -157,7 +157,11 @@ async def test_a_post_without_the_csrf_token_is_refused(real_db, client):
 # ── the page ─────────────────────────────────────────────────────────────────
 
 
-async def test_the_page_shows_the_card_its_sources_and_escapes_them(real_db, client):
+async def test_the_page_shows_the_card_its_sources_and_escapes_them(
+    real_db, client, monkeypatch
+):
+    """With operator review on, the page is the full review view."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", True)
     made = await make_card(real_db)
     page = await client.get("/admin/cards/view", headers=AUTH)
     assert page.status_code == 200
@@ -170,6 +174,32 @@ async def test_the_page_shows_the_card_its_sources_and_escapes_them(real_db, cli
     # Her words are shown, escaped.
     assert "&lt;b&gt;and&lt;/b&gt;" in html and "<b>and</b>" not in html
     assert review.csrf_token() in html
+
+
+async def test_with_review_off_the_page_shows_no_family_content(
+    real_db, client, monkeypatch
+):
+    """STORIES.md §6c: no one at Katha reads a family's cards. With review
+    off (the default) the page lists ids, states and dates, never what a
+    card says or what she said, and presigns no image."""
+    monkeypatch.setattr("config.settings.CARDS_OPERATOR_REVIEW", False)
+    waiting = await make_card(real_db)
+    recent = await make_card(real_db, status="awaiting_parent")
+    page = await client.get("/admin/cards/view", headers=AUTH)
+    assert page.status_code == 200
+    html = page.text
+    for words in (
+        "The walk to the talkies",  # title
+        "six kilometres",  # hook and excerpt
+        "What do you remember",  # call prompt
+        "நீங்கள்",  # read-back
+        "Left out which film.",  # held-back note
+        "talkies",  # her transcript
+        "s3.test",  # the card image
+    ):
+        assert words not in html, f"{words!r} is on the page with review off"
+    assert str(waiting.card_id) in html and str(recent.card_id) in html
+    assert "Operator review is off" in html
 
 
 # ── approve / reject ─────────────────────────────────────────────────────────

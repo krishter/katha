@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards import review, review_page
+from config import settings
 from core.auth import require_admin_token_browser
 from media import storage
 from models.db import get_db
@@ -42,8 +43,11 @@ def _check_csrf(csrf: str) -> None:
 @router.get("/admin/cards/view")
 async def view(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
     queue = await review.review_queue(db)
+    # Review off: no one reads a family's cards, so the page is ids and
+    # states only and no image is presigned (STORIES.md §6c).
+    show_content = settings.CARDS_OPERATOR_REVIEW
     urls = {}
-    for item in queue["waiting"]:
+    for item in queue["waiting"] if show_content else []:
         card = item["card"]
         if card.image_s3_key:
             try:
@@ -52,7 +56,8 @@ async def view(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResp
                 logger.exception("Could not presign card image %s", card.id)
     flash = request.query_params.get("flash", "")
     return HTMLResponse(
-        review_page.render(queue, urls, review.csrf_token(), flash), headers=_HEADERS
+        review_page.render(queue, urls, review.csrf_token(), flash, show_content),
+        headers=_HEADERS,
     )
 
 

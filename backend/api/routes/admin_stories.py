@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards.review import csrf_ok, csrf_token
+from config import settings
 from core.auth import require_admin_token_browser
 from models.db import get_db
 from stories import review, review_page
@@ -47,7 +48,11 @@ async def view(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResp
     queue = await review.review_queue(db)
     flash = request.query_params.get("flash", "")
     return HTMLResponse(
-        review_page.render(queue, csrf_token(), flash), headers=_HEADERS
+        # Review off: ids and states only (STORIES.md §6c).
+        review_page.render(
+            queue, csrf_token(), flash, settings.STORIES_OPERATOR_REVIEW
+        ),
+        headers=_HEADERS,
     )
 
 
