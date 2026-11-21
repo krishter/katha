@@ -10,7 +10,7 @@
 ## 1. Where we are
 
 - **Phase A ran on 2026-11-07,** over one pilot parent's 11 conversations. It found 14 incidents and 3 complete Stories. All 3 passed the fidelity check. Of the 9 open threads, 8 had no turn: the conversation never asked what happened next.
-- **#66 changed the conversation to fix that.** Katha now follows an incident to its end and doesn't close mid-story. Whether more incidents now finish shows up in the Phase A rerun on new sessions, around 2026-11-24 (`FINISHING_STORIES.md` §5, target D1 40%).
+- **#66 changed the conversation to fix that.** Katha now follows an incident to its end and doesn't close mid-story. Whether more incidents now finish shows up in the Phase A rerun on new sessions, around 2026-11-24 (`FINISHING_STORIES.md` §5, target D1 40%). The rerun reports counts only for a family; no one reads its Stories.
 - **The proposal's read-back now exists, built for cards.** Cards already do most of what Stories need on the parent's side:
 
 | Stories needs (proposal) | Already built for cards |

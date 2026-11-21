@@ -576,7 +576,7 @@ Mitigation: Metro-first strategy targets highest-density addressable segment. B2
 
 **What we measure:**
 - Session completion rate
-- Story extraction quality (manual review of first 50 story atoms)
+- Story extraction quality (manual review of first 50 story atoms). *Changed 2026-11-21: on the eval cases and the team's self-trial conversations, not pilot families' atoms; no one at Katha reads a family's conversations.*
 - Drop-off points and reasons (exit interviews at Day 7 and Day 30)
 - Family dashboard engagement
 - Qualitative: "What did you like / dislike? What confused you?"
@@ -584,7 +584,7 @@ Mitigation: Metro-first strategy targets highest-density addressable segment. B2
 **Go/No-Go criteria for Phase 1 launch:**
 - ≥50% of pilot users complete 10+ sessions
 - ≥70% of adult child accounts open at least one memory card
-- Story extraction accuracy ≥75% (manual validation)
+- Story extraction accuracy ≥75% (manual validation, on eval and self-trial data; see above)
 - No critical WhatsApp API issues or Sarvam STT failures in normal operation
 
 ### 12.2 Phase 1 Launch (Months 3–6)

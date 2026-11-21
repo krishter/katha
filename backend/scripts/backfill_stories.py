@@ -7,9 +7,10 @@ Run the Stories consolidation pass over one family's past sessions (D-c).
 
 Without --write it only lists the sessions it would read. With --write it
 runs stories/consolidate.py over each, oldest first, exactly as after a
-live session: threads and pending Stories are written, each Story waits
-for the operator, and nothing is offered to her until her family's
-stories switch is on. A session already consolidated is skipped, so a
+live session: threads and Stories are written, and nothing is offered to
+her until her family's stories switch is on. No one at Katha reads them
+(operator review is off); she hears each one and decides. It logs counts
+only. A session already consolidated is skipped, so a
 second run only picks up what the first missed.
 
 The LLM calls are real and billed (about ₹3 a session, STORIES.md §2.1).
@@ -81,7 +82,11 @@ async def run(args) -> int:
                 outcome.new_threads,
                 len(outcome.promoted),
             )
-        logger.info("Done: %d Story(ies) waiting at /admin/stories/view", promoted)
+        logger.info(
+            "Done: %d Story(ies) made, to be offered to her once her family's "
+            "stories switch is on",
+            promoted,
+        )
     return 0
 
 

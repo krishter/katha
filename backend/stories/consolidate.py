@@ -4,11 +4,13 @@ The consolidation pass after a session (docs/specs/STORIES.md §2.1).
 Groups what she told today by incident, carrying her open threads forward
 so an incident begun last week can be finished today. A thread whose arc is
 complete, and whose draft survives the fidelity check, becomes a Story with
-a read-back in her language, waiting for the operator (D-a).
+a read-back in her language, ready to be offered to her (STORIES.md §6c:
+no one at Katha reviews it). With STORIES_OPERATOR_REVIEW on, it waits for
+the operator first (D-a, off in production since 2026-11-15).
 
 Private turns are never sent to the model, and nothing here reaches the
-family: the furthest a Story gets is "waiting for the operator". Runs off
-the critical path after a session. Logs and never raises.
+family: a Story leaves only after she hears it and says yes. Runs off the
+critical path after a session. Logs and never raises.
 """
 
 from __future__ import annotations
@@ -290,8 +292,10 @@ async def write_readback_for(
     row: Story, user_id: str, profile: UserProfileModel, db: AsyncSession
 ) -> None:
     """Write and check her read-back, then fingerprint what she will hear.
-    A failed check leaves the Story with the operator; it cannot be passed
-    until a read-back passes (stories/review.py)."""
+    A failed check means she is never offered it: with no review it is set
+    aside unheard; with STORIES_OPERATOR_REVIEW on it stays with the
+    operator, and cannot be passed until a read-back passes
+    (stories/review.py)."""
     family = await family_of(user_id, db)
     parent_title = (family.parent_title if family else None) or profile.name
     child_name = (family.child_name if family else None) or "their family"
