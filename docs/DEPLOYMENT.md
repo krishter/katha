@@ -158,12 +158,35 @@ and its cost to serve (`docs/specs/ADMIN_METRICS.md`). With no token set, both a
    ADMIN_API_TOKEN=<the token>
    METRICS_EXCLUDED_USER_IDS=user_xxxxxxxx,user_yyyyyyyy   # your self-trial and rehearsal user_ids
    ```
-3. Restart the backend, then open `https://api.katha.life/admin/metrics/view`. The browser
-   asks for a username and password: any username, and the token as the password. Scripts
-   use `Authorization: Bearer <token>`.
+3. Restart the backend, then open the page through an SSH tunnel (below). The browser asks
+   for a username and password: any username, and the token as the password. Scripts use
+   `Authorization: Bearer <token>`.
 
-No Caddy change is needed: `api.katha.life` already proxies to FastAPI, and the token is the
-gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
+The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
+
+### Operator pages: through an SSH tunnel, never the public host
+
+Every `/admin` page (metrics, question release, and card and Story review while those are
+on) is refused on `api.katha.life`: Caddy answers 404 for `/admin`, `/docs`, `/redoc` and
+`/openapi.json` (SH-10). The backend also listens on the box's own loopback,
+`127.0.0.1:8000` (`docker-compose.prod.yml`), which nothing outside the box can reach. To
+use the pages, from your laptop:
+
+```
+ssh -N -L 8000:127.0.0.1:8000 <you>@<the box's static IP>
+```
+
+then open `http://localhost:8000/admin/metrics/view` (or `/admin/cards/view`). Close the
+tunnel with Ctrl-C when done. The token is still required: the tunnel decides who can reach
+the page, and the token decides who can use it.
+
+Every admin request is logged as `admin: <METHOD> <path>` (ids only, never a query string or
+the token), and a wrong token as `admin: wrong token for …`:
+`docker compose -f docker-compose.prod.yml logs backend | grep 'admin:'`.
+
+Check after each deploy that the public host refuses them:
+`curl -s -o /dev/null -w '%{http_code}\n' https://api.katha.life/admin/metrics` must print
+`404`, and the same for `/docs` and `/openapi.json`.
 
 ## Step 4 — SES out of the sandbox *(start this first — it has a queue)*
 

@@ -59,6 +59,11 @@ services:
     # No command override — the Dockerfile's CMD is the production one
     # (--workers 1, no --reload). No volume mount: the image is the
     # artifact, so what runs is what was built, not whatever is on disk.
+    # Published on the box's loopback only, for the operator's SSH tunnel
+    # to /admin (Caddy refuses /admin publicly, SH-10). 127.0.0.1 is not
+    # reachable from outside the box; never publish this as "8000:8000".
+    ports:
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 30s
