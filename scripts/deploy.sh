@@ -123,11 +123,31 @@ $COMPOSE run --rm backend alembic upgrade head
 echo "==> Starting"
 $COMPOSE up -d
 
+echo "==> Caddy config"
+# Caddy reads its Caddyfile once, at start, through a single-file bind
+# mount. `up -d` recreates only containers whose compose settings changed,
+# and `git pull` replaces the file rather than editing it, so after a
+# Caddyfile change the running Caddy keeps, and still sees, the old one.
+# That is how SH-10's /admin block sat on disk through a deploy while /admin
+# stayed public (2026-11-21). Compare what Caddy sees with the file in the
+# repo, and recreate it on any difference. TLS drops for a second or two.
+if ! $COMPOSE exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - Caddyfile; then
+	echo "    Caddyfile changed: recreating caddy"
+	$COMPOSE up -d --force-recreate caddy
+	if ! $COMPOSE exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - Caddyfile; then
+		echo "caddy still does not see the repo's Caddyfile — check: $COMPOSE logs caddy" >&2
+		exit 1
+	fi
+else
+	echo "    unchanged"
+fi
+
 echo "==> Waiting for health"
-# From inside the container: the backend publishes no port of its own, so
-# it is reachable only through Caddy on the public interface. Checking it
-# here rather than through Caddy separates "the app is up" from "TLS and
-# DNS are right", which are different problems with different fixes.
+# From inside the container: the backend's only published port is on the
+# box's loopback, for the operator's tunnel. Checking it here rather than
+# through Caddy separates "the app is up" from "TLS and DNS are right",
+# which are different problems with different fixes. The public host is
+# checked at the end.
 healthy=""
 for _ in $(seq 1 30); do
 	if $COMPOSE exec -T backend python -c \
@@ -167,5 +187,35 @@ if [[ "${starts}" -gt 1 ]]; then
 	exit 1
 fi
 
+echo "==> Public host"
+# What the internet sees, through DNS, TLS and Caddy. /health must answer;
+# the operator surface must not (SH-10). Retried, because Caddy may have just
+# been recreated.
+public="https://api.katha.life"
+code() {
+	curl -s -o /dev/null -w '%{http_code}' --retry 10 --retry-all-errors \
+		--retry-delay 2 --max-time 10 "${public}$1"
+}
+health=$(code /health)
+if [[ "${health}" != "200" ]]; then
+	echo "${public}/health answered ${health}, not 200 — check: $COMPOSE logs caddy" >&2
+	exit 1
+fi
+echo "    /health 200"
+exposed=""
+for path in /admin/metrics /admin/cards/view /docs /openapi.json; do
+	got=$(code "${path}")
+	echo "    ${path} ${got}"
+	if [[ "${got}" != "404" ]]; then
+		exposed="yes"
+	fi
+done
+if [[ -n "${exposed}" ]]; then
+	echo "THE OPERATOR SURFACE IS PUBLIC. Every path above must answer 404 on" >&2
+	echo "${public}. Check that Caddy runs the repo's Caddyfile:" >&2
+	echo "  $COMPOSE exec caddy grep -c @operator /etc/caddy/Caddyfile" >&2
+	exit 1
+fi
+
 echo
-echo "Deployed. Check: curl -fsS https://api.katha.life/health"
+echo "Deployed."

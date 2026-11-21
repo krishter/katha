@@ -184,9 +184,13 @@ Every admin request is logged as `admin: <METHOD> <path>` (ids only, never a que
 the token), and a wrong token as `admin: wrong token for …`:
 `docker compose -f docker-compose.prod.yml logs backend | grep 'admin:'`.
 
-Check after each deploy that the public host refuses them:
-`curl -s -o /dev/null -w '%{http_code}\n' https://api.katha.life/admin/metrics` must print
-`404`, and the same for `/docs` and `/openapi.json`.
+`scripts/deploy.sh` checks this at the end of every deploy and exits 1 if any of
+`/admin/metrics`, `/admin/cards/view`, `/docs` or `/openapi.json` answers anything but 404 on
+`https://api.katha.life`. It also recreates Caddy whenever the Caddyfile Caddy sees differs
+from the repo's: Caddy reads it once at start, and `docker compose up -d` does not restart
+it for a changed file (on 2026-11-21 that left `/admin` public after the deploy that blocked
+it). By hand: `curl -s -o /dev/null -w '%{http_code}\n' https://api.katha.life/admin/metrics`
+must print `404`.
 
 ## Step 4 — SES out of the sandbox *(start this first — it has a queue)*
 
