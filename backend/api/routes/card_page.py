@@ -23,7 +23,7 @@ import logging
 from html import escape
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cards import family_inbox, links
 from cards.context import family_of
 from config import settings
+from core import ratelimit
 from models.conversation_card import ConversationCard
 from models.db import get_db
 from models.user_profile import UserProfileModel
@@ -125,11 +126,16 @@ talk, saying it comes from you.</label></p>
 a new card only if {escape(title)} agrees again.</p>""")
 
 
+_SLOW_DOWN = "<p>That is a lot at once. Please wait a while and try again.</p>"
+
+
 @router.post("/c/{token}/react")
 async def react(token: str, db: AsyncSession = Depends(get_db)):
     card, profile, _ = await _card_for(token, db)
     if card is None or not settings.CONVERSATION_CARDS_ENABLED:
         return _gone()
+    if not ratelimit.limiter.allow(ratelimit.CARD_REACT_PER_LINK, token):
+        return _page(_SLOW_DOWN, status=429)
     reply = await family_inbox.react(
         profile, card, family_inbox.DIDNT_KNOW, "email", db
     )
@@ -137,13 +143,27 @@ async def react(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/c/{token}/ask")
-async def ask(token: str, question: str = Form(""), db: AsyncSession = Depends(get_db)):
+async def ask(
+    request: Request,
+    token: str,
+    question: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
     card, profile, _ = await _card_for(token, db)
     if card is None or not settings.CONVERSATION_CARDS_ENABLED:
         return _gone()
     question = question.strip()[:MAX_QUESTION]
     if not question:
         return _page("<p>Please type a question first.</p>", status=400)
+    # Every question is screened by an LLM before the queue cap is checked
+    # (the screen is also what reads "stop"), so the limit comes first
+    # (SH-09). Both counted: a leaked link, and one client across links.
+    per_link = ratelimit.limiter.allow(ratelimit.CARD_ASK_PER_LINK, token)
+    per_client = ratelimit.limiter.allow(
+        ratelimit.CARD_ASK_PER_CLIENT, ratelimit.client_ip(request)
+    )
+    if not (per_link and per_client):
+        return _page(_SLOW_DOWN, status=429)
     reply = await family_inbox.receive(profile, question, "email", db, card=card)
     return _page(f"<p>{escape(reply)}</p>")
 

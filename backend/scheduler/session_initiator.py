@@ -326,6 +326,20 @@ async def delete_twilio_messages() -> None:
         logger.exception("Scheduler: deleting Twilio messages failed")
 
 
+async def check_spend() -> None:
+    """Tell the operator about a family whose API spend today is above
+    DAILY_SPEND_ALERT_INR (core/alerts.py, SH-09). Production only."""
+    from config import settings
+    from core import alerts
+
+    if settings.ENVIRONMENT != "production":
+        return
+    try:
+        await alerts.check_spend()
+    except Exception:
+        logger.exception("Scheduler: checking spend failed")
+
+
 def create_scheduler(db_session_factory) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
@@ -343,6 +357,14 @@ def create_scheduler(db_session_factory) -> AsyncIOScheduler:
         trigger="cron",
         minute=7,
         id="check_backups",
+        replace_existing=True,
+        misfire_grace_time=1800,
+    )
+    scheduler.add_job(
+        check_spend,
+        trigger="cron",
+        minute=23,
+        id="check_spend",
         replace_existing=True,
         misfire_grace_time=1800,
     )

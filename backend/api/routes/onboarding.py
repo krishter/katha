@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards import setup as card_setup
 from config import settings
-from core import auth, family_number, parent_consent
+from core import auth, family_number, parent_consent, ratelimit
 from core.auth import get_current_user
 from media import tts, voices
 from models.consent_record import ConsentRecord
@@ -63,14 +63,16 @@ def _validate_session_time(value: str) -> time:
 
 @router.post("/onboarding/start")
 async def onboarding_start(
-    email: str = Form(...), db: AsyncSession = Depends(get_db)
+    request: Request, email: str = Form(...), db: AsyncSession = Depends(get_db)
 ) -> dict:
     """
     Step 1 of onboarding: email registration, and the universal email
     entry point — the login page posts here too, because this is the only
     endpoint that handles a first-time visitor and a returning one alike.
-    No auth required. Always returns 200.
+    No auth required. Returns 200, or 429 when one client has asked for
+    too many sign-in emails (SH-09).
     """
+    ratelimit.enforce(ratelimit.EMAIL_LINK, ratelimit.client_ip(request))
     account = await auth.find_account_by_email(email, db)
 
     if account is None:
@@ -273,7 +275,8 @@ async def onboarding_consent(
             user_id=user_id,
             email_hash=auth.hash_email(email),
             consent_version=_CONSENT_VERSION,
-            ip_address=request.client.host if request.client else None,
+            # The family's address, not Caddy's (request.client is Caddy).
+            ip_address=ratelimit.client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
     )
