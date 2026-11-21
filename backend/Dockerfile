@@ -26,7 +26,10 @@ COPY requirements.txt .
 # as False — and raqm support is a compile-time decision, so installing
 # the library at runtime does nothing. --no-binary is what makes the
 # apt packages above matter.
-RUN pip install --no-cache-dir --no-binary Pillow -r requirements.txt
+# requirements.txt is a lock with hashes (scripts/lock_requirements.sh), so
+# every rebuild installs the same packages; --require-hashes refuses any
+# line without one.
+RUN pip install --no-cache-dir --require-hashes --no-binary Pillow -r requirements.txt
 
 # Fail the build rather than ship an image that renders tofu. This is
 # cheap to check and impossible to notice later: cards still generate,
