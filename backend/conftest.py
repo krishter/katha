@@ -182,3 +182,16 @@ def system_speech_store(monkeypatch):
     system_speech.clear_memory()
     yield store
     system_speech.clear_memory()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Every test starts with empty per-client counts (core/ratelimit.py).
+    The limiter is in memory and module-level, so without this the tenth
+    test to post to /onboarding/start from TestClient's one address would
+    get a 429 that has nothing to do with what it tests."""
+    from core import ratelimit
+
+    ratelimit.limiter.reset()
+    yield
+    ratelimit.limiter.reset()

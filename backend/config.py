@@ -225,6 +225,10 @@ class Settings(BaseSettings):
     # Where "a card is waiting for review" and "she said never share"
     # alerts go. Empty: logged only.
     OPERATOR_EMAIL: str = ""
+    # One family's API spend today (IST) above this, in rupees, emails the
+    # operator once that day (SH-09, core/alerts.check_spend). An alert, not
+    # a limit: Katha carries on. 0 turns it off. About 10x a normal day.
+    DAILY_SPEND_ALERT_INR: float = 150.0
     # katha_conversation_card_v2 (§8.1). Variable mapping:
     #   {{1}}  media — the card image (injected by the adapter, via
     #          TWILIO_TEMPLATE_MEDIA_HOST, as for the memory card)

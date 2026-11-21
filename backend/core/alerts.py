@@ -199,3 +199,91 @@ async def check_backup(now: Optional[datetime] = None, newest=None) -> bool:
         every=BACKUP_ALERT_EVERY,
     )
     return False
+
+
+SPEND_ALERT_EVERY = timedelta(hours=24)
+
+
+def _ist_day_start(now: datetime) -> datetime:
+    """Midnight in India, as a UTC time: the day a spend alert is about."""
+    from zoneinfo import ZoneInfo
+
+    local = now.astimezone(ZoneInfo("Asia/Kolkata"))
+    return local.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def check_spend(now: Optional[datetime] = None, db=None) -> list[str]:
+    """
+    Email the operator once a day for each family whose API spend today
+    (since midnight IST) is above DAILY_SPEND_ALERT_INR (SH-09). An alert
+    only: Katha carries on talking to her. Returns the user_ids alerted.
+
+    Priced the way the metrics page prices it (core/pricing.py). The body
+    carries the user_id and an amount, nothing she said.
+    """
+    from types import SimpleNamespace
+
+    from config import settings
+    from core import pricing
+    from models.api_usage import ApiUsage
+
+    threshold = settings.DAILY_SPEND_ALERT_INR
+    if not threshold or threshold <= 0:
+        return []
+    now = now or datetime.now(timezone.utc)
+    day_start = _ist_day_start(now)
+
+    async def _rows(session):
+        return (
+            await session.execute(
+                select(
+                    ApiUsage.user_id,
+                    ApiUsage.vendor,
+                    ApiUsage.operation,
+                    ApiUsage.model,
+                    ApiUsage.units,
+                    ApiUsage.created_at,
+                )
+                .where(ApiUsage.created_at >= day_start)
+                .where(ApiUsage.user_id.is_not(None))
+            )
+        ).all()
+
+    if db is None:
+        from models.db import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as session:
+            rows = await _rows(session)
+    else:
+        rows = await _rows(db)
+
+    spent: dict[str, float] = {}
+    for r in rows:
+        cost = pricing.cost_inr(
+            SimpleNamespace(
+                vendor=r.vendor,
+                operation=r.operation,
+                model=r.model,
+                units=r.units or {},
+                created_at=r.created_at,
+            )
+        )
+        if cost is not None:
+            spent[r.user_id] = spent.get(r.user_id, 0.0) + float(cost)
+
+    alerted = []
+    for user_id, inr in sorted(spent.items()):
+        if inr <= threshold:
+            continue
+        sent = await send(
+            "A family's API spend today is unusually high",
+            f"user {user_id} has spent ₹{inr:.2f} on API calls since midnight "
+            f"IST, above the ₹{threshold:.0f} alert line "
+            "(DAILY_SPEND_ALERT_INR). Katha has not been paused. Look at "
+            "/admin/metrics/view through the tunnel for what the calls were.",
+            key=f"spend:{user_id}:{day_start.date().isoformat()}",
+            every=SPEND_ALERT_EVERY,
+        )
+        if sent:
+            alerted.append(user_id)
+    return alerted

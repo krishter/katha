@@ -57,7 +57,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Scheduler stopped")
 
 
-app = FastAPI(title="Katha API", lifespan=lifespan)
+def docs_routes(environment: str) -> dict:
+    """FastAPI's /docs, /redoc and /openapi.json map every route, the
+    operator ones included. Off in production (SH-10); Caddy refuses them
+    publicly as well."""
+    if environment == "production":
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {}
+
+
+app = FastAPI(title="Katha API", lifespan=lifespan, **docs_routes(settings.ENVIRONMENT))
 
 # Cookie-based auth (Phase 6) requires explicit origins — browsers reject
 # "Access-Control-Allow-Origin: *" on credentialed requests, so a wildcard

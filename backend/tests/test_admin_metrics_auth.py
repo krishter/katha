@@ -139,3 +139,38 @@ def test_excluded_ids_are_parsed_from_the_setting():
         {"user_a", "user_b"}
     )
     assert metrics.parse_excluded("") == frozenset()
+
+
+# ── SH-10: the operator surface off the public host ─────────────────────────
+
+
+def test_docs_and_openapi_are_off_in_production():
+    from main import docs_routes
+
+    assert docs_routes("production") == {
+        "docs_url": None,
+        "redoc_url": None,
+        "openapi_url": None,
+    }
+    assert docs_routes("development") == {}
+
+
+def test_an_admin_request_is_logged_by_method_and_path_only(db, caplog):
+    caplog.set_level("INFO", logger="core.auth")
+    r = client.get("/admin/metrics?secret=1", headers=_bearer(_TOKEN))
+    assert r.status_code == 200
+    lines = [rec.getMessage() for rec in caplog.records if rec.name == "core.auth"]
+    assert "admin: GET /admin/metrics" in lines
+    assert not any("secret" in line for line in lines), "query string was logged"
+    assert not any(_TOKEN in line for line in lines), "the token was logged"
+
+
+def test_a_wrong_token_is_logged_but_a_first_browser_request_is_not(db, caplog):
+    caplog.set_level("INFO", logger="core.auth")
+    client.get("/admin/metrics/view")  # the browser before it prompts
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+    client.get("/admin/metrics/view", headers=_basic("wrong-token"))
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings == ["admin: wrong token for GET /admin/metrics/view"]
+    assert not any("wrong-token" in w for w in warnings)

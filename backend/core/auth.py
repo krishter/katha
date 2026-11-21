@@ -279,12 +279,20 @@ def _check_admin_token(request: Request, *, prompt_browser: bool) -> None:
     if presented is None or not secrets.compare_digest(
         presented.encode("utf-8"), expected.encode("utf-8")
     ):
+        if presented is not None:
+            # A wrong token, not a browser's first unauthenticated request.
+            logger.warning(
+                "admin: wrong token for %s %s", request.method, request.url.path
+            )
         headers = (
             {"WWW-Authenticate": 'Basic realm="katha-admin"'}
             if prompt_browser
             else None
         )
         raise HTTPException(status_code=401, detail="Unauthorized", headers=headers)
+    # The record of what the operator did (SH-10). The path carries ids only
+    # (a card, Story or question); the query string is left out.
+    logger.info("admin: %s %s", request.method, request.url.path)
 
 
 def require_admin_token(request: Request) -> None:

@@ -10,6 +10,23 @@
 api.katha.life {
 	encode gzip
 
+	# The operator surface is not on the public host (SH-10). /admin holds
+	# metrics, card and Story review and question release, behind one shared
+	# token; /docs and /openapi.json map every route. All of it answers 404
+	# here. The operator reaches /admin through an SSH tunnel to the
+	# backend's loopback port instead (docker-compose.prod.yml, and
+	# docs/DEPLOYMENT.md "Operator pages").
+	@operator path /admin /admin/* /docs /docs/* /redoc /redoc/* /openapi.json
+	respond @operator 404
+
+	# Nothing Katha accepts is large: Twilio's webhook is a small form (voice
+	# notes arrive as a media URL, not in the body), and every page posts a
+	# few fields. A cap stops a client making the backend read and parse an
+	# arbitrarily large body before any check runs (SH-09). Over it: 413.
+	request_body {
+		max_size 1MB
+	}
+
 	reverse_proxy backend:8000 {
 		# Long enough for a full voice turn: Sarvam STT, then the LLM, then
 		# Sarvam TTS, all on the request path. The default 100s cuts off a

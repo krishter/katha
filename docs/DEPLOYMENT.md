@@ -1,10 +1,16 @@
 # Katha — Production cutover (pre-pilot)
 
-**Why this doc exists:** there is no deployed backend today. `katha.life` resolves to Vercel
-and serves the coming-soon waitlist page; `api.katha.life` and `app.katha.life` do not
-resolve at all; `.github/workflows/ci.yml` runs lint and tests and deploys nothing; there is
-no IaC in the repo. The self-trial was written against localhost because localhost is the
-only environment that exists — not because local was the right place to test.
+**Status: Steps 0–5 complete as of 2026-09-20; `api.katha.life/health` live in production.**
+*(Checked again 2026-11-21: `/health` returns 200. The box was stopped from outside on
+2026-11-02 and was down for four days; the uptime check in `.github/workflows` now watches it.)*
+
+**Why this doc exists** *(written 2026-09-06, before the cutover — describes the state it
+started from, not the state today)*: there is no deployed backend today. `katha.life`
+resolves to Vercel and serves the coming-soon waitlist page; `api.katha.life` and
+`app.katha.life` do not resolve at all; `.github/workflows/ci.yml` runs lint and tests and
+deploys nothing; there is no IaC in the repo. The self-trial was written against localhost
+because localhost is the only environment that exists — not because local was the right
+place to test.
 
 That has to change before family #1, and it should change before **your** Stage B run too:
 the point of a self-trial is to be the first real user of the thing families will use.
@@ -96,9 +102,15 @@ cookie change carefully; it is the one that silently locks out every family.
 1. Caddy in front of the backend, `api.katha.life { reverse_proxy backend:8000 }` — automatic
    certificates, and it terminates TLS so `PUBLIC_BASE_URL` is the https URL Twilio signs.
 2. At GoDaddy: **A** `api` → the Lightsail static IP; **CNAME** `app` → Vercel.
-3. **While you're in the DNS panel:** the apex still carries A records pointing at Vercel from
-   an earlier setup. Confirm which are live and remove the orphans — a stale A record on the
-   apex is how a "why is the site down" hour starts.
+3. **Apex — checked 2026-09-12, no orphans.** The earlier suspicion that GoDaddy carried
+   stale Vercel A records at the apex was wrong: there was exactly one, and it was live.
+   It has since been moved to Vercel's current anycast IP (`216.198.79.1`) and `www` to the
+   project CNAME (`a1a73ceb28cba64e.vercel-dns-017.com`), both edited in place rather than
+   added — a second apex A record round-robins traffic into a stale destination, which is the
+   failure this step was originally written to prevent. Apex 308-redirects to `www`.
+4. **Check for CAA records at the apex before Caddy asks for a certificate.** If any exist and
+   none permits `letsencrypt.org`, issuance for `api.katha.life` fails with an error that
+   points nowhere near DNS. No CAA record at all is fine — absence permits any CA.
 
 ## Step 3 — Production `.env`
 
@@ -146,12 +158,39 @@ and its cost to serve (`docs/specs/ADMIN_METRICS.md`). With no token set, both a
    ADMIN_API_TOKEN=<the token>
    METRICS_EXCLUDED_USER_IDS=user_xxxxxxxx,user_yyyyyyyy   # your self-trial and rehearsal user_ids
    ```
-3. Restart the backend, then open `https://api.katha.life/admin/metrics/view`. The browser
-   asks for a username and password: any username, and the token as the password. Scripts
-   use `Authorization: Bearer <token>`.
+3. Restart the backend, then open the page through an SSH tunnel (below). The browser asks
+   for a username and password: any username, and the token as the password. Scripts use
+   `Authorization: Bearer <token>`.
 
-No Caddy change is needed: `api.katha.life` already proxies to FastAPI, and the token is the
-gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
+The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
+
+### Operator pages: through an SSH tunnel, never the public host
+
+Every `/admin` page (metrics, question release, and card and Story review while those are
+on) is refused on `api.katha.life`: Caddy answers 404 for `/admin`, `/docs`, `/redoc` and
+`/openapi.json` (SH-10). The backend also listens on the box's own loopback,
+`127.0.0.1:8000` (`docker-compose.prod.yml`), which nothing outside the box can reach. To
+use the pages, from your laptop:
+
+```
+ssh -N -L 8000:127.0.0.1:8000 <you>@<the box's static IP>
+```
+
+then open `http://localhost:8000/admin/metrics/view` (or `/admin/cards/view`). Close the
+tunnel with Ctrl-C when done. The token is still required: the tunnel decides who can reach
+the page, and the token decides who can use it.
+
+Every admin request is logged as `admin: <METHOD> <path>` (ids only, never a query string or
+the token), and a wrong token as `admin: wrong token for …`:
+`docker compose -f docker-compose.prod.yml logs backend | grep 'admin:'`.
+
+`scripts/deploy.sh` checks this at the end of every deploy and exits 1 if any of
+`/admin/metrics`, `/admin/cards/view`, `/docs` or `/openapi.json` answers anything but 404 on
+`https://api.katha.life`. It also recreates Caddy whenever the Caddyfile Caddy sees differs
+from the repo's: Caddy reads it once at start, and `docker compose up -d` does not restart
+it for a changed file (on 2026-11-21 that left `/admin` public after the deploy that blocked
+it). By hand: `curl -s -o /dev/null -w '%{http_code}\n' https://api.katha.life/admin/metrics`
+must print `404`.
 
 ## Step 4 — SES out of the sandbox *(start this first — it has a queue)*
 
@@ -183,12 +222,17 @@ gate. The page holds counts and pseudonymous `user_id`s only, so it is safe to s
    its media from Twilio: her voice note once it is transcribed, its own messages at a final
    status, and anything left by the `delete_twilio_messages` job every 5 minutes. Check the
    account in the Twilio console and write the answers here:
-   - Media retention: is there an account-level setting, and what is it? `______`
-   - PII redaction for message bodies: available on this account? Turned on? `______`
+   - Media and message retention: the account's "days to retain" is **400 days** for anything
+     not deleted (checked 2026-10-21). Katha deletes everything well inside that, so it only
+     matters if a delete keeps failing; lower it to the minimum if the console allows.
+     HTTP Basic Auth on media URLs: `______` (turn it on).
+   - PII redaction for message bodies: **not available on this account** (checked
+     2026-10-21). Deletion is the control.
    - Message log retention after a delete: does anything survive (billing records, Messaging
-     Insights)? `______`
+     Insights)? `______` (ask Twilio support; record their answer and the date).
 5. **After the first self-trial voice note**, open the message in the Twilio console a minute
-   later and confirm it and its media are gone. If not, read the `delete_twilio_messages` and
+   later and confirm it and its media are gone. *Confirmed 2026-10-21: body and media gone
+   within a couple of minutes.* If not, read the `delete_twilio_messages` and
    `Could not delete … from Twilio` lines in the backend log.
 
 ## Step 7 — Frontend
