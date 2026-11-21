@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from core import auth
+from core import auth, ratelimit
 from models.db import get_db
 from models.family_account import FamilyAccount
 
@@ -21,9 +21,11 @@ _GENERIC_MESSAGE = "If that email is registered, a login link is on its way."
 
 @router.post("/auth/magic-link")
 async def request_magic_link(
-    email: str = Form(...), db: AsyncSession = Depends(get_db)
+    request: Request, email: str = Form(...), db: AsyncSession = Depends(get_db)
 ) -> dict:
-    """Always returns 200 — never reveals whether the email is registered."""
+    """Returns 200 whether or not the email is registered, so it reveals
+    nothing; 429 when one client has asked for too many links (SH-09)."""
+    ratelimit.enforce(ratelimit.EMAIL_LINK, ratelimit.client_ip(request))
     sent = True
     try:
         sent = await auth.send_magic_link(email, db)
