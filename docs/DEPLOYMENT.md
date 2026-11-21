@@ -164,6 +164,17 @@ and its cost to serve (`docs/specs/ADMIN_METRICS.md`). With no token set, both a
 
 The page holds counts and pseudonymous `user_id`s only, so it is safe to screenshot.
 
+**API keys.** The top of the page shows each key (last four characters only), when it last
+worked, whether a free live check passes, and its renew-by date. The keys have no provider
+expiry, so write the dates you know (a prepaid balance, a free tier, a planned rotation) in
+`backend/.env` as `KEY_RENEW_BY=anthropic=2027-01-15,twilio=2026-12-31` (names: anthropic,
+sarvam, gemini, twilio, aws) and restart the backend. You are emailed once a day from 14
+days before, and as soon as the hourly check sees a key refused.
+
+**New families' plan.** `DEFAULT_PLAN` (default `pilot`) is the plan a new account starts
+on. Set `DEFAULT_PLAN=free` in `backend/.env` when charging starts; families already signed
+up keep theirs (`scripts/set_plan.py` moves one).
+
 ### Operator pages: through an SSH tunnel, never the public host
 
 Every `/admin` page (metrics, question release, and card and Story review while those are

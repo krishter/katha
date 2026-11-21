@@ -229,6 +229,18 @@ class Settings(BaseSettings):
     # operator once that day (SH-09, core/alerts.check_spend). An alert, not
     # a limit: Katha carries on. 0 turns it off. About 10x a normal day.
     DAILY_SPEND_ALERT_INR: float = 150.0
+    # The plan a new family account starts on: free, pilot or paid
+    # (scripts/set_plan.py moves one family). Pilot during the pilot, so no
+    # family is stopped at conversation 11; set it to free when charging
+    # starts. Families already signed up keep the plan they have.
+    DEFAULT_PLAN: str = "pilot"
+    # When each API key needs renewing, as name=YYYY-MM-DD pairs separated
+    # by commas: "anthropic=2027-01-15,twilio=2026-12-31". Names: anthropic,
+    # sarvam, gemini, twilio, aws. None of these keys expire on their own;
+    # this is the date a prepaid balance, a free tier or a rotation runs out.
+    # The metrics page turns amber 14 days before and red after, and the
+    # operator is emailed (core/key_health.py).
+    KEY_RENEW_BY: str = ""
     # katha_conversation_card_v2 (§8.1). Variable mapping:
     #   {{1}}  media — the card image (injected by the adapter, via
     #          TWILIO_TEMPLATE_MEDIA_HOST, as for the memory card)
@@ -290,6 +302,10 @@ def validate_production_config(s: Settings = settings) -> None:
     ):
         if not getattr(s, name):
             problems.append(f"{name} is empty")
+    if s.DEFAULT_PLAN not in ("free", "pilot", "paid"):
+        problems.append(
+            f"DEFAULT_PLAN must be free, pilot or paid (got: {s.DEFAULT_PLAN!r})"
+        )
     if s.TTS_VENDOR not in ("gemini", "sarvam"):
         problems.append(f"TTS_VENDOR must be gemini or sarvam (got: {s.TTS_VENDOR!r})")
     elif s.TTS_VENDOR == "gemini" and not s.GEMINI_API_KEY:

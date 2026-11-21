@@ -7,6 +7,7 @@ import boto3
 from botocore.config import Config
 
 from config import settings
+from core import key_health
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +51,17 @@ async def upload_media(
     Files are stored in ap-south-1 (Mumbai) for DPDP Act compliance.
     """
     client = _s3_client()
-    await asyncio.to_thread(
-        client.put_object,
-        Bucket=settings.AWS_S3_BUCKET,
-        Key=key,
-        Body=data,
-        ContentType=content_type,
-    )
+    try:
+        await asyncio.to_thread(
+            client.put_object,
+            Bucket=settings.AWS_S3_BUCKET,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+        )
+    except Exception as exc:
+        key_health.failed("aws", key_health.status_of(exc))
+        raise
     logger.info("Uploaded %s (%d bytes)", key, len(data))
     await _track(key)
     return key

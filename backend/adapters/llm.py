@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from anthropic import APIError, AsyncAnthropic
 
 from config import settings
-from core import usage
+from core import key_health, usage
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +176,7 @@ async def chat(
     try:
         response = await _client.messages.create(**kwargs)
     except APIError as exc:
+        key_health.failed("anthropic", key_health.status_of(exc))
         raise RuntimeError(f"Anthropic API error: {exc}") from exc
     latency_ms = int((time.monotonic() - started) * 1000)
 

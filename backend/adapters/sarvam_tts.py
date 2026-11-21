@@ -8,7 +8,7 @@ import httpx
 
 from adapters.retry import post_with_retry
 from config import settings
-from core import usage
+from core import key_health, usage
 from media import tts_check, voices
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ async def _request(text: str, voice: voices.Voice, purpose: str) -> bytes:
         )
 
     if response.status_code != 200:
+        key_health.failed("sarvam", response.status_code)
         # The status and Sarvam's error code, not its body: an error body
         # can echo the input (P7).
         raise RuntimeError(

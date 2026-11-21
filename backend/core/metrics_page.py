@@ -43,6 +43,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .bar { height: 8px; background: var(--bar); border-radius: 4px; min-width: 1px; }
 .barcell { width: 40%; min-width: 80px; }
 ol.funnel { padding-left: 1.2em; }
+.state { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: .8rem;
+  font-weight: 600; }
+.state.ok { background: #e3f1e6; color: #1e5e2c; }
+.state.warn { background: #fbefd5; color: #7a4b00; }
+.state.bad { background: #fbe0de; color: var(--warn); }
+td.why { white-space: normal; min-width: 180px; }
 ol.funnel li { margin: 2px 0; }
 """
 
@@ -443,6 +449,60 @@ def _families(rows: list[dict]) -> str:
     return f"<div class=scroll><table><tr>{head}</tr>{body}</table></div>"
 
 
+_STATE_WORDS = {"ok": "Working", "warn": "Check soon", "bad": "Act now"}
+
+
+def _check(c: dict) -> str:
+    if c.get("ok") is None:
+        return "not checked"
+    word = "passed" if c["ok"] else f"failed ({c.get('status') or '?'})"
+    return f"{word}{' · ' + c['detail'] if c.get('detail') else ''}"
+
+
+def _api_keys(rows: list[dict]) -> str:
+    """Each key's health and renew-by date (core/key_health.py). Last four
+    characters only."""
+    if not rows:
+        return "<p class=note>Not available.</p>"
+    head = "".join(
+        f"<th>{h}</th>"
+        for h in (
+            "Key",
+            "State",
+            "Ends",
+            "Last success",
+            "Last failure",
+            "Live check",
+            "Renew by",
+            "Why",
+        )
+    )
+    body = ""
+    for r in rows:
+        f = r.get("last_failure")
+        failure = f"{_ist(f['at'])} ({_e(f['status'])})" if f else "—"
+        state = r["state"]
+        word = _STATE_WORDS.get(state, state)
+        body += (
+            f"<tr><td>{_e(r['label'])}</td>"
+            f"<td><span class='state {_e(state)}'>{_e(word)}</span></td>"
+            f"<td>{_e(r['fingerprint'] or None)}</td>"
+            f"<td>{_ist(r['last_success'])}</td>"
+            f"<td>{failure}</td>"
+            f"<td>{_e(_check(r['check']))}</td>"
+            f"<td>{_e(r['renew_by'])}</td>"
+            f"<td class=why>{_e('; '.join(r['reasons']) or None)}</td></tr>"
+        )
+    return (
+        f"<div class=scroll><table><tr>{head}</tr>{body}</table></div>"
+        "<p class=note>None of these keys expire by themselves. Renew-by dates "
+        "come from KEY_RENEW_BY in backend/.env (name=YYYY-MM-DD, comma "
+        "separated); a key turns amber 14 days before and red after, and you "
+        "are emailed once a day. Last failure is kept in memory since the last "
+        "restart. Sarvam has no free check, so only its last success shows.</p>"
+    )
+
+
 def render(m: dict) -> str:
     conv = m["conversations"]
     cards = m["memory_cards"]
@@ -451,8 +511,11 @@ def render(m: dict) -> str:
     failed_7d = cards["failed"]["last_7d"]
     crisis_7d = m["safety"]["crisis_events"]["last_7d"]
     wasted_7d = cost["wasted_outbound"]["last_7d"]
+    keys = m.get("api_keys") or []
+    keys_off = sum(1 for k in keys if k["state"] != "ok")
     strip = "".join(
         [
+            _tile("API keys to look at", _e(keys_off), alert=bool(keys_off)),
             _tile("Empty sessions, 7d", _e(empty_7d), alert=bool(empty_7d)),
             _tile("Failed cards, 7d", _e(failed_7d), alert=bool(failed_7d)),
             _tile("Crisis events, 7d", _e(crisis_7d), alert=bool(crisis_7d)),
@@ -477,6 +540,7 @@ def render(m: dict) -> str:
 <p class=meta>Generated {_ist(m["generated_at"])} · {_e(m["excluded_user_count"])}
 account(s) excluded · day boundaries in IST</p>
 <div class=strip>{strip}</div>
+<h2>API keys</h2>{_api_keys(keys)}
 <h2>Onboarding funnel</h2>{_funnel(m["funnel"])}
 <h2>Conversations</h2>{_conversations(conv)}
 <h2>Engagement and retention</h2>{_engagement(m["engagement"])}

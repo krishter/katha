@@ -79,6 +79,25 @@ def test_onboarding_start_new_email_creates_account_and_sends_link(db):
     mock_send.assert_called_once()
 
 
+@pytest.mark.parametrize("plan", ["pilot", "free"])
+def test_a_new_account_starts_on_the_default_plan(db, monkeypatch, plan):
+    """DEFAULT_PLAN decides it: pilot during the pilot, free once charging
+    starts."""
+    from config import settings
+
+    monkeypatch.setattr(settings, "DEFAULT_PLAN", plan)
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=None))
+    with patch("api.routes.onboarding.auth.send_magic_link", new=AsyncMock()):
+        client.post("/onboarding/start", data={"email": "new@katha.life"})
+    assert db.add.call_args.args[0].plan == plan
+
+
+def test_the_default_plan_is_pilot():
+    from config import Settings
+
+    assert Settings.model_fields["DEFAULT_PLAN"].default == "pilot"
+
+
 def test_onboarding_start_existing_complete_account_returns_existing(db):
     account = MagicMock()
     account.onboarding_complete = True

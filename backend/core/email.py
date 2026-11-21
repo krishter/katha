@@ -24,7 +24,7 @@ from email.utils import make_msgid
 import boto3
 
 from config import settings
-from core import redact
+from core import key_health, redact
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +47,22 @@ async def send_email_ses(to: str, subject: str, body_text: str, body_html: str) 
         return
 
     client = boto3.client("ses", region_name=settings.AWS_S3_REGION)
-    await asyncio.to_thread(
-        client.send_email,
-        Source=settings.SES_FROM_EMAIL,
-        Destination={"ToAddresses": [to]},
-        Message={
-            "Subject": {"Data": subject},
-            "Body": {
-                "Text": {"Data": body_text},
-                "Html": {"Data": body_html},
+    try:
+        await asyncio.to_thread(
+            client.send_email,
+            Source=settings.SES_FROM_EMAIL,
+            Destination={"ToAddresses": [to]},
+            Message={
+                "Subject": {"Data": subject},
+                "Body": {
+                    "Text": {"Data": body_text},
+                    "Html": {"Data": body_html},
+                },
             },
-        },
-    )
+        )
+    except Exception as exc:
+        key_health.failed("aws", key_health.status_of(exc))
+        raise
     logger.info("Sent email via SES to %s", redact.email(to))
 
 
@@ -109,12 +113,16 @@ async def send_raw_email_ses(message: EmailMessage) -> str:
         return f"mock-{uuid.uuid4()}"
 
     client = boto3.client("ses", region_name=settings.AWS_S3_REGION)
-    response = await asyncio.to_thread(
-        client.send_raw_email,
-        Source=settings.SES_FROM_EMAIL,
-        Destinations=[message["To"]],
-        RawMessage={"Data": message.as_bytes()},
-    )
+    try:
+        response = await asyncio.to_thread(
+            client.send_raw_email,
+            Source=settings.SES_FROM_EMAIL,
+            Destinations=[message["To"]],
+            RawMessage={"Data": message.as_bytes()},
+        )
+    except Exception as exc:
+        key_health.failed("aws", key_health.status_of(exc))
+        raise
     return response["MessageId"]
 
 
