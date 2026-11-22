@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
@@ -55,7 +55,61 @@ async def test_counts_only_and_layer3_dropout(real_db):
                 extraction_status="done",
             )
         )
-    # Six domains, oldest first: the oldest drops out of the newest five.
+    # One childhood atom, then a full Layer 3 window of newer career atoms:
+    # childhood falls outside the window, so it has dropped out.
+    domains = ["childhood"] + ["career"] * session_health.LAYER3_TOP_K
+    for minute, domain in enumerate(domains):
+        db.add(
+            StoryAtom(
+                session_id=session.id,
+                user_id=USER,
+                domain=domain,
+                title="The red door",
+                narrative=SECRET_WORDS,
+                who=["Kunjamma"],
+                open_threads=[],
+                completeness_score=3,
+                verbatim_quote=SECRET_WORDS,
+                created_at=datetime(2026, 11, 20, 5, tzinfo=timezone.utc)
+                + timedelta(minutes=minute),
+            )
+        )
+    await db.commit()
+
+    out = "\n".join(await session_health.report(USER, 10, db))
+
+    assert "1/2" in out  # one turn of two heard in her own language
+    assert "Dropped from Layer 3: childhood" in out
+    for words in ("Vellayani", "red door", "Kunjamma", "A reply Katha gave", "Devaki"):
+        assert words not in out
+
+
+async def test_six_domains_inside_the_window_are_not_dropped(real_db):
+    # The old check used a window of 5, so six domains looked like a dropout
+    # even though Layer 3 still receives all of them.
+    db = real_db
+    user = "user_health_window"
+    db.add(
+        UserProfileModel(
+            user_id=user,
+            name="Saraswati",
+            whatsapp_number="+919000000312",
+            preferred_language="en-IN",
+            katha_gender="female",
+            scheduled_time=time(10, 30),
+        )
+    )
+    session = Session(
+        id=uuid.uuid4(),
+        user_id=user,
+        session_number=1,
+        domain="childhood",
+        exchange_count=0,
+        status="ended",
+        started_at=datetime(2026, 11, 20, 5, 0, tzinfo=timezone.utc),
+    )
+    db.add(session)
+    await db.flush()
     for minute, domain in enumerate(
         (
             "childhood",
@@ -69,22 +123,20 @@ async def test_counts_only_and_layer3_dropout(real_db):
         db.add(
             StoryAtom(
                 session_id=session.id,
-                user_id=USER,
+                user_id=user,
                 domain=domain,
-                title="The red door",
-                narrative=SECRET_WORDS,
-                who=["Kunjamma"],
+                title="A title",
+                narrative="A narrative",
+                who=[],
                 open_threads=[],
                 completeness_score=3,
-                verbatim_quote=SECRET_WORDS,
                 created_at=datetime(2026, 11, 20, 5, minute, tzinfo=timezone.utc),
             )
         )
     await db.commit()
 
-    out = "\n".join(await session_health.report(USER, 10, db))
+    out = "\n".join(await session_health.report(user, 10, db))
 
-    assert "1/2" in out  # one turn of two heard in her own language
-    assert "Dropped from Layer 3: childhood" in out
-    for words in ("Vellayani", "red door", "Kunjamma", "A reply Katha gave", "Devaki"):
-        assert words not in out
+    assert f"newest {session_health.LAYER3_TOP_K} atoms" in out
+    assert "covers 6 domain(s)" in out
+    assert "Nothing dropped yet." in out
