@@ -56,8 +56,9 @@
 - System prompt architecture: Persona + therapeutic protocol + life context + conversation state
 - Function calling: `extract_story`, `identify_theme`, `generate_memory_card`, `check_gaps`
 
-**Text-to-Speech: Gemini 3.8 Flash-Lite TTS, with Sarvam Bulbul**
-*(Changed 2026-10-18; see `docs/specs/GEMINI_TTS.md`. This section said Sarvam Bulbul V3.)*
+**Text-to-Speech: Sarvam Bulbul for the pilot; Gemini built but not used**
+*(Changed 2026-11-22: new families are back on Sarvam (`TTS_VENDOR=sarvam`) because Gemini's voice drifts from one message to the next; `docs/specs/GEMINI_TTS.md` §11. Changed 2026-10-18 to Gemini; before that, Sarvam Bulbul V3. The bullets below describe the Gemini build, which stays in the code.)*
+- Pilot: every parent speaks with Sarvam Bulbul, v4 Flash where it has a conversation voice for the language and persona, else v3. In a speaker-consistency test each Sarvam voice scored 0.83–0.93 across different lines, against 0.73 for Gemini.
 - New families speak with Gemini 3.8 Flash-Lite TTS: one voice per persona (Sulafat, Achird) in 12 of Katha's 13 languages, steered by a plain-words style ("warm and caring, clear and attentive, at a natural conversational pace"; until 2026-11-07 "unhurried, warm and gentle", which a Malayalam parent found too slow and breathy).
 - Sarvam Bulbul (v4 Flash where it has a conversation voice, else v3) speaks Urdu, which Gemini does not list, and every family pinned before the switch.
 - Each parent's voice is pinned on her profile (`user_profiles.tts_voice`) and only an operator moves it (`scripts/set_voice.py`), so a change of default never changes the voice she knows.

@@ -1,6 +1,9 @@
 # Switch Katha's voice to Gemini TTS: plan
 
-**Status:** Built (§4–5) on `feature/gemini-tts`; rollout (§6) not started. Decided 2026-10-18: Gemini 3.8 Flash-Lite is Katha's voice. D1 is decided; D2–D4 take the proposed answers. Section 2's tallies are optional: Krish judged the A/B himself.
+**Status:** Built and deployed. **Rolled back for the pilot on 2026-11-22:** new families get Sarvam again (`TTS_VENDOR=sarvam`) because Gemini's voice drifts from one message to the next. See §11. The rest of this document is the original plan, kept for the record.
+
+> Was: Built (§4–5) on `feature/gemini-tts`; rollout (§6) not started. Decided 2026-10-18: Gemini 3.8 Flash-Lite is Katha's voice. D1 is decided; D2–D4 take the proposed answers. Section 2's tallies are optional: Krish judged the A/B himself.
+
 **Owner:** Krish · **Written:** 2026-10-18
 **Branch:** `feature/gemini-tts`, one PR, branched from `feature/gemini-tts-abtest`. Never commit to `main`; see `.claude/rules/git.md`.
 **Depends on:** the `feature/cost-to-serve` PR being merged first. Both Gemini branches sit on top of it.
@@ -183,3 +186,48 @@ Same assumptions as the proposal's §4: about 2,300 characters of speech a sessi
 ---
 
 **Sources:** [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) · [Gemini 3.8 Flash TTS](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash-tts) · [Gemini data logging and ZDR](https://ai.google.dev/gemini-api/docs/zdr?hl=en) · [Gemini rate limits and tiers](https://ai.google.dev/gemini-api/docs/rate-limits?authuser=1) · [measured audio tokens per second](https://mxchat.ai/gemini-tts-pricing-tokens-per-second/)
+
+## 11. Rollback for the pilot: Gemini's voice drifts between messages (2026-11-22)
+
+**What happened.** In a Marathi test onboarding the parent heard four different-sounding voices across the four consent messages (welcome, re-ask, confirmation, thank-you). The server log shows all four were Gemini 3.8 Flash-Lite, voice `Sulafat`, with no fallback to Sarvam. The pin worked; the voice itself changed. The A/B in §2 judged one clip at a time, so it could not catch this.
+
+**How it was measured.** The four fixed consent lines (invented names) were synthesised several times per setting, and every clip was turned into a speaker embedding with SpeechBrain's ECAPA model (`speechbrain/spkrec-ecapa-voxceleb`). The score is the cosine similarity between two clips: 1.0 is the same voice. "Across lines" compares clips of different lines, which is what a parent hears in one conversation; "same line" compares repeats of one line. The scripts were run from a scratch directory and are not in the repo.
+
+Marathi, female persona:
+
+| Voice | Across lines, mean / min | Same line |
+|---|---|---|
+| Gemini `Sulafat`, as deployed | 0.73 / 0.56 | 0.79 |
+| Gemini `Sulafat`, fixed `seed` | 0.75 / 0.64 | 0.95 |
+| Gemini `Sulafat`, `seed` + `temperature` 0.3 | 0.74 / 0.58 | 0.95 |
+| Sarvam `ishita_mr_conversational` (v4 Flash) | 0.92 / 0.86 | 0.94 |
+| Reference: `Sulafat` against another Gemini voice (`Kore`) | 0.37 | |
+
+The Interactions API accepts `seed` and `temperature` in `generation_config`. A seed makes repeats of the same sentence consistent, but different sentences still drift, so it does not fix a conversation.
+
+Every Sarvam voice Katha uses, both personas, two repeats of each line (Urdu and Assamese left out: their Sarvam clips fail with 400 today):
+
+| Language | Female voice | Across lines, mean / min | Male voice | Across lines, mean / min |
+|---|---|---|---|---|
+| Bengali | v4 `roopa_bn_conversational` | 0.92 / 0.84 | v4 `arnab_bn_conversation` | 0.84 / 0.74 |
+| English | v4 `simran_en_conversation` | 0.86 / 0.81 | v4 `dev_en_conversational` | 0.89 / 0.81 |
+| Gujarati | v4 `pooja_gu_conversational` | 0.91 / 0.87 | v4 `bhavik_gu_conversation` | 0.89 / 0.79 |
+| Hindi | v4 `ritu_hi_conversation` | 0.88 / 0.82 | v4 `aditya_hi_conversational` | 0.89 / 0.74 |
+| Kannada | v4 `chaitra_kn_conversation` | 0.88 / 0.75 | v4 `chetan_kn_conversation` | 0.85 / 0.73 |
+| Malayalam | v3 `ritu` | 0.88 / 0.79 | v3 `shubh` | 0.86 / 0.76 |
+| Marathi | v4 `ishita_mr_conversational` | 0.91 / 0.83 | v4 `nilesh_mr_conversation` | 0.86 / 0.73 |
+| Odia | v3 `ritu` | 0.88 / 0.83 | v3 `shubh` | 0.89 / 0.82 |
+| Punjabi | v3 `ritu` | 0.88 / 0.82 | v4 `anand_pa_conversation` | 0.83 / 0.74 |
+| Tamil | v3 `ritu` | 0.86 / 0.66 | v3 `shubh` | 0.87 / 0.77 |
+| Telugu | v4 `kavitha_te_conversation` | 0.93 / 0.90 | v3 `shubh` | 0.89 / 0.83 |
+
+Every Sarvam voice averages 0.83–0.93 across lines, against Gemini's 0.73. The ECAPA model was trained mostly on English speech, so compare scores within a language more than across languages; the Marathi comparison is like for like. The scores are a proxy for a listener. The Marathi pair was checked by ear (`~/kit/voice-consistency-2026-11-22`, not in the repo).
+
+**Decision (Krish, 2026-11-22).** The pilot runs on Sarvam.
+- `TTS_VENDOR=sarvam` in production, so new families get the Sarvam voice from `media/voices.py`.
+- The two parents on Gemini were moved with `scripts/set_voice.py` (recorded in `voice_changes`): Malayalam to v3 `ritu`, Marathi to v4 `ishita_mr_conversational`.
+- The Gemini code stays. A parent pinned to Gemini still gets Gemini; nobody is.
+- Side effect: the pilot no longer depends on Gemini's Tier 1 limit of 100 TTS requests a day.
+
+**Before Gemini comes back** for any language: a cross-line consistency test like the one above, scored and heard, with Gemini at least as consistent as the Sarvam voice it would replace. Re-test when Google ships a new TTS model or a documented way to hold a speaker steady.
+

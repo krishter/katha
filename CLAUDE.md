@@ -17,7 +17,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 ## Tech Stack
 
 - **STT:** Sarvam Saaras V3 (all 22 Indian languages, code-mixing, elderly speech)
-- **TTS:** Gemini 3.8 Flash-Lite TTS for new families (decided 2026-10-18, `docs/specs/GEMINI_TTS.md`); Sarvam Bulbul v4 Flash / v3 for Urdu, for families pinned before the switch, and as the fallback when Gemini fails. Each parent's voice is pinned on her profile (`media/tts.py`)
+- **TTS:** Sarvam Bulbul for the pilot (v4 Flash where it has a conversation voice, else v3; `TTS_VENDOR=sarvam` since 2026-11-22). Gemini 3.8 Flash-Lite TTS is built but not used: its voice drifts from one message to the next (`docs/specs/GEMINI_TTS.md` §11). Each parent's voice is pinned on her profile (`media/tts.py`); only `scripts/set_voice.py` moves it
 - **LLM:** Claude Sonnet 4.6 (`claude-sonnet-4-6`) for MVP (evaluate Sarvam native LLM in Phase 2)
 - **Messaging:** WhatsApp Business API (via Meta or Twilio/360Dialog intermediary)
 - **Memory:** Postgres fact store + story-atom retrieval for Layer 3. Recency today; hybrid semantic retrieval (Vertex AI `gemini-embedding-001` at 1536 dimensions, `asia-south1`, vectors in `story_atoms.embedding`) is built behind `EMBEDDINGS_ENABLED`, off by default. While it is off no text goes to an embedding vendor. See `docs/specs/SEMANTIC_RETRIEVAL.md`; the history is in @docs/proposals/embedding-strategy.md
@@ -28,7 +28,7 @@ Katha (`katha.life`) is a WhatsApp-first AI conversational agent that helps elde
 
 See @docs/TECH_DESIGN.md Section 1 for full system diagram and data flow.
 
-Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → TTS in the parent's pinned voice (Gemini or Sarvam, via `media/tts.py`) → WhatsApp voice note. Story extraction runs async post-session.
+Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → TTS in the parent's pinned voice (Sarvam for the pilot, via `media/tts.py`) → WhatsApp voice note. Story extraction runs async post-session.
 
 ## AI System
 
@@ -56,7 +56,7 @@ Key flow: WhatsApp webhook → Sarvam STT → LLM (dialogue + extraction) → TT
 - **DPDP Act compliance:** All user data (voice, stories) requires explicit consent; user can delete all data; no AI training on user content
 - **WhatsApp API:** Outbound messages require pre-approved message templates; 24-hour conversation window resets on user reply
 - **Sarvam API:** STT ~₹1/min, TTS ~₹0.50/min — track API costs per session in unit economics
-- **Gemini TTS:** ~₹1.14/min of audio to 31 Dec 2026, doubling from 1 Jan 2027; billed per second of audio, so slower speech costs more. Every request sends `store: false`; production needs a billing-enabled key
+- **Gemini TTS:** ~₹1.14/min of audio to 31 Dec 2026, doubling from 1 Jan 2027; billed per second of audio, so slower speech costs more. Every request sends `store: false`; production needs a billing-enabled key. Not used in the pilot (see TTS above)
 - **Conversation cards:** nothing reaches the family unless the parent said "approve" to that exact card after hearing it read; enforced in `cards/state.py` and by a CHECK constraint on `conversation_cards`. Private turns never feed a card or the family dashboard. The card template's Meta category (`META_TEMPLATE_CATEGORIES`) decides whether +1 numbers get WhatsApp at all; unknown is treated as Marketing. See `docs/specs/CONVERSATION_CARDS.md`
 - **No medical claims:** Katha is not therapy; include disclaimers; crisis protocol must reference iCall India (9152987821)
 
