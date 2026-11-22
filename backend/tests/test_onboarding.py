@@ -208,6 +208,33 @@ def test_onboarding_profile_rejects_an_unknown_persona(db):
     assert response.status_code == 422
 
 
+def test_the_old_name_for_india_time_is_saved_as_the_current_one(db):
+    # Chrome and Safari in India report "Asia/Calcutta". The production
+    # image's zone files leave that name out, so it used to fail with 422.
+    account = MagicMock(timezone=None)
+
+    async def _execute(stmt, *args, **kwargs):
+        if "family_accounts" in str(stmt):
+            return _query_result(scalar_one_or_none=account)
+        return _query_result(scalar_one_or_none=None)
+
+    db.execute = AsyncMock(side_effect=_execute)
+    payload = {**_VALID_PROFILE_PAYLOAD, "family_timezone": "Asia/Calcutta"}
+
+    response = client.post("/onboarding/profile", data=payload)
+
+    assert response.status_code == 200
+    assert account.timezone == "Asia/Kolkata"
+
+
+def test_an_unknown_timezone_is_named_in_the_422(db):
+    payload = {**_VALID_PROFILE_PAYLOAD, "family_timezone": "Mars/Olympus"}
+    response = client.post("/onboarding/profile", data=payload)
+    assert response.status_code == 422
+    # The form reads this word to say which field failed.
+    assert "timezone" in response.json()["detail"]
+
+
 # ── /onboarding/consent ──────────────────────────────────────────────────────
 
 
