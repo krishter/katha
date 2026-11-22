@@ -27,8 +27,33 @@ def parse_slot(text: str) -> dict:
     return {"dow": DAYS[day[:3]], "time": f"{hour:02d}:{minute:02d}"}
 
 
+# Old names some browsers still report (Intl, from CLDR), mapped to the
+# current IANA name. Chrome and Safari in India give "Asia/Calcutta", and
+# the production image's zone files (Debian) leave the old names out, so
+# without this the onboarding form failed for most Indian families. The
+# tzdata package (requirements.in) resolves every other old name; this map
+# only makes sure the stored name is the current one.
+_LEGACY_NAMES = {
+    "Asia/Calcutta": "Asia/Kolkata",
+    "Asia/Katmandu": "Asia/Kathmandu",
+    "Asia/Rangoon": "Asia/Yangon",
+    "Asia/Saigon": "Asia/Ho_Chi_Minh",
+    "Asia/Dacca": "Asia/Dhaka",
+    "Asia/Thimbu": "Asia/Thimphu",
+    "Atlantic/Faeroe": "Atlantic/Faroe",
+    "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+    "America/Indianapolis": "America/Indiana/Indianapolis",
+    "America/Louisville": "America/Kentucky/Louisville",
+    "Pacific/Truk": "Pacific/Chuuk",
+    "Pacific/Ponape": "Pacific/Pohnpei",
+    "Europe/Kiev": "Europe/Kyiv",
+}
+
+
 def parse_timezone(name: str) -> str:
-    """An IANA timezone name, checked. Raises ValueError."""
+    """An IANA timezone name, checked, under its current name. Raises
+    ValueError."""
+    name = _LEGACY_NAMES.get(name, name)
     try:
         ZoneInfo(name)
     except Exception as exc:

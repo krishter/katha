@@ -146,10 +146,26 @@ export default function OnboardingPage() {
         setError(err.detail);
         return;
       }
-      setError(
-        "Couldn't save that. Double-check the WhatsApp numbers are in " +
-          "+91XXXXXXXXXX format."
-      );
+      // 422 names the field that failed. Say which one, rather than
+      // blaming the numbers for everything: a time zone the server did
+      // not recognise used to read as a number problem.
+      const detail =
+        err instanceof ApiError && err.status === 422 ? err.detail ?? "" : "";
+      if (/whatsapp_number/.test(detail)) {
+        setError(
+          "Couldn't save that. Double-check the WhatsApp numbers are in " +
+            "+91XXXXXXXXXX format."
+        );
+      } else if (/timezone/i.test(detail)) {
+        setError(
+          "Couldn't save that. We didn't recognise the time zone. Try a " +
+            "name like Asia/Kolkata."
+        );
+      } else if (/HH:MM|call times/.test(detail)) {
+        setError("Couldn't save that. Check the call times you added.");
+      } else {
+        setError("Couldn't save that. Please check the form and try again.");
+      }
     } finally {
       setSubmitting(false);
     }
