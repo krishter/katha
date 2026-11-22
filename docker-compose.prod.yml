@@ -57,8 +57,13 @@ services:
       db:
         condition: service_healthy
     # No command override — the Dockerfile's CMD is the production one
-    # (--workers 1, no --reload). No volume mount: the image is the
+    # (--workers 1, no --reload). No code mount: the image is the
     # artifact, so what runs is what was built, not whatever is on disk.
+    # The one mount is the secrets folder, read-only, for the Vertex AI
+    # key behind EMBEDDINGS_ENABLED (DEPLOYMENT.md §3b). Docker creates it
+    # empty if it is missing, which is harmless while the flag is off.
+    volumes:
+      - /opt/katha/secrets:/opt/katha/secrets:ro
     # Published on the box's loopback only, for the operator's SSH tunnel
     # to /admin (Caddy refuses /admin publicly, SH-10). 127.0.0.1 is not
     # reachable from outside the box; never publish this as "8000:8000".

@@ -9,7 +9,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from memory import fact_store
+from memory import fact_store, vector_store
 from models.story_atom import StoryAtom
 from prompts.domains import (
     get_domain,
@@ -206,6 +206,14 @@ async def process_extraction(
         # Refresh to get DB-generated ids
         for atom in created_atoms:
             await db.refresh(atom)
+        # Their vectors for Layer 3 (SEMANTIC_RETRIEVAL.md §5.3). Off unless
+        # EMBEDDINGS_ENABLED. embed_atoms never raises: a failure marks the
+        # atom for the hourly sweep and nothing below is affected. This
+        # whole function runs in the background, so no reply waits on it.
+        try:
+            await vector_store.embed_atoms(created_atoms, db)
+        except Exception:
+            logger.exception("Embedding story atoms failed for turn %s", turn_id)
 
     # Process significant people.
     #

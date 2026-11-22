@@ -1,0 +1,619 @@
+[
+ {
+  "id": "qK01",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "love_marriage",
+  "reply": "அய்யோ, first meet-ஆ? கல்யாணத்துக்கு முன்னாடி அவர ஒரு தடவை கூட சரியா பார்க்கல. அறுபத்தெட்டுல மதுரையில எங்க அப்பா வீட்டு முத்தத்துலயே தான் கல்யாணம், நாதஸ்வரம் விடிய விடிய வாசிச்சுக்கிட்டே இருந்தாங்க, எனக்கு தூக்கமே வரல. தாலி கட்டும்போது தான் கொஞ்சம் தலைய தூக்கி பார்த்தேன், பெரிய மீசை வச்சிருந்தார்.",
+  "relevant": [
+   "K04"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK02",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "love_marriage",
+  "reply": "அதெல்லாம் இருக்கட்டும், லக்ஷ்மி கல்யாணம் தான் எனக்கு ஞாபகம் வருது. தொண்ணூத்தஞ்சுல மயிலாப்பூர் மண்டபத்துல, எல்லாமே நானே தான் பார்த்துக்கிட்டேன். சமையல்காரன் ரொம்ப late-ஆ வந்தான், எனக்கு படபடன்னு ஆயிடுச்சு. சாம்பார், பாயசம் எல்லாம் நானே ருசி பார்த்துட்டு தான் இலை போட விட்டேன்.",
+  "relevant": [
+   "K26"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK03",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "family_ancestors",
+  "reply": "எங்க பாட்டி பத்தி அவ்வளவா ஞாபகம் இல்லம்மா. ஆனா லக்ஷ்மிக்கு வளைகாப்பு, தொண்ணூத்தேழுல, பெங்களூர்ல நடந்தது. நான் ராத்திரி train-ல தனியா போனேன், பை நிறைய கண்ணாடி வளையல் வாங்கிட்டு. அவ கையில ஒவ்வொண்ணா போட்டு விடும்போது கண்ணுல தண்ணி வந்துடுச்சு.",
+  "relevant": [
+   "K37"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK04",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "love_marriage",
+  "reply": "அவர முதல்ல பார்த்தது கல்யாண மேடையில தான், அவ்வளவு தான். ஆனா எனக்கு நல்லா ஞாபகம் இருக்கிறது என் சீமந்தம், எழுபதுல, முதல் பிள்ளை வயித்துல இருக்கும்போது. மதுரையில அம்மா வீட்டுல, ரெண்டு கை முழுக்க வளையல், நடந்தா கலகலன்னு சத்தம். அம்மா சர்க்கரைப் பொங்கல், புளியோதரை எல்லாம் பண்ணி வச்சிருந்தா.",
+  "relevant": [
+   "K38"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK05",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "family_ancestors",
+  "reply": "தாத்தா ரொம்ப கண்டிப்பானவர், அவ்வளவு தான் தெரியும். அது சரி, எங்க ரவி கல்யாணம் பத்தி சொல்லட்டுமா? ரெண்டாயிரத்தி நாலுல அமெரிக்காவுலேருந்து வந்தான், இங்க சென்னையிலேயே கல்யாணம். பொண்ணு கல்கத்தா பக்கம், பெங்காலி. எனக்கு முதல்ல கொஞ்சம் பயமா இருந்துச்சு, அவங்க பழக்கம் எல்லாம் வேற, அப்புறம் ரொம்ப நல்லவங்கன்னு தெரிஞ்சுது.",
+  "relevant": [
+   "K40"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK06",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "childhood",
+  "reply": "எங்க வீடு சின்ன வீடு தான், ஆனா நாங்க பாதி நேரம் அப்பா கடையிலேயே இருப்போம். மீனாட்சி அம்மன் கோயில் கிட்டயே, பித்தளை குடம், சொம்பு, குத்துவிளக்கு எல்லாம் வரிசையா அடுக்கி வச்சிருப்பார். பள்ளிக்கூடம் விட்டதும் நேரா அங்க போய் துடைச்சு வைப்பேன். சித்திரைத் திருவிழா சமயம் கூட்டம் தாங்க முடியாது, அந்த பித்தளை வாசனை இன்னும் மூக்குல இருக்கு.",
+  "relevant": [
+   "K01",
+   "K31"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK07",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "education",
+  "reply": "ஸ்கூல் ஒண்ணும் பெரிசா இல்ல, சாதாரண பள்ளிக்கூடம் தான். ஆனா எட்டு வயசுல பாட்டு கிளாஸ் சேர்த்தாங்க பாருங்க, அது தான் முக்கியம். அம்மா காலையில அஞ்சு மணிக்கே எழுப்பி விட்டுருவா, இருட்டுல உட்கார்ந்து சரளி வரிசை பாடணும். தூக்கக் கலக்கத்துல அழுதுருக்கேன், ஆனா அதனால தான் இன்னிக்கு குரல் இருக்கு.",
+  "relevant": [
+   "K06"
+  ],
+  "drift": true,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK08",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "education",
+  "reply": "ஆமா, ஒரு டீச்சர் இருந்தாங்க, சரஸ்வதி டீச்சர்னு நினைக்கிறேன், பேரு சரியா ஞாபகம் இல்ல. க்ளாஸ்ல நான் முணுமுணுன்னு பாடிக்கிட்டு இருந்ததைக் கேட்டுட்டு, நாளைக்கு prayer-ல நீ தான் பாடணும்னு சொல்லிட்டாங்க. எல்லா பிள்ளைங்க முன்னாடியும் தனியா நின்னு பாடினேன், கால் நடுங்கிச்சு.",
+  "relevant": [
+   "K05"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK09",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "historical_events",
+  "reply": "பெரிய விஷயம் எல்லாம் தெரியாது, ஆனா எனக்கு பத்து வயசு இருக்கும், வைகையில தண்ணி பொங்கி எங்க தெருவுக்குள்ளேயே வந்துடுச்சு. நானும் என் தம்பியும் நோட்டுப் புத்தகத்தை கிழிச்சு காகிதக் கப்பல் விட்டோம். அம்மா பார்த்துட்டு நல்லா திட்டினா, பாவாடை முழுக்க சேறு.",
+  "relevant": [
+   "K23"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK10",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "historical_events",
+  "reply": "ரெண்டாயிரத்துப் பதினைஞ்சு மழை தான், அதை மறக்கவே முடியாது. கீழ் வீடு முழுக்க தண்ணி, சோபா எல்லாம் மிதந்துச்சு. மூணு நாள் நாங்க எல்லாரும் மொட்டை மாடியில தான், யார் வீட்டுல என்ன இருக்கோ அதை எல்லாம் பகிர்ந்து சாப்பிட்டோம். ரவி அமெரிக்காவுலேருந்து போன் பண்ணிக்கிட்டே இருந்தான், லைன் கிடைக்கல.",
+  "relevant": [
+   "K18"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qK11",
+  "user_id": "synth-kamala",
+  "reply_language": "ta",
+  "session_domain": "hobbies",
+  "reply": "என்னோட வீணை தான், எல்லாருக்கும் தெரியும். தொண்ணூத்து மூணுல எங்க இருபத்தஞ்சாவது anniversary-க்கு அவர் surprise-ஆ வாங்கிக் குடுத்தார். இன்னிக்கு வரைக்கும் பேரப்பிள்ளைங்க கூட அதைத் தொடக் கூடாது, நான் தான் துணி போட்டு மூடி வைப்பேன். அவர் போனதுக்கு அப்புறம் வாசிக்கும்போது அவர் பக்கத்துல இருக்கிற மாதிரி இருக்கு.",
+  "relevant": [
+   "K36"
+  ],
+  "drift": true,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS01",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "love_marriage",
+  "reply": "अरे, पहली बार ठीक से तो जयमाला के वक़्त ही देखा था उनको। चौंसठ में इलाहाबाद में हमारी शादी हुई, वो घोड़ी पर चढ़ कर आए थे, सेहरा बाँधे। और उसी रात ज़ोर की बारिश हो गई, सारे बाराती भीग गए। माला डालते हुए मैंने नज़र उठाई तो वो मुस्कुरा रहे थे, बस।",
+  "relevant": [
+   "S04"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS02",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "love_marriage",
+  "reply": "वो तो बहुत पुरानी बात है बेटा, ज़्यादा याद नहीं। हाँ, नेहा की शादी याद है, नब्बे में, लखनऊ में। सारा इंतज़ाम मैंने ही किया था, टेंट से लेकर हलवाई तक। आधी रात को हलवाई बोला चीनी ख़त्म हो गई, मैं ख़ुद पड़ोसियों को जगा-जगा के चीनी माँग के लाई। नेहा के पापा तो आराम से सो रहे थे।",
+  "relevant": [
+   "S21"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS03",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "family_ancestors",
+  "reply": "दादी-नानी की तो धुँधली सी याद है। पर अमित की शादी, छियानवे में बैंगलोर में हुई थी, वो मुझे ख़ूब याद है। बहू कर्नाटक की है, उनके यहाँ केले के पत्ते पर खाना परोसा, सब कुछ इमली-इमली, मुझे समझ ही नहीं आया क्या खा रही हूँ। मैं तो बस चावल और दही खा के उठ गई।",
+  "relevant": [
+   "S37"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS04",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "childhood",
+  "reply": "घर तो इलाहाबाद में था, बड़ा सा आँगन वाला। अच्छा, होली से याद आया, नेहा की शादी के बाद पहली होली कानपुर में ससुराल में थी। मैं डिब्बे भर-भर के गुझिया और मठरी ले कर गई थी, ट्रेन में सँभालते-सँभालते। समधन जी ने बड़े प्यार से रखा, पर बेटी को पराए घर रंग में देख के आँख भर आई।",
+  "relevant": [
+   "S38"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS05",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "childhood",
+  "reply": "हमारा घर ऐसा था, बीच में बड़ा आँगन, चारों तरफ़ कमरे। होली पर उसी आँगन में धमाचौकड़ी होती थी। अम्मा दो दिन पहले से गुझिया बनाती थीं, खोया भूनने की ख़ुशबू पूरे घर में। और विनोद, मेरा भाई, सबसे पहले बाबूजी के गाल पर गुलाल लगाता था, बाबूजी झूठमूठ गुस्सा करते थे।",
+  "relevant": [
+   "S03"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS06",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "career",
+  "reply": "शादी के दो साल बाद, छियासठ में, लखनऊ के एक लड़कियों के college में पढ़ाने लगी। सास जी पहले तो राज़ी नहीं थीं, फिर इन्होंने मना लिया। पहली तनख़्वाह डेढ़ सौ रुपये मिली थी, लिफ़ाफ़ा बिना खोले सास जी के हाथ में रख दिया। उन्होंने उसमें से दस रुपये निकाल के मुझे लौटा दिए, वो मैं आज भी नहीं भूली।",
+  "relevant": [
+   "S07"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS07",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "career",
+  "reply": "मेरी नौकरी तो ठीक है, पर असली ख़ुशी तो तब हुई जब विनोद को रेलवे में नौकरी लगी, अड़सठ की बात है। बाबूजी ने पूरी गली में लड्डू बँटवाए, हर दरवाज़े पर। अम्मा ने हनुमान जी को प्रसाद चढ़ाया। विनोद उस दिन पहली बार नई पतलून और जूते पहन के निकला था।",
+  "relevant": [
+   "S39"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS08",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "childhood",
+  "reply": "घर के पास ही मैदान था, दशहरे का मेला वहीं लगता था। बाबूजी मुझे कंधे पर बिठा लेते थे ताकि भीड़ में कुछ दिखे। जब रावण के पुतले में आग लगती और पटाखे फूटते, मैं डर के बाबूजी का सिर कस के पकड़ लेती थी। बारूद की गंध और भुने चने की ख़ुशबू, सब साथ-साथ।",
+  "relevant": [
+   "S40"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS09",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "family_ancestors",
+  "reply": "दादाजी तो मेरे होश सँभालने से पहले ही चले गए। हाँ, बाबूजी के साथ खिचड़ी के दिन संगम जाना याद है। मुँह अँधेरे उठा देते थे, ठंडा-ठंडा पानी, दाँत किटकिटाते थे। डुबकी के बाद किनारे पर गरम-गरम जलेबी खिलाते थे, वो स्वाद आज तक नहीं मिला।",
+  "relevant": [
+   "S26"
+  ],
+  "drift": true,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS10",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "historical_events",
+  "reply": "बासठ की लड़ाई, चीन वाली। तब मेरी शादी भी नहीं हुई थी। मोहल्ले की सारी औरतें दोपहर में बैठ के फ़ौजियों के लिए स्वेटर बुनती थीं, रेडियो पर ख़बरें चलती रहती थीं। मैंने अपनी सोने की दो चूड़ियाँ उतार के चंदे में दे दीं, अम्मा ने कुछ नहीं कहा, बस सिर पर हाथ फेरा।",
+  "relevant": [
+   "S10"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qS11",
+  "user_id": "synth-shanti",
+  "reply_language": "hi",
+  "session_domain": "hobbies",
+  "reply": "हाँ, चिकनकारी। लखनऊ आने के बाद पड़ोस में ज़रीना बी रहती थीं, उन्होंने ही सुई पकड़ना सिखाया, बड़ी सब्र वाली थीं। नेहा के दहेज़ के लिए मैंने अपने हाथ से कुर्ते काढ़े थे, रात-रात भर ट्यूबलाइट के नीचे बैठ के। आँखें तब से ही कमज़ोर हो गईं।",
+  "relevant": [
+   "S11"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP01",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "love_marriage",
+  "reply": "Well, it was at my cousin's marriage in Hassan, 1976 it must be. There was this girl singing a devaranama during the muhurtham, very sweet voice, and I simply couldn't stop looking. So I went and quietly asked my aunt, who is that girl? She gave me one look, you know, and laughed. That was Usha.",
+  "relevant": [
+   "P06"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP02",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "love_marriage",
+  "reply": "Ha, our wedding, 1977, in Mysore. My friend Nagaraj lent me his Ambassador for the occasion, white one, very proud I was. And halfway to the choultry it just stopped, radiator boiling. Usha's brothers had to push it while I sat there in my panche feeling like a fool. Even now she teases me about it.",
+  "relevant": [
+   "P08"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP03",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "family_ancestors",
+  "reply": "My grandfather I barely knew, he stayed back in the village. But you know what I keep thinking of? Divya's marriage, 2005, here in Bangalore. I insisted on taking the photos myself with my Nikon, and I was so busy changing the roll that I missed the actual thaali tying. Usha has still not forgiven me.",
+  "relevant": [
+   "P26"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP04",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "family_ancestors",
+  "reply": "Grandparents, hmm, both of them died before I was ten. Let me tell you about Kiran's wedding instead, 2012, in Pune. Lovely Marathi girl, they did everything their way, the green bangles, puran poli. This time I had learnt my lesson, we hired a fellow for the photos and I just sat in the front row and watched.",
+  "relevant": [
+   "P37"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP05",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "career",
+  "reply": "I joined the Railways as a young assistant engineer, and almost immediately there was the big strike of '74. Nineteen days I didn't go home, slept on a bench in the station master's office with a bedsheet from home. Trains standing still, the whole yard silent, very eerie. My mother sent tiffin through a peon every day.",
+  "relevant": [
+   "P05"
+  ],
+  "drift": true,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP06",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "education",
+  "reply": "College was in Mysore itself, '68 to '72, but I stayed in the hostel anyway, Appa insisted it would make a man of me. Hostel food was terrible, rice full of stones. Every morning we cycled to the workshops in a gang, eight-ten fellows, racing each other. There was one professor who wrote with chalk in both hands, I forget his name now.",
+  "relevant": [
+   "P02"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP07",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "career",
+  "reply": "First posting was Allahabad, and I knew no Hindi at all, only Kannada and English. There was a trackman there, Ramlal, old fellow with a big moustache, he took pity on me. Every evening over chai he'd make me repeat things, kya haal hai sahib, like that. Within six months I was scolding the gang in Hindi. I still think of him.",
+  "relevant": [
+   "P07"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP08",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "childhood",
+  "reply": "House was a small one in Mysore, near the railway quarters actually, we could hear the engines at night. Maybe that's why. I remember my first train journey, Mysore to Bangalore, I must have been six or seven. I stuck my head out of the window the whole way, coal dust in my eyes, my mother pulling me back by the shirt.",
+  "relevant": [
+   "P40"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP09",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "love_marriage",
+  "reply": "First meeting, that I've told you before, no? Better is our 25th anniversary, 2002. I took Usha to Shimla on the toy train from Kalka, the little narrow-gauge one. Slow, slow, through all those tunnels, and she was holding my arm in every one of them. It was the first holiday we took without the children.",
+  "relevant": [
+   "P34"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP10",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "career",
+  "reply": "Career, well, the proudest day was in '86, we opened a new station near Tambaram, I was in charge of the works. The minister himself came to cut the ribbon, so we were up all night painting the platform edge and fixing the nameboard. So humid, my shirt was soaked through by ten in the morning.",
+  "relevant": [
+   "P38"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qP11",
+  "user_id": "synth-prakash",
+  "reply_language": "en",
+  "session_domain": "hobbies",
+  "reply": "Chess, definitely chess. In the railway colony in Madras every Sunday after breakfast we'd gather under the neem tree, boards on folding tables. One year I actually became colony champion, beat an old signal inspector in the final. Usha would send coffee out in a flask and complain I spent more time with the pawns than with her.",
+  "relevant": [
+   "P39"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM01",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "love_marriage",
+  "reply": "ഓ, അദ്ദേഹത്തെ ആദ്യം ശരിക്കും കണ്ടത് താലികെട്ടിന്റെ അന്നാ. അറുപത്തിമൂന്നിൽ ഗുരുവായൂരമ്പലത്തിൽ വെച്ചായിരുന്നു കല്യാണം. തിരിച്ച് വീട്ടിൽ വന്നപ്പോൾ ഇരുന്നൂറ് പേർക്ക് സദ്യ, ഇലയിട്ട്, പായസം രണ്ട് തരം. ഗോപാലേട്ടൻ ഒന്നും മിണ്ടാതെ ഇരുന്നു, ഞാനും.",
+  "relevant": [
+   "M03"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM02",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "love_marriage",
+  "reply": "അതൊക്കെ പഴയ കഥയല്ലേ. അനിതയുടെ കല്യാണം ആണ് എനിക്ക് ഓർമ്മ വരുന്നത്, തൊണ്ണൂറിൽ, തൃശ്ശൂർ town hall-ൽ. അദ്ദേഹം ദുബായിൽ നിന്ന് ഒരു മാസത്തെ leave-ൽ വന്നതാ, അതും കല്യാണത്തിന് നാല് ദിവസം മുമ്പ്. എല്ലാം ഞാൻ ഒറ്റയ്ക്ക് ഒരുക്കി, അദ്ദേഹം വന്ന് കന്യാദാനം ചെയ്തു, അത്രേ ഉള്ളൂ.",
+  "relevant": [
+   "M11"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM03",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "career",
+  "reply": "ജോലിയോ? ആദ്യം എനിക്ക് പ്രത്യേകിച്ച് ജോലി ഒന്നും ഇല്ലായിരുന്നു. എഴുപത്തഞ്ചിൽ അദ്ദേഹം ഗൾഫിലേക്ക് പോയി, ദുബായിൽ. പോകുന്ന ദിവസം ഞാൻ കരഞ്ഞില്ല, കുട്ടികൾ നോക്കി നിൽക്കുന്നുണ്ടായിരുന്നു. പിന്നെ ഇരുപത് കൊല്ലം, കത്തും ഇടയ്ക്കൊരു ഫോണും മാത്രം.",
+  "relevant": [
+   "M07"
+  ],
+  "drift": true,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM04",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "love_marriage",
+  "reply": "ആദ്യം കണ്ടതൊക്കെ ശരി, പക്ഷേ ശരിക്കും ഒന്നിച്ച് ജീവിക്കാൻ തുടങ്ങിയത് തൊണ്ണൂറ്റഞ്ചിലാ, അദ്ദേഹം ദുബായ് വിട്ട് എന്നേക്കുമായി വന്നപ്പോൾ. സത്യം പറഞ്ഞാൽ ആദ്യത്തെ കൊല്ലം വലിയ പ്രയാസമായിരുന്നു. വീട്ടുകാര്യം ഞാൻ ഒറ്റയ്ക്ക് നോക്കി ശീലിച്ചതല്ലേ, അദ്ദേഹം ഓരോന്നിലും ഇടപെടും, എനിക്ക് ദേഷ്യം വരും. പിന്നെ പതുക്കെ ശരിയായി.",
+  "relevant": [
+   "M15"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM05",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "family_ancestors",
+  "reply": "മുത്തശ്ശിയെ കുറച്ച് ഓർമ്മയുണ്ട്, മുറുക്കാൻ ചവച്ചിരിക്കുന്നത്. പക്ഷേ എനിക്ക് പറയാനുള്ളത് ആ cassette-കളെ കുറിച്ചാ. ദുബായിൽ നിന്ന് അദ്ദേഹം സ്വന്തം ശബ്ദം record ചെയ്ത് അയക്കും, ഞങ്ങൾ tape recorder-ന് ചുറ്റും ഇരുന്ന് കേൾക്കും. തിരിച്ച് കുട്ടികൾ പാട്ട് പാടി അയക്കും, അനിത ഒരു സിനിമാപ്പാട്ട് പാടി നാണിച്ച് നിർത്തി.",
+  "relevant": [
+   "M08"
+  ],
+  "drift": false,
+  "look_alike": true,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM06",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "historical_events",
+  "reply": "രണ്ടായിരത്തിപ്പതിനെട്ടിലെ വെള്ളപ്പൊക്കം, അത് മറക്കാൻ പറ്റുമോ. രാത്രി കൊണ്ട് വെള്ളം കയറി, രാവിലെ ആയപ്പോൾ നെഞ്ചോളം. ഞാൻ അലമാരയുടെ മുകളിൽ ഫോട്ടോകൾ എടുത്ത് വെച്ചു. പിന്നെ കടപ്പുറത്ത് നിന്ന് മീൻപിടുത്തക്കാരുടെ വള്ളം വന്നു, ഒരു പയ്യൻ എന്നെ താങ്ങി കയറ്റി. ദൈവം പോലെ ആയിരുന്നു അവർ.",
+  "relevant": [
+   "M12"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM07",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "childhood",
+  "reply": "തൃശ്ശൂരിന് അടുത്തുള്ള ഞങ്ങളുടെ തറവാട്, ഓടിട്ട വലിയ വീട്, നടുമുറ്റം ഒക്കെ ഉള്ളത്. മുറ്റത്ത് ഒരു വലിയ മാവ്, കാറ്റടിച്ചാൽ മാങ്ങ വീഴുന്ന ശബ്ദം കേട്ട് ഓടും. പിന്നാമ്പുറത്ത് കുളം, അവിടെയാ ഞാൻ നീന്താൻ പഠിച്ചത്, ചേട്ടൻ തേങ്ങ കെട്ടി തന്നിട്ട്.",
+  "relevant": [
+   "M01"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM08",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "childhood",
+  "reply": "വീട് സാധാരണ വീട് തന്നെ. പക്ഷേ അച്ഛൻ എന്നെ പൂരത്തിന് കൊണ്ടുപോയത് നല്ല ഓർമ്മയുണ്ട്. ആനകളുടെ മുകളിൽ കുടമാറ്റം, ഓരോ നിറം മാറുമ്പോഴും ആളുകൾ ആർത്തുവിളിക്കും. ചെണ്ടമേളം നെഞ്ചിൽ അടിക്കുന്ന പോലെ തോന്നി, ഞാൻ അച്ഛന്റെ കൈ മുറുക്കി പിടിച്ചു.",
+  "relevant": [
+   "M06"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM09",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "education",
+  "reply": "എന്റെ ടീച്ചർ എന്ന് ചോദിച്ചാൽ, എന്റെ അച്ഛൻ തന്നെ. സ്കൂളിൽ കണക്ക് മാഷ് ആയിരുന്നു. രാത്രി ഉമ്മറത്ത് ചിമ്മിനി വിളക്ക് കത്തിച്ച് അയൽപക്കത്തെ കുട്ടികളെ ഒക്കെ ഇരുത്തി പഠിപ്പിക്കും, പൈസ ഒന്നും വാങ്ങാതെ. മണ്ണെണ്ണയുടെ മണവും സ്ലേറ്റിൽ കല്ലുപെൻസിൽ ഉരയുന്ന ശബ്ദവും ഇപ്പോഴും ഓർമ്മയുണ്ട്.",
+  "relevant": [
+   "M02"
+  ],
+  "drift": true,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM10",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "career",
+  "reply": "അദ്ദേഹം ഗൾഫിൽ ആയിരുന്നല്ലോ, വെറുതെ ഇരിക്കാൻ എനിക്ക് പറ്റിയില്ല. എൺപതിൽ വീടിന്റെ വരാന്തയിൽ രണ്ട് തയ്യൽ മെഷീൻ വെച്ച് തുടങ്ങി, അടുത്തുള്ള നാല് പെണ്ണുങ്ങളെ കൂട്ടി. സ്കൂൾ യൂണിഫോം ആയിരുന്നു പ്രധാനം, നീല പാവാടയും വെള്ള ഷർട്ടും, June മാസം ആവുമ്പോൾ രാത്രി വരെ മെഷീൻ ഓടും.",
+  "relevant": [
+   "M09"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": false,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ },
+ {
+  "id": "qM11",
+  "user_id": "synth-sarojini",
+  "reply_language": "ml",
+  "session_domain": "historical_events",
+  "reply": "കറന്റ് ആദ്യമായി നാട്ടിൽ വന്ന രാത്രി. അറുപതിൽ ആണെന്ന് തോന്നുന്നു, എനിക്ക് പതിനാറ് വയസ്സ്. നാട്ടുകാർ മുഴുവൻ ആ ഒരു വീടിന്റെ മുമ്പിൽ കൂടി, switch ഇട്ടപ്പോൾ ബൾബ് കത്തി, എല്ലാരും കൈയടിച്ചു. ചില പ്രായമായവർ പേടിച്ച് പിന്നോട്ട് മാറി. അമ്മ പറഞ്ഞു, ഇനി വിളക്ക് തുടയ്ക്കണ്ടല്ലോ എന്ന്.",
+  "relevant": [
+   "M04"
+  ],
+  "drift": false,
+  "look_alike": false,
+  "old_target": true,
+  "author": "second author (fresh subagent, saw only a terse fact sheet); labels machine-written, needs owner review"
+ }
+]

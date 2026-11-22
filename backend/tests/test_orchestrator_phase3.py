@@ -120,6 +120,155 @@ async def test_build_prior_context_includes_significant_people():
     assert isinstance(result, PriorContext)
 
 
+# ── Semantic retrieval (SEMANTIC_RETRIEVAL.md §5.2, §5.4) ───────────────────
+
+
+def _atom(domain, *threads):
+    return SimpleNamespace(id=uuid.uuid4(), domain=domain, open_threads=list(threads))
+
+
+def _retrieval_patches(stack, *, recent, semantic=None, embed=None, fallback=None):
+    stack.enter_context(
+        patch("core.orchestrator.fact_store.get_facts", new=AsyncMock(return_value={}))
+    )
+    stack.enter_context(
+        patch(
+            "core.orchestrator.fact_store.get_significant_people",
+            new=AsyncMock(return_value=[]),
+        )
+    )
+    stack.enter_context(
+        patch(
+            "core.orchestrator.vector_store.retrieve_relevant",
+            new=AsyncMock(return_value=recent),
+        )
+    )
+    retrieve_semantic = AsyncMock(return_value=semantic or [])
+    stack.enter_context(
+        patch("core.orchestrator.vector_store.retrieve_semantic", new=retrieve_semantic)
+    )
+    embed = embed or AsyncMock(return_value=[1.0] + [0.0] * 1535)
+    stack.enter_context(patch("core.orchestrator.gemini_embeddings.embed", new=embed))
+    fallback = fallback or AsyncMock()
+    stack.enter_context(
+        patch("core.orchestrator.gemini_embeddings.record_query_fallback", new=fallback)
+    )
+    return embed, retrieve_semantic, fallback
+
+
+async def test_flag_off_is_recency_with_no_embedding_call(monkeypatch):
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", False)
+    with ExitStack() as stack:
+        embed, semantic, _ = _retrieval_patches(
+            stack, recent=[_atom("career", "first boss")]
+        )
+        result = await build_prior_context(
+            _USER_ID,
+            _DOMAIN,
+            _make_db(),
+            query_text="she talks about her father's shop",
+        )
+    embed.assert_not_called()
+    semantic.assert_not_called()
+    assert result.open_threads == ["first boss"]
+
+
+async def test_semantic_threads_go_first_then_breadth_first_fill(monkeypatch):
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    monkeypatch.setattr(settings, "SEMANTIC_THREADS_FIRST", 2)
+    shop = _atom("childhood", "name of the shop", "the boy who worked there", "x")
+    recent = [_atom("career", "first boss"), shop, _atom("hobbies", "first song")]
+    with ExitStack() as stack:
+        _retrieval_patches(stack, recent=recent, semantic=[shop])
+        result = await build_prior_context(
+            _USER_ID,
+            _DOMAIN,
+            _make_db(),
+            query_text="Appa's shop near the temple, you know",
+        )
+    # Two semantic threads first (the cap), then the newest-25 breadth-first
+    # fill, less the threads already taken. The shop atom's third thread did
+    # not fit the first block and still reaches the fill.
+    assert result.open_threads == [
+        "name of the shop",
+        "the boy who worked there",
+        "first boss",
+        "first song",
+        "x",
+    ]
+
+
+async def test_query_embedding_failure_falls_back_to_recency(monkeypatch):
+    from adapters.gemini_embeddings import EmbeddingUnavailable
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    with ExitStack() as stack:
+        _, semantic, fallback = _retrieval_patches(
+            stack,
+            recent=[_atom("career", "first boss")],
+            embed=AsyncMock(side_effect=EmbeddingUnavailable("timeout")),
+        )
+        result = await build_prior_context(
+            _USER_ID,
+            _DOMAIN,
+            _make_db(),
+            query_text="she talks about her father's shop",
+        )
+    fallback.assert_awaited_once_with("timeout")
+    semantic.assert_not_called()
+    assert result.open_threads == ["first boss"]
+
+
+async def test_semantic_sql_failure_rolls_back_and_uses_recency(monkeypatch):
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    db = _make_db()
+    with ExitStack() as stack:
+        _, semantic, _ = _retrieval_patches(stack, recent=[_atom("career", "boss")])
+        semantic.side_effect = RuntimeError("bad sql")
+        result = await build_prior_context(
+            _USER_ID, _DOMAIN, db, query_text="her father's shop"
+        )
+    db.rollback.assert_awaited()
+    assert result.open_threads == ["boss"]
+
+
+@pytest.mark.parametrize("transcript", [None, "", "haan", "haan ji"])
+async def test_short_first_reply_queries_the_domain_alone(monkeypatch, transcript):
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    with ExitStack() as stack:
+        embed, _, _ = _retrieval_patches(stack, recent=[])
+        await build_prior_context(
+            _USER_ID, "childhood", _make_db(), query_text=transcript
+        )
+    assert embed.call_args.args[0] == "Childhood & Home"
+    assert embed.call_args.kwargs == {"kind": "query"}
+
+
+async def test_query_is_the_first_reply_alone(monkeypatch):
+    from config import settings
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    with ExitStack() as stack:
+        embed, semantic, _ = _retrieval_patches(stack, recent=[])
+        await build_prior_context(
+            _USER_ID,
+            "childhood",
+            _make_db(),
+            query_text="  Appa's shop near the temple  ",
+        )
+    assert embed.call_args.args[0] == "Appa's shop near the temple"
+    assert semantic.call_args.kwargs["k"] == settings.SEMANTIC_TOP_K
+
+
 # ── build_prior_context degrades rather than raising (S1.5.2) ─────────────────
 #
 # Retrieval failing must never cost the user their reply. Before S1.5 this

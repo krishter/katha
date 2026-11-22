@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me"
@@ -127,6 +129,22 @@ class Settings(BaseSettings):
     # within a session, which is what lets prompt caching work. false
     # rebuilds it every turn, as before. The rendering caps apply either way.
     LAYER3_FREEZE_PER_SESSION: bool = True
+
+    # Semantic retrieval for Layer 3 (docs/specs/SEMANTIC_RETRIEVAL.md).
+    # Off by default: while false no atom text and no query leaves for
+    # Google, and Layer 3 is recency exactly as before. Vertex AI's location
+    # is deliberately not a setting; adapters/gemini_embeddings.py pins it
+    # to asia-south1.
+    EMBEDDINGS_ENABLED: bool = False
+    GOOGLE_CLOUD_PROJECT: str = ""
+    # Path to the service account key (roles/aiplatform.user only), mounted
+    # read-only, mode 600, outside git and outside the image.
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    # How many atoms the query vector fetches, and how many of their open
+    # threads go ahead of the newest-25 breadth-first fill. Set from the
+    # end-to-end retrieval case in evals/run_eval.py (§6).
+    SEMANTIC_TOP_K: int = 8
+    SEMANTIC_THREADS_FIRST: int = 6
 
     # Which Claude model each call runs on (COST_TO_SERVE.md C1, C4). Every
     # one rolls back with an env change and a restart: the old path stays in
@@ -343,6 +361,23 @@ def validate_production_config(s: Settings = settings) -> None:
             f"PUBLIC_BASE_URL is not https:// (got: {s.PUBLIC_BASE_URL!r}) — "
             "every Twilio webhook signature check would fail"
         )
+    if s.EMBEDDINGS_ENABLED:
+        # A missing key must fail the deploy, not quietly turn every
+        # session's query into a recency fallback.
+        if not s.GOOGLE_CLOUD_PROJECT:
+            problems.append(
+                "EMBEDDINGS_ENABLED is true but GOOGLE_CLOUD_PROJECT is empty"
+            )
+        if not s.GOOGLE_APPLICATION_CREDENTIALS:
+            problems.append(
+                "EMBEDDINGS_ENABLED is true but GOOGLE_APPLICATION_CREDENTIALS is empty"
+            )
+        elif not os.path.isfile(s.GOOGLE_APPLICATION_CREDENTIALS):
+            problems.append(
+                "EMBEDDINGS_ENABLED is true but GOOGLE_APPLICATION_CREDENTIALS "
+                f"names a key file that does not exist: "
+                f"{s.GOOGLE_APPLICATION_CREDENTIALS!r}"
+            )
 
     if problems:
         raise RuntimeError(

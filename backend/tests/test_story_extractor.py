@@ -432,3 +432,85 @@ async def test_set_aside_is_recorded_and_its_people_are_not_flagged():
     )
     assert [c.args[1]["name"] for c in mock_upsert.await_args_list] == ["Uma"]
     assert result.set_aside == [{"kind": "person", "name": "Rani"}]
+
+
+# ── Embedding after extraction (SEMANTIC_RETRIEVAL.md §5.3) ────────────────
+
+
+async def test_embeds_after_commit_exactly_the_stored_text(monkeypatch):
+    """Title, narrative and quote as stored (D8): nothing translated."""
+    from config import settings
+    from memory import vector_store
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    db = _make_db()
+    order: list[str] = []
+    db.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+    sent: list[str] = []
+
+    async def embed(text, kind):
+        order.append("embed")
+        sent.append(text)
+        return [1.0] + [0.0] * 1535
+
+    monkeypatch.setattr(vector_store.gemini_embeddings, "embed", embed)
+    extraction = {"story_atoms": [_FULL_ATOM], "significant_people": []}
+
+    result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    assert order[:2] == ["commit", "embed"]
+    assert sent == [
+        "Father's shop\nMy father had a shop in Madurai selling brass vessels.\n"
+        "“The shop smelled of oil and metal”"
+    ]
+    assert result.story_atoms[0].embedding_model == "gemini-embedding-001@1536"
+
+
+async def test_embedding_failure_marks_the_atom_and_extraction_carries_on(
+    monkeypatch,
+):
+    from adapters.gemini_embeddings import EmbeddingUnavailable
+    from config import settings
+    from memory import vector_store
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", True)
+    monkeypatch.setattr(
+        vector_store.gemini_embeddings,
+        "embed",
+        AsyncMock(side_effect=EmbeddingUnavailable("error")),
+    )
+    db = _make_db()
+    extraction = {"story_atoms": [_FULL_ATOM], "significant_people": [_IYER]}
+
+    with (
+        patch(
+            "extraction.story_extractor.fact_store.get_significant_people",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "extraction.story_extractor.fact_store.upsert_significant_person",
+            new=AsyncMock(),
+        ) as upsert,
+    ):
+        result = await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    assert len(result.story_atoms) == 1
+    assert result.story_atoms[0].embedding_failed is True
+    assert result.story_atoms[0].embedding is None
+    upsert.assert_awaited_once()
+    assert result.significant_people_detected == [_IYER]
+
+
+async def test_flag_off_means_no_embedding_call(monkeypatch):
+    from config import settings
+    from memory import vector_store
+
+    monkeypatch.setattr(settings, "EMBEDDINGS_ENABLED", False)
+    embed = AsyncMock()
+    monkeypatch.setattr(vector_store.gemini_embeddings, "embed", embed)
+    db = _make_db()
+    extraction = {"story_atoms": [_FULL_ATOM], "significant_people": []}
+
+    await process_extraction(extraction, _SESSION_ID, _USER_ID, db)
+
+    embed.assert_not_called()

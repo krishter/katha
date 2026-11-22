@@ -1,8 +1,10 @@
 # Embedding strategy — why Katha has no embedding vendor
 
-**Status:** Decided and implemented (Sprint 1, S1.5)
+**Status:** Decided and implemented (Sprint 1, S1.5). **Phase 2 path superseded 2026-10-23**: see below.
 **Date:** 2026-08-14
 **Supersedes:** the `OpenAI text-embedding-3-small` entry in `CLAUDE.md`'s Tech Stack
+
+> **Superseded, 2026-10-23.** Route A (Azure OpenAI) was never wired. The offline evaluation (`embedding-eval-results.md`) chose Vertex AI `gemini-embedding-001` at 1536 dimensions in `asia-south1` (100% Recall@5; Titan V2 in ap-south-1 90%, BGE-M3 88%, recency 38%), and `docs/specs/SEMANTIC_RETRIEVAL.md` builds it behind `EMBEDDINGS_ENABLED`, off by default. Google is already a processor (Gemini TTS), so this adds no vendor. Two things below still hold: the domain is a poor query and a poor filter (the query is now the parent's first reply), and vectors from two models must never be mixed (every vector carries `story_atoms.embedding_model`). One correction to the residency reasoning: Google's data-residency table (checked 2026-10-22) does not list `gemini-embedding-001` for ML processing in India, only the US and EU multi-regions; see the round-2 section of the results doc.
 
 ---
 

@@ -1,0 +1,349 @@
+{
+ "_about": "All labels machine-written. Entries with needs_owner_review=true involve Hindi, Tamil or code-mixed text; please check them.",
+ "labels": {
+  "qK01": {
+   "relevant": [
+    "K04"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractors: K26 daughter's wedding, K36 anniversary"
+  },
+  "qK02": {
+   "relevant": [
+    "K26"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractor: K04 her own wedding"
+  },
+  "qK03": {
+   "relevant": [
+    "K01",
+    "K31"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qK04": {
+   "relevant": [
+    "K06"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractors: K09/K22 teaching, K19 radio"
+  },
+  "qK05": {
+   "relevant": [
+    "K05"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "target has STT noise"
+  },
+  "qK06": {
+   "relevant": [
+    "K03"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qK07": {
+   "relevant": [
+    "K18"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "no shared keywords with target"
+  },
+  "qK08": {
+   "relevant": [
+    "K23"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractor: K18 2015 Chennai floods; target has STT noise"
+  },
+  "qK09": {
+   "relevant": [
+    "K09",
+    "K22"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qK10": {
+   "relevant": [
+    "K02"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qK11": {
+   "relevant": [
+    "K29"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qK12": {
+   "relevant": [
+    "K15"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "Tamil query, English target with STT noise"
+  },
+  "qS01": {
+   "relevant": [
+    "S04"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractors: S21 daughter's wedding, S30 anniversary"
+  },
+  "qS02": {
+   "relevant": [
+    "S21"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractor: S04 her own wedding"
+  },
+  "qS03": {
+   "relevant": [
+    "S03"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qS04": {
+   "relevant": [
+    "S05",
+    "S26"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "S05 has STT noise"
+  },
+  "qS05": {
+   "relevant": [
+    "S06"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qS06": {
+   "relevant": [
+    "S02"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qS07": {
+   "relevant": [
+    "S10"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qS08": {
+   "relevant": [
+    "S11"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qS09": {
+   "relevant": [
+    "S07"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "distractors: S23 retirement, S29 literacy class, S12 vice principal"
+  },
+  "qS10": {
+   "relevant": [
+    "S17"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qS11": {
+   "relevant": [
+    "S08",
+    "S09"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "Devanagari query, S08 is romanised Hinglish"
+  },
+  "qS12": {
+   "relevant": [
+    "S24"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": ""
+  },
+  "qP01": {
+   "relevant": [
+    "P06"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "distractor: P08 his own wedding"
+  },
+  "qP02": {
+   "relevant": [
+    "P08"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "distractors: P06 cousin's wedding, P26 daughter's wedding"
+  },
+  "qP03": {
+   "relevant": [
+    "P26"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "distractor: P08"
+  },
+  "qP04": {
+   "relevant": [
+    "P05"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "target has STT noise"
+  },
+  "qP05": {
+   "relevant": [
+    "P02"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": ""
+  },
+  "qP06": {
+   "relevant": [
+    "P04",
+    "P07",
+    "P15"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qP07": {
+   "relevant": [
+    "P07"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qP08": {
+   "relevant": [
+    "P10"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qP09": {
+   "relevant": [
+    "P25"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qP10": {
+   "relevant": [
+    "P09",
+    "P13",
+    "P30"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": ""
+  },
+  "qP11": {
+   "relevant": [
+    "P11"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": ""
+  },
+  "qP12": {
+   "relevant": [
+    "P03"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": ""
+  },
+  "qK13": {
+   "relevant": [
+    "K36"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "control: target from sessions 26-30, where recency should succeed"
+  },
+  "qK14": {
+   "relevant": [
+    "K33"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "control: target from sessions 26-30, where recency should succeed"
+  },
+  "qS13": {
+   "relevant": [
+    "S28"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "control: target from sessions 26-30, where recency should succeed"
+  },
+  "qS14": {
+   "relevant": [
+    "S36"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": true,
+   "note": "control: target from sessions 26-30, where recency should succeed"
+  },
+  "qP13": {
+   "relevant": [
+    "P30"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "control: target from sessions 26-30, where recency should succeed"
+  },
+  "qP14": {
+   "relevant": [
+    "P36"
+   ],
+   "author": "machine (Claude, 2026-10-23)",
+   "needs_owner_review": false,
+   "note": "control: target from sessions 26-30, where recency should succeed"
+  }
+ }
+}

@@ -20,7 +20,7 @@ from datetime import datetime, time, timezone
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from core.auth import get_current_user
 from main import app
@@ -96,6 +96,10 @@ async def _seed_full_user(
         completeness_score=3,
         verbatim_quote="It smelled of jasmine.",
         open_threads=["what did the shop sell"],
+        # Embeddings live in the atom's row (SEMANTIC_RETRIEVAL.md §5.7), so
+        # deleting the atom must take the vector with it.
+        embedding=[0.5] * 1536,
+        embedding_model="gemini-embedding-001@1536",
     )
     db.add(atom)
     await db.commit()
@@ -214,6 +218,14 @@ async def test_export_then_delete_removes_every_row(real_db, monkeypatch):
 
         before = await _count_rows(real_db, user_id)
         assert all(v > 0 for v in before.values()), before
+        assert (
+            await real_db.execute(
+                select(func.count())
+                .select_from(StoryAtom)
+                .where(StoryAtom.user_id == user_id)
+                .where(StoryAtom.embedding.is_not(None))
+            )
+        ).scalar_one() == 1
 
         # 1. The export the UI offers immediately before deletion.
         export = await client.get("/family/export")
@@ -240,6 +252,16 @@ async def test_export_then_delete_removes_every_row(real_db, monkeypatch):
             "api_usage": 0,
             "voice_changes": 0,
         }, after
+        # Nor any vector for this parent, under any model.
+        vectors = (
+            await real_db.execute(
+                select(func.count())
+                .select_from(StoryAtom)
+                .where(StoryAtom.user_id == user_id)
+                .where(StoryAtom.embedding.is_not(None))
+            )
+        ).scalar_one()
+        assert vectors == 0
 
         # Consent records are retained and anonymised, never hard-deleted.
         consents = (

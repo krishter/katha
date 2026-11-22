@@ -210,6 +210,10 @@ async def _load(db: AsyncSession, excluded: frozenset[str]) -> _World:
                     StoryAtom.domain,
                     StoryAtom.completeness_score,
                     StoryAtom.created_at,
+                    # Whether a vector exists, never the vector itself
+                    # (ADMIN_METRICS.md §3 rule 1).
+                    (StoryAtom.embedding.is_not(None)).label("has_embedding"),
+                    StoryAtom.embedding_failed,
                 )
             )
         )
@@ -597,6 +601,25 @@ def _story_atoms(world: _World, w: _Windows) -> dict:
             "histogram": histogram,
             "storytellers_6_plus": sum(n for k, n in histogram.items() if k >= 6),
         },
+        "embeddings": _embeddings(atoms_by_window["all_time"]),
+    }
+
+
+def _embeddings(atoms) -> dict:
+    """
+    Semantic retrieval's coverage (SEMANTIC_RETRIEVAL.md §5.8): counts only.
+    Pending is no vector and not failed; the hourly sweep works through
+    pending and failed atoms alike. All zero while EMBEDDINGS_ENABLED is off
+    and nothing has been embedded.
+    """
+    embedded = sum(1 for a in atoms if a.has_embedding)
+    failed = sum(1 for a in atoms if not a.has_embedding and a.embedding_failed)
+    return {
+        "atoms_total": len(atoms),
+        "atoms_embedded": embedded,
+        "atoms_failed": failed,
+        "atoms_pending": len(atoms) - embedded - failed,
+        "share_embedded": rate(embedded, len(atoms)),
     }
 
 
@@ -801,6 +824,10 @@ def _units(window_rows) -> dict:
     # how often a Gemini reply had to be said by Sarvam instead (D3).
     gemini_clips = vendor_fallbacks = 0
     gemini_seconds = 0.0
+    # Embeddings (SEMANTIC_RETRIEVAL.md §5.8): their own vendor, so they
+    # never count as TTS clips.
+    embedding_tokens = embedding_documents = embedding_queries = 0
+    embedding_fallbacks = 0
     for u in window_rows:
         units = u.units or {}
         if u.vendor == "anthropic":
@@ -821,6 +848,14 @@ def _units(window_rows) -> dict:
             tts_chars += int(units.get("characters") or 0)
             if u.operation == "tts_fallback_vendor":
                 vendor_fallbacks += 1
+        elif u.vendor == "google_embeddings":
+            embedding_tokens += int(units.get("tokens") or 0)
+            if u.operation == "embed_document":
+                embedding_documents += 1
+            elif u.operation == "embed_query":
+                embedding_queries += 1
+            elif u.operation == "embed_query_fallback":
+                embedding_fallbacks += 1
         elif u.vendor == "google":
             gemini_clips += 1
             gemini_seconds += float(units.get("audio_seconds") or 0)
@@ -842,6 +877,13 @@ def _units(window_rows) -> dict:
         ),
         "messages_in": messages_in,
         "messages_out": messages_out,
+        "embedding_tokens": embedding_tokens,
+        "embedding_document_calls": embedding_documents,
+        "embedding_query_calls": embedding_queries,
+        "embedding_query_fallbacks": embedding_fallbacks,
+        "embedding_query_fallback_rate": rate(
+            embedding_fallbacks, embedding_queries + embedding_fallbacks
+        ),
     }
 
 
