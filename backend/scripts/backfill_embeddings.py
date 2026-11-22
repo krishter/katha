@@ -18,18 +18,27 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib
 import pathlib
+import pkgutil
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import func, or_, select  # noqa: E402
 
+import models  # noqa: E402
 from adapters import gemini_embeddings  # noqa: E402
 from config import settings  # noqa: E402
 from memory import vector_store  # noqa: E402
 from models.db import AsyncSessionLocal  # noqa: E402
 from models.story_atom import StoryAtom  # noqa: E402
+
+# Load every model, as the app does. story_atoms points at turns, turns at
+# sessions, and so on: with only StoryAtom loaded, every flush failed with
+# NoReferencedTableError (found on the first production backfill).
+for _module in pkgutil.iter_modules(models.__path__):
+    importlib.import_module(f"models.{_module.name}")
 
 # One request a second stays far inside any default Vertex quota. Replace
 # with the figure from the P3 quota check.
