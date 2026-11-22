@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <main id="main" className="mx-auto max-w-2xl px-6 py-12 text-ink">
       <h1 className="font-display text-2xl font-semibold">Katha Privacy Policy</h1>
-      <p className="mt-2 text-sm text-ink-mid">Version 1.2 · 15 November 2026</p>
+      <p className="mt-2 text-sm text-ink-mid">Version 1.3 · 22 November 2026</p>
 
       <section className="mt-8">
         <h2 className="font-display text-lg font-semibold">What we collect</h2>
@@ -108,7 +108,13 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Google</strong> (USA) speaks Katha&apos;s replies, from
-            text, with the request marked not to be stored.
+            text, with the request marked not to be stored. Google also turns
+            the stories Katha writes down, and her first words in each
+            conversation, into numbers, so Katha can bring back an earlier
+            story that fits what she is talking about. These requests go to
+            Google&apos;s servers in Mumbai, but Google may process them
+            outside India. The numbers are stored with her stories, in India,
+            and are deleted with them.
           </li>
           <li>
             <strong>Twilio</strong> (USA) and <strong>Meta</strong>, which runs
