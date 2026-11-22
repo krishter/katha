@@ -10,7 +10,8 @@ answered from counts (PILOT_RUNBOOK.md, "Reading what she said"). Per
 session: turns, how long her messages were, whether the language heard was
 hers, story atoms and their 5W completeness, private turns, failures, how
 it ended. Then the Layer 3 check: how many life domains her atoms cover,
-and how many of them the 5 most recent (what Layer 3 receives) still do.
+and how many of them the newest atoms Layer 3 retrieves (the orchestrator's
+window, 25 today) still do.
 
 It prints no transcript, reply, atom, title, name or place. It reads only.
 """
@@ -27,15 +28,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import func, select  # noqa: E402
 
+from core.orchestrator import _RETRIEVAL_TOP_K as LAYER3_TOP_K  # noqa: E402
 from models.db import AsyncSessionLocal  # noqa: E402
 from models.operator_alert import TurnFailure  # noqa: E402
 from models.session import Session  # noqa: E402
 from models.story_atom import StoryAtom  # noqa: E402
 from models.turn import Turn  # noqa: E402
 from models.user_profile import UserProfileModel  # noqa: E402
-
-# Layer 3 takes this many atoms, newest first (memory/vector_store.py).
-LAYER3_TOP_K = 5
 
 
 def _lang(code: str | None) -> str:
@@ -126,7 +125,8 @@ async def report(user_id: str, last: int, db) -> list[str]:
         + ", ".join(f"{d} {c}" for d, c in sorted(all_domains.items())),
         f"Layer 3 (newest {LAYER3_TOP_K} atoms) covers {len(recent)} domain(s). "
         + (
-            f"Dropped from Layer 3: {', '.join(dropped)}. That is T5's trigger."
+            f"Dropped from Layer 3: {', '.join(dropped)}. "
+            "Time to switch on semantic retrieval."
             if dropped
             else "Nothing dropped yet."
         ),

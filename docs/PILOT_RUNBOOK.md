@@ -236,11 +236,13 @@ said. A survey from the operator breaks the fiction that Katha is her conversati
 
 ## Phase 5 · Days 8–12 — Two scheduled cliffs
 
-**Session ~5 — the Layer 3 thinning.** `retrieve_relevant` returns `top_k=5` by recency, so
-once atoms span more than five domains the earliest domain drops out of the prompt entirely.
-🔧 At session 5, run `scripts.session_health`: its last line says which life domains have
-dropped out of the newest five atoms Layer 3 receives. If any have, that is T5's trigger
-firing — do T5 before more families join. No one reads the Layer 3 block itself.
+**From session ~8 — the Layer 3 thinning.** Layer 3 retrieves her newest 25 atoms by
+recency (`_RETRIEVAL_TOP_K` in `core/orchestrator.py`) and renders up to 12 open threads, one
+per domain before a second from any. Once she has more than 25 atoms, the earliest domains
+can drop out of the prompt entirely. 🔧 From session 8, run `scripts.session_health` weekly:
+its last line says which life domains have dropped out of the newest 25 atoms. If any have,
+it is time to switch on semantic retrieval (`docs/specs/SEMANTIC_RETRIEVAL.md`, branch
+`feature/semantic-retrieval`) before more families join. No one reads the Layer 3 block itself.
 
 **Session 10 — the free limit.** Pilot families are on the `pilot` plan (pre-flight step 5)
 and never reach it; check with `python -m scripts.set_plan --user-id … --plan pilot --by
