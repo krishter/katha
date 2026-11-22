@@ -98,7 +98,7 @@ Then the full regression: TC-01 to TC-11 at three samples, plus TC-19 to TC-25. 
 
 ## 5. Did it work
 
-The eval cases show the prompt does what it says. Whether she now finishes more stories only shows up in real conversations. After about two weeks of sessions, rerun the Phase A script (`scripts/consolidate_stories.py`, offline against a restore, read-only) over the **new sessions only**, for the same parent, and compare:
+The eval cases show the prompt does what it says. Whether she now finishes more stories only shows up in real conversations. After about two weeks of sessions, rerun the Phase A script over the **new sessions only**, for the same parent, and compare. Run it on the box, read-only, with `--from-session <first new session>`: for a family it reports only the counts below, never her words, titles or drafts (no one at Katha reads them, 2026-11-21). A full report with drafts is only made for the team's own self-trial accounts:
 
 | Measure | Phase A baseline (2026-11-07) | Target |
 |---|---|---|
