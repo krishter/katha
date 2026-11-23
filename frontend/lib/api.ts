@@ -278,6 +278,12 @@ export const api = {
 
   // A fresh confirm link. The code is stored hashed, so an earlier one
   // cannot be shown again; this replaces it.
+  emailSetupLinks: () =>
+    apiFetch<{ sent: boolean; family_confirm_link: string }>(
+      "/family/setup-links/email",
+      { method: "POST" },
+    ),
+
   getFamilyConfirmLink: () =>
     apiFetch<{ link: string }>("/family/family-number/confirm-link", {
       method: "POST",

@@ -13,8 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cards.privacy import not_private_atom, not_private_memory_card
 from config import settings
-from core import family_number, freemium, parent_consent
+from core import family_number, freemium, parent_consent, ratelimit, setup_links
 from core.auth import get_current_user
+from core.email import send_email_ses
 from core.freemium import FREE_SESSION_LIMIT
 from media import storage
 from models.conversation_card import ConversationCard
@@ -310,6 +311,51 @@ async def family_number_confirm_link(
     code = family_number.issue_code(account)
     await db.commit()
     return {"link": family_number.confirm_link(code)}
+
+
+@router.post("/family/setup-links/email")
+async def email_setup_links(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Email the child the links that are still to be used, for finishing on a
+    phone after setting up on a laptop (core/setup_links.py): the parent's
+    start link until she has messaged, and the number-confirm link until it
+    is confirmed. The confirm link is new, and replaces any earlier one; it
+    is returned so the page can show the same one.
+    """
+    user_id = current_user["user_id"]
+    ratelimit.enforce(ratelimit.SETUP_LINKS_EMAIL, user_id)
+    account = (
+        await db.execute(select(FamilyAccount).where(FamilyAccount.user_id == user_id))
+    ).scalar_one_or_none()
+    profile = (
+        await db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    if account is None or profile is None:
+        raise HTTPException(status_code=404, detail="Family account not found")
+
+    consent = await parent_consent.get_status(user_id, db)
+    parent_link = (
+        _wa_me_link(profile.whatsapp_number)
+        if consent.status is parent_consent.ConsentStatus.NOT_ASKED
+        else ""
+    )
+    confirm_link = ""
+    if profile.family_whatsapp_number and not family_number.is_confirmed(profile):
+        confirm_link = family_number.confirm_link(family_number.issue_code(account))
+        await db.commit()
+    if not parent_link and not confirm_link:
+        return {"sent": False, "family_confirm_link": ""}
+
+    subject, text, html = setup_links.build_email(
+        profile.name or "", parent_link, confirm_link
+    )
+    await send_email_ses(account.email, subject, text, html)
+    return {"sent": True, "family_confirm_link": confirm_link}
 
 
 @router.get("/family/stories")

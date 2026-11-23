@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { ConfirmNumberQr } from "@/components/ConfirmNumberQr";
+import { ParentLinkShare } from "@/components/ParentLinkShare";
 import { api, ApiError } from "@/lib/api";
+import { useIsDesktop } from "@/lib/useIsDesktop";
 
 type Step = "checking" | "email" | "verify" | "profile" | "consent" | "done";
 
@@ -25,6 +28,15 @@ const INPUT_CLASS =
   "mt-1 w-full rounded-lg border border-border px-4 py-2 text-ink focus:border-saffron";
 const BUTTON_CLASS =
   "w-full rounded-lg bg-saffron px-4 py-2 font-medium text-indigo transition hover:bg-gold disabled:opacity-60";
+
+type EmailState = "idle" | "sending" | "sent" | "nothing" | "limited" | "failed";
+
+const EMAIL_STATE_TEXT: Record<Exclude<EmailState, "idle" | "sending">, string> = {
+  sent: "Sent. Open it on your phone when you're ready.",
+  nothing: "Nothing left to send: both steps are already done.",
+  limited: "We've sent these a few times already. Please try again in an hour.",
+  failed: "Couldn't send that just now. Please try again.",
+};
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -77,6 +89,8 @@ export default function OnboardingPage() {
     whatsappLink: string;
     familyConfirmLink: string;
   } | null>(null);
+  const [emailState, setEmailState] = useState<EmailState>("idle");
+  const isDesktop = useIsDesktop();
 
   // A magic-link click is a full page reload landing back on this same
   // route once the cookie is set — this mount check is what actually
@@ -168,6 +182,28 @@ export default function OnboardingPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleEmailLinks() {
+    setEmailState("sending");
+    try {
+      const result = await api.emailSetupLinks();
+      if (!result.sent) {
+        setEmailState("nothing");
+        return;
+      }
+      // Sending made a new confirm code, which replaces the one on screen.
+      if (result.family_confirm_link) {
+        setDoneInfo((info) =>
+          info ? { ...info, familyConfirmLink: result.family_confirm_link } : info,
+        );
+      }
+      setEmailState("sent");
+    } catch (err) {
+      setEmailState(
+        err instanceof ApiError && err.status === 429 ? "limited" : "failed",
+      );
     }
   }
 
@@ -612,7 +648,7 @@ export default function OnboardingPage() {
           which is no longer true and would have left families waiting for
           a message that never came.
         */
-        <div className={CARD_CLASS}>
+        <div className={`${CARD_CLASS} md:max-w-2xl`}>
           <h1 className="font-display text-2xl font-semibold text-ink">
             One last thing — and it matters
           </h1>
@@ -651,21 +687,12 @@ export default function OnboardingPage() {
           </ol>
 
           {doneInfo.whatsappLink && (
-            <>
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(
-                  `I set up something I think you'll like, Katha. Tap this and say hello: ${doneInfo.whatsappLink}`,
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${BUTTON_CLASS} mt-6 block text-center no-underline`}
-              >
-                Share on WhatsApp
-              </a>
-              <p className="mt-3 break-all text-meta text-ink-muted">
-                Or copy this link: {doneInfo.whatsappLink}
-              </p>
-            </>
+            <div className="mt-6">
+              <ParentLinkShare
+                whatsappLink={doneInfo.whatsappLink}
+                buttonClassName={`${BUTTON_CLASS} block`}
+              />
+            </div>
           )}
 
           {doneInfo.familyConfirmLink && (
@@ -675,17 +702,52 @@ export default function OnboardingPage() {
               </p>
               <p className="mt-1 text-sm text-ink-mid">
                 Cards carry {doneInfo.parentName}&apos;s own words, so
-                Katha sends them only to a number you&apos;ve confirmed. Open
-                this on your phone and send the message it fills in.
+                Katha sends them only to a number you&apos;ve confirmed.
+                {isDesktop
+                  ? ""
+                  : " Open this on your phone and send the message it fills in."}
               </p>
-              <a
-                href={doneInfo.familyConfirmLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-block rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-ink no-underline hover:border-saffron-ink"
+              {isDesktop ? (
+                <ConfirmNumberQr link={doneInfo.familyConfirmLink} />
+              ) : (
+                <a
+                  href={doneInfo.familyConfirmLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-ink no-underline hover:border-saffron-ink"
+                >
+                  Confirm my number on WhatsApp
+                </a>
+              )}
+            </div>
+          )}
+
+          {isDesktop && (doneInfo.whatsappLink || doneInfo.familyConfirmLink) && (
+            <div className="mt-6 rounded-lg border border-border p-4">
+              <p className="text-sm font-medium text-ink">
+                Finish later from your phone
+              </p>
+              <p className="mt-1 text-sm text-ink-mid">
+                We&apos;ll email you these links. Your dashboard keeps them too
+                until they&apos;re done.
+              </p>
+              <button
+                type="button"
+                onClick={handleEmailLinks}
+                disabled={emailState === "sending" || emailState === "sent"}
+                className="mt-3 rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-ink hover:border-saffron-ink disabled:opacity-60"
               >
-                Confirm my number on WhatsApp
-              </a>
+                {emailState === "sending"
+                  ? "Sending…"
+                  : emailState === "sent"
+                    ? "Sent"
+                    : "Email me these links"}
+              </button>
+              {emailState !== "idle" && emailState !== "sending" && (
+                <p className="mt-2 text-meta text-ink-muted" aria-live="polite">
+                  {EMAIL_STATE_TEXT[emailState]}
+                </p>
+              )}
             </div>
           )}
 

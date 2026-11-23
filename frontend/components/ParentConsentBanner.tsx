@@ -1,5 +1,6 @@
 "use client";
 
+import { ParentLinkShare } from "@/components/ParentLinkShare";
 import type { ParentConsentStatus } from "@/lib/api";
 
 /**
@@ -26,12 +27,6 @@ export function ParentConsentBanner({
 }) {
   // Consent given and conversations running — nothing to say.
   if (status === "granted") return null;
-
-  const shareHref = whatsappLink
-    ? `https://wa.me/?text=${encodeURIComponent(
-        `I set up something I think you'll like, Katha. Tap this and say hello: ${whatsappLink}`,
-      )}`
-    : null;
 
   if (status === "declined") {
     return (
@@ -163,20 +158,14 @@ export function ParentConsentBanner({
         still on the phone. A message from an unknown number is exactly what
         older people are told to ignore.
       </p>
-      {shareHref && (
-        <a
-          href={shareHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 inline-block rounded-lg bg-saffron px-4 py-2 text-sm font-semibold text-indigo hover:opacity-90"
-        >
-          Send the link on WhatsApp
-        </a>
-      )}
       {whatsappLink && (
-        <p className="mt-3 break-all text-meta text-ink-muted">
-          Or copy: {whatsappLink}
-        </p>
+        <div className="mt-4">
+          <ParentLinkShare
+            whatsappLink={whatsappLink}
+            buttonLabel="Send the link on WhatsApp"
+            buttonClassName="inline-block rounded-lg bg-saffron px-4 py-2 text-sm font-semibold text-indigo hover:opacity-90"
+          />
+        </div>
       )}
     </section>
   );

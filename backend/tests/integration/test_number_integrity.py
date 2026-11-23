@@ -451,3 +451,90 @@ async def test_bad_setup_details_are_refused(real_db, field, value):
     async with _Api(user_id) as api:
         response = await api.profile(_number(), **{field: value})
     assert response.status_code == 422
+
+
+# ── "Email me these links" (finishing on a phone after a laptop) ─────────────
+
+
+@pytest.fixture
+def no_rate_limits():
+    from core import ratelimit
+
+    ratelimit.limiter.reset()
+    yield
+    ratelimit.limiter.reset()
+
+
+async def test_emailed_links_carry_the_start_link_and_a_live_confirm_code(
+    real_db, no_rate_limits
+):
+    user_id, _ = await _family(real_db)
+
+    with patch("api.routes.family.send_email_ses", new=AsyncMock()) as send:
+        async with _Api(user_id) as api:
+            body = (await api.client.post("/family/setup-links/email")).json()
+            assert body["sent"] is True
+            to, subject, text_body, html_body = send.await_args.args
+            assert to == f"{user_id}@example.test"
+            assert "Lakshmi" in subject
+            assert "wa.me/" in text_body and "say hello" in text_body
+            assert body["family_confirm_link"] in text_body
+
+            # The emailed code is the live one: it confirms the number.
+            code = body["family_confirm_link"].rsplit("CONFIRM%20", 1)[1]
+            await api.client.post(
+                "/webhook/whatsapp",
+                data={
+                    "From": f"whatsapp:{_FAMILY}",
+                    "Body": f"CONFIRM {code}",
+                    "MessageSid": f"SM{uuid.uuid4().hex[:12]}",
+                },
+            )
+    real_db.expire_all()
+    profile = (
+        await real_db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+        )
+    ).scalar_one()
+    assert family_number.is_confirmed(profile)
+
+
+async def test_nothing_is_emailed_once_both_steps_are_done(real_db, no_rate_limits):
+    user_id, _ = await _family(real_db, consented=True)
+    profile = (
+        await real_db.execute(
+            select(UserProfileModel).where(UserProfileModel.user_id == user_id)
+        )
+    ).scalar_one()
+    profile.family_number_confirmed_at = datetime.now(timezone.utc)
+    await real_db.commit()
+
+    with patch("api.routes.family.send_email_ses", new=AsyncMock()) as send:
+        async with _Api(user_id) as api:
+            body = (await api.client.post("/family/setup-links/email")).json()
+    assert body == {"sent": False, "family_confirm_link": ""}
+    send.assert_not_awaited()
+
+
+async def test_the_start_link_is_left_out_once_she_has_agreed(real_db, no_rate_limits):
+    user_id, _ = await _family(real_db, consented=True)
+
+    with patch("api.routes.family.send_email_ses", new=AsyncMock()) as send:
+        async with _Api(user_id) as api:
+            body = (await api.client.post("/family/setup-links/email")).json()
+    assert body["sent"] is True
+    text_body = send.await_args.args[2]
+    assert "say hello" not in text_body
+    assert body["family_confirm_link"] in text_body
+
+
+async def test_setup_link_emails_are_rate_limited(real_db, no_rate_limits):
+    user_id, _ = await _family(real_db)
+
+    with patch("api.routes.family.send_email_ses", new=AsyncMock()):
+        async with _Api(user_id) as api:
+            codes = [
+                (await api.client.post("/family/setup-links/email")).status_code
+                for _ in range(4)
+            ]
+    assert codes == [200, 200, 200, 429]

@@ -54,6 +54,9 @@ CARD_ASK_PER_LINK = Limit("card-ask-link", count=5, seconds=3600)
 CARD_ASK_PER_CLIENT = Limit("card-ask-client", count=20, seconds=3600)
 # /c/{token}/react: a row and a message to the parent's queue per tap.
 CARD_REACT_PER_LINK = Limit("card-react-link", count=10, seconds=3600)
+# /family/setup-links/email: the done screen's "email me these links". Per
+# account; each send also replaces the family-number code.
+SETUP_LINKS_EMAIL = Limit("setup-links-email", count=3, seconds=3600)
 
 _MAX_KEYS = 50_000
 
@@ -77,7 +80,13 @@ class Limiter:
 
     def _prune(self, now: float) -> None:
         longest = max(
-            (EMAIL_LINK, CARD_ASK_PER_LINK, CARD_ASK_PER_CLIENT, CARD_REACT_PER_LINK),
+            (
+                EMAIL_LINK,
+                CARD_ASK_PER_LINK,
+                CARD_ASK_PER_CLIENT,
+                CARD_REACT_PER_LINK,
+                SETUP_LINKS_EMAIL,
+            ),
             key=lambda lim: lim.seconds,
         ).seconds
         for k in [k for k, v in self._hits.items() if not v or now - v[-1] >= longest]:
