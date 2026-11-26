@@ -58,6 +58,13 @@ IST = timezone(timedelta(hours=5, minutes=30), "IST")
 WINDOWS = ("all_time", "last_7d", "last_30d")
 _WINDOW_DAYS = {"last_7d": 7, "last_30d": 30}
 
+# Family number (METRICS_PAGE_LAYOUT.md §4). A child still unconfirmed this
+# long after sign-up is worth a nudge.
+FAMILY_NUMBER_NUDGE_AFTER = timedelta(hours=48)
+# Families table (§5.4): a parent this many days without a conversation.
+QUIET_ORANGE_DAYS = 3
+QUIET_RED_DAYS = 7
+
 STORIES_PLACEHOLDER = {
     "available": False,
     "reason": "Stories are not persisted yet (consolidation Phase A).",
@@ -151,6 +158,12 @@ async def _load(db: AsyncSession, excluded: frozenset[str]) -> _World:
                 UserProfileModel.created_at,
                 UserProfileModel.parent_consent_asks,
                 UserProfileModel.preferred_language,
+                # Whether a number was given, never the number itself
+                # (ADMIN_METRICS.md §3 rule 1).
+                (UserProfileModel.family_whatsapp_number.is_not(None)).label(
+                    "family_number_given"
+                ),
+                UserProfileModel.family_number_confirmed_at,
             )
         )
     )
@@ -164,6 +177,9 @@ async def _load(db: AsyncSession, excluded: frozenset[str]) -> _World:
                     FamilyAccount.user_id,
                     FamilyAccount.plan,
                     FamilyAccount.onboarding_complete,
+                    FamilyAccount.created_at,
+                    # The expiry only; the code's hash is never read.
+                    FamilyAccount.family_confirm_code_expires_at,
                 )
             )
         )
@@ -430,6 +446,76 @@ def _funnel(world: _World) -> dict:
         "reached_10_conversations": reached_10,
         "go_no_go_rate": rate(reached_10, len(parent)),
     }
+
+
+def _family_number(world: _World, w: _Windows) -> dict:
+    """METRICS_PAGE_LAYOUT.md §4.1: the child's side of onboarding, as it
+    stands now. Counted over families, joined to their profile."""
+    given = confirmed = live = not_live = over_48h = over_48h_not_live = 0
+    for f in world.families:
+        profile = world.storytellers.get(f.user_id)
+        if profile is None or not profile.family_number_given:
+            continue
+        given += 1
+        if profile.family_number_confirmed_at is not None:
+            confirmed += 1
+            continue
+        code_live = _code_live(f.family_confirm_code_expires_at, w.now)
+        live += code_live
+        not_live += not code_live
+        created = _aware(f.created_at)
+        if created is not None and created < w.now - FAMILY_NUMBER_NUDGE_AFTER:
+            over_48h += 1
+            over_48h_not_live += not code_live
+    return {
+        "given": given,
+        "confirmed": confirmed,
+        "waiting_code_live": live,
+        "waiting_no_live_code": not_live,
+        "waiting_over_48h": over_48h,
+        "waiting_over_48h_no_live_code": over_48h_not_live,
+        "confirmed_rate": rate(confirmed, given),
+    }
+
+
+def _code_live(expires_at: datetime | None, now: datetime) -> bool:
+    return expires_at is not None and _aware(expires_at) > now
+
+
+# §5.4: the first rule that matches wins, and its place is the sort order.
+FAMILY_STATUS_ORDER = (
+    "consent_stalled",
+    "quiet_red",
+    "number_no_live_code",
+    "no_parent_consent",
+    "no_conversation_yet",
+    "quiet_orange",
+    "number_unconfirmed",
+    "active",
+)
+
+
+def family_status(row: dict) -> str:
+    """Which §5.4 status a families[] row has."""
+    days = row.get("days_since_last_conversation")
+    unconfirmed = row.get("family_number_given") and not row.get(
+        "family_number_confirmed"
+    )
+    if (row.get("parent_consent_asks") or 0) >= 2 and not row["parent_consented"]:
+        return "consent_stalled"
+    if row["parent_consented"] and days is not None and days >= QUIET_RED_DAYS:
+        return "quiet_red"
+    if unconfirmed and not row.get("confirm_code_live"):
+        return "number_no_live_code"
+    if not row["parent_consented"]:
+        return "no_parent_consent"
+    if days is None:
+        return "no_conversation_yet"
+    if days >= QUIET_ORANGE_DAYS:
+        return "quiet_orange"
+    if unconfirmed:
+        return "number_unconfirmed"
+    return "active"
 
 
 def _length_minutes(s) -> float | None:
@@ -1075,6 +1161,7 @@ def _plans(world: _World) -> dict:
 
 def _families(world: _World, w: _Windows) -> list[dict]:
     plan_of = {f.user_id: f.plan for f in world.families}
+    account_of = {f.user_id: f for f in world.families}
     parent = _parent_consent_dates(world)
     known_domains = get_domain_sequence()
     convs = [s for s in _conversations(world) if _aware(s.started_at) <= w.now]
@@ -1095,6 +1182,7 @@ def _families(world: _World, w: _Windows) -> list[dict]:
             Decimal(0),
         )
         conversations_30d = sum(1 for s in mine if w.contains("last_30d", s.started_at))
+        account = account_of.get(user_id)
         domains = {a.domain for a in atoms if a.domain in known_domains}
         out.append(
             {
@@ -1161,20 +1249,31 @@ def _families(world: _World, w: _Windows) -> list[dict]:
                 "cost_per_conversation_30d_inr": (
                     inr(cost_30d / conversations_30d) if conversations_30d else None
                 ),
-                "_sort": last,
+                "family_number_given": bool(profile.family_number_given),
+                "family_number_confirmed": bool(
+                    profile.family_number_given
+                    and profile.family_number_confirmed_at is not None
+                ),
+                "confirm_code_live": bool(
+                    account
+                    and _code_live(account.family_confirm_code_expires_at, w.now)
+                ),
+                "days_since_last_conversation": (
+                    (w.now - last).days if last is not None else None
+                ),
             }
         )
-    # Most recent conversation first; never-talked last, then by id so the
-    # order is stable.
+    # METRICS_PAGE_LAYOUT.md §5.4: most urgent status first, then quietest
+    # first (never talked before anyone who has), then by id so the order is
+    # stable.
     out.sort(
         key=lambda r: (
-            r["_sort"] is None,
-            -(r["_sort"].timestamp()) if r["_sort"] else 0,
+            FAMILY_STATUS_ORDER.index(family_status(r)),
+            r["days_since_last_conversation"] is not None,
+            -(r["days_since_last_conversation"] or 0),
             r["user_id"],
         )
     )
-    for row in out:
-        del row["_sort"]
     return out
 
 
@@ -1189,11 +1288,13 @@ async def compute_metrics(
     w = _Windows(now)
     world = await _load(db, excluded_user_ids)
     conversations = _conversations_section(world, w)
+    funnel = _funnel(world)
+    funnel["family_number"] = _family_number(world, w)
     return {
         "generated_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timezone": "Asia/Kolkata",
         "excluded_user_count": len(excluded_user_ids),
-        "funnel": _funnel(world),
+        "funnel": funnel,
         "conversations": conversations,
         "engagement": _engagement(world, w),
         "story_atoms": _story_atoms(world, w),

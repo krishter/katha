@@ -50,6 +50,9 @@ VECTOR_MARKER = 0.0123456789
 PII_MARKERS = [
     "Kamala Zz-Marker",
     "+910000000001",
+    # A child's number (METRICS_PAGE_LAYOUT.md §7): only "a number was
+    # given" may reach the page, never the number.
+    "+910000000099",
     "marker@example.invalid",
     "NARRATIVE-MARKER",
     "PATTERN-MARKER",
@@ -83,7 +86,17 @@ async def _seed(db) -> dict[str, uuid.UUID]:
         ),
         ("user_excl", "Krish Self Trial", "+910000000099", utc(9, 1), 0, ""),
     ]
+    # The child's side (METRICS_PAGE_LAYOUT.md §4): a confirmed her number,
+    # b has a live code, c's code lapsed. No new rows, so every other number
+    # in this world is unchanged.
+    family_numbers = {
+        "user_a": ("+910000000099", utc(9, 2)),
+        "user_b": ("+919999999999", None),
+        "user_c": ("+919999999999", None),
+        "user_excl": ("+919999999999", utc(9, 1)),
+    }
     for user_id, name, phone, created, asks, context in profiles:
+        family_phone, confirmed_at = family_numbers[user_id]
         db.add(
             UserProfileModel(
                 user_id=user_id,
@@ -92,22 +105,38 @@ async def _seed(db) -> dict[str, uuid.UUID]:
                 preferred_language="hi-IN",
                 pronouns="she/her",
                 onboarding_context=context,
-                family_whatsapp_number="+919999999999",
+                family_whatsapp_number=family_phone,
+                family_number_confirmed_at=confirmed_at,
                 scheduled_time=time(10, 30),
                 timezone="Asia/Kolkata",
                 parent_consent_asks=asks,
                 created_at=created,
             )
         )
-    for user_id, email, plan, complete in [
-        ("user_a", "a@example.invalid", "free", True),
-        ("user_b", "marker@example.invalid", "family", True),
-        ("user_c", "c@example.invalid", "free", False),
-        ("user_excl", "krish@example.invalid", "free", True),
+    for user_id, email, plan, complete, created, code_expires in [
+        ("user_a", "a@example.invalid", "free", True, utc(9, 1), None),
+        # b signed up a day before NOW and the code is still live.
+        (
+            "user_b",
+            "marker@example.invalid",
+            "family",
+            True,
+            utc(10, 15, 12),
+            utc(10, 21),
+        ),
+        # c signed up six days before NOW; the code lapsed two days later.
+        ("user_c", "c@example.invalid", "free", False, utc(10, 10), utc(10, 12)),
+        ("user_excl", "krish@example.invalid", "free", True, utc(9, 1), None),
     ]:
         db.add(
             FamilyAccount(
-                user_id=user_id, email=email, plan=plan, onboarding_complete=complete
+                user_id=user_id,
+                email=email,
+                plan=plan,
+                onboarding_complete=complete,
+                created_at=created,
+                family_confirm_code_hash="0" * 64 if code_expires else None,
+                family_confirm_code_expires_at=code_expires,
             )
         )
     for user_id, principal, at, email_hash in [
@@ -532,7 +561,20 @@ async def test_funnel(world):
         "reached_3_conversations": 1,
         "reached_10_conversations": 1,  # a: a1..a10
         "go_no_go_rate": 0.5,
+        "family_number": {
+            "given": 3,
+            "confirmed": 1,  # a
+            "waiting_code_live": 1,  # b
+            "waiting_no_live_code": 1,  # c
+            "waiting_over_48h": 1,  # c; b signed up 24h ago
+            "waiting_over_48h_no_live_code": 1,
+            "confirmed_rate": 0.333,
+        },
     }
+    n = world["funnel"]["family_number"]
+    assert n["waiting_code_live"] + n["waiting_no_live_code"] == (
+        n["given"] - n["confirmed"]
+    )
 
 
 async def test_conversations(world):
@@ -748,8 +790,10 @@ async def test_cost(world):
 
 async def test_families(world):
     rows = world["families"]
-    assert [r["user_id"] for r in rows] == ["user_b", "user_a", "user_c"]
-    b, a, c = rows
+    # METRICS_PAGE_LAYOUT.md §5.4: c is stalled on consent, b's number is
+    # unconfirmed with a live code, a is active.
+    assert [r["user_id"] for r in rows] == ["user_c", "user_b", "user_a"]
+    c, b, a = rows
     assert a == {
         "user_id": "user_a",
         "onboarded_at_ist": "2026-09-01T05:30:00+05:30",
@@ -770,6 +814,10 @@ async def test_families(world):
         # r1..r9 + r11 = 10.671927 over 8 conversations in 30 days
         "cost_30d_inr": 10.67,
         "cost_per_conversation_30d_inr": 1.33,
+        "family_number_given": True,
+        "family_number_confirmed": True,
+        "confirm_code_live": False,
+        "days_since_last_conversation": 1,  # 10-14 18:40 UTC to 10-16 12:00
     }
     assert b == {
         "user_id": "user_b",
@@ -790,6 +838,10 @@ async def test_families(world):
         "pending_card_status": None,
         "cost_30d_inr": 1.14,  # r10; r13 is unpriced
         "cost_per_conversation_30d_inr": 0.57,
+        "family_number_given": True,
+        "family_number_confirmed": False,
+        "confirm_code_live": True,
+        "days_since_last_conversation": 0,
     }
     assert c == {
         "user_id": "user_c",
@@ -810,6 +862,10 @@ async def test_families(world):
         "pending_card_status": None,
         "cost_30d_inr": 0.0,
         "cost_per_conversation_30d_inr": None,
+        "family_number_given": True,
+        "family_number_confirmed": False,
+        "confirm_code_live": False,
+        "days_since_last_conversation": None,
     }
 
 
