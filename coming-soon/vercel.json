@@ -1,0 +1,5 @@
+{
+  "redirects": [
+    { "source": "/family/:path*", "destination": "https://app.katha.life/family/:path*", "permanent": false }
+  ]
+}
