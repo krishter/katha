@@ -42,14 +42,30 @@ def _wa_me_link() -> str:
 
 
 _E164_RE = re.compile(r"^\+[1-9]\d{7,14}$")
+# What people type between digits: spaces (the form's own placeholder has
+# them), dashes, dots and brackets. Removed before the check, never guessed
+# at: a number without its country code is still refused, because Katha
+# cannot know which country it belongs to (a parent may live outside India).
+_NUMBER_PUNCTUATION_RE = re.compile(r"[\s\-.()]")
 
 
-def _validate_e164(value: str, field_name: str) -> None:
-    if not _E164_RE.match(value):
+def normalise_number(value: str) -> str:
+    """ "+264 81-234 5678" -> "+264812345678"; "00 91 98765…" -> "+9198765…"."""
+    number = _NUMBER_PUNCTUATION_RE.sub("", value or "")
+    if number.startswith("00"):
+        number = "+" + number[2:]
+    return number
+
+
+def _validate_e164(value: str, field_name: str) -> str:
+    """The number in E.164, or 422. Callers store what this returns."""
+    number = normalise_number(value)
+    if not _E164_RE.match(number):
         raise HTTPException(
             status_code=422,
             detail=f"{field_name} must be in E.164 format, e.g. +919876543210",
         )
+    return number
 
 
 def _validate_session_time(value: str) -> time:
@@ -149,8 +165,10 @@ async def onboarding_profile(
             detail="preferred_language must be one of "
             + ", ".join(SUPPORTED_LANGUAGES),
         )
-    _validate_e164(whatsapp_number, "whatsapp_number")
-    _validate_e164(family_whatsapp_number, "family_whatsapp_number")
+    whatsapp_number = _validate_e164(whatsapp_number, "whatsapp_number")
+    family_whatsapp_number = _validate_e164(
+        family_whatsapp_number, "family_whatsapp_number"
+    )
     scheduled_time = _validate_session_time(session_time)
     try:
         family_tz = (
