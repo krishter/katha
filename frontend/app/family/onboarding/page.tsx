@@ -167,8 +167,8 @@ export default function OnboardingPage() {
         err instanceof ApiError && err.status === 422 ? err.detail ?? "" : "";
       if (/whatsapp_number/.test(detail)) {
         setError(
-          "Couldn't save that. Double-check the WhatsApp numbers are in " +
-            "+91XXXXXXXXXX format."
+          "Couldn't save that. Check each WhatsApp number starts with + " +
+            "and the country code, like +91 98765 43210."
         );
       } else if (/timezone/i.test(detail)) {
         setError(
@@ -303,6 +303,9 @@ export default function OnboardingPage() {
                 placeholder="+91 98765 43210"
                 className={INPUT_CLASS}
               />
+              <p className="mt-1 text-meta text-ink-muted">
+                Start with + and the country code. It can be any country.
+              </p>
             </div>
             <div>
               <label htmlFor="child_name" className={LABEL_CLASS}>

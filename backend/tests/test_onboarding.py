@@ -171,6 +171,42 @@ def test_onboarding_profile_invalid_phone_returns_422(db):
     assert response.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "typed, stored",
+    [
+        ("+91 98765 43210", "+919876543210"),
+        ("+91-98765-43210", "+919876543210"),
+        ("+264 81 234 5678", "+264812345678"),
+        ("+264 (81) 234.5678", "+264812345678"),
+        ("0091 98765 43210", "+919876543210"),
+        ("+919876543210", "+919876543210"),
+    ],
+)
+def test_onboarding_profile_stores_numbers_without_spaces_or_dashes(db, typed, stored):
+    db.execute = AsyncMock(return_value=_query_result(scalar_one_or_none=None))
+    payload = {
+        **_VALID_PROFILE_PAYLOAD,
+        "whatsapp_number": typed,
+        "family_whatsapp_number": typed.replace("5678", "5679").replace(
+            "43210", "43211"
+        ),
+    }
+
+    response = client.post("/onboarding/profile", data=payload)
+
+    assert response.status_code == 200, response.text
+    saved = db.add.call_args.args[0]
+    assert saved.whatsapp_number == stored
+    assert saved.family_whatsapp_number == stored[:-1] + str(int(stored[-1]) + 1)
+
+
+@pytest.mark.parametrize("typed", ["98765 43210", "264 81 234 5678", "+91 98765", ""])
+def test_onboarding_profile_still_refuses_numbers_without_a_country_code(db, typed):
+    payload = {**_VALID_PROFILE_PAYLOAD, "whatsapp_number": typed}
+    response = client.post("/onboarding/profile", data=payload)
+    assert response.status_code == 422
+
+
 def test_onboarding_profile_invalid_session_time_returns_422(db):
     payload = {**_VALID_PROFILE_PAYLOAD, "session_time": "9:30am"}
     response = client.post("/onboarding/profile", data=payload)
