@@ -165,3 +165,20 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  landing-site:
+    name: Landing site build check + API tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: index.html matches art and styles
+        run: node coming-soon/build.mjs --check
+
+      - name: Test /api/interest
+        run: node --test coming-soon/test/*.test.mjs
