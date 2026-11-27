@@ -125,6 +125,7 @@ denominator is 0 (never divide by zero, never report 0% for "no data").
 | `reached_3_conversations` | ≥3 |
 | `reached_10_conversations` | ≥10 (the PRD §12.1 go/no-go line) |
 | `go_no_go_rate` | `reached_10_conversations / parent_consented` |
+| `family_number` | The child's side of onboarding: `given`, `confirmed`, `waiting_code_live`, `waiting_no_live_code`, `waiting_over_48h`, `waiting_over_48h_no_live_code`, `confirmed_rate`. Defined in `METRICS_PAGE_LAYOUT.md` §4.1 *(added 2026-11-26)* |
 
 ### 6.2 Conversations
 
@@ -251,12 +252,14 @@ the runbook.
 
 ### 6.11 Per-family table
 
-One row per storyteller, sorted by last conversation (most recent first, never-talked last):
+One row per storyteller, sorted by status severity, then quietest first (never-talked first), then `user_id` (`METRICS_PAGE_LAYOUT.md` §5.4; changed 2026-11-26 from most recent conversation first):
 
 `user_id`, `onboarded_at_ist` (profile `created_at`), `parent_consented` (bool),
 `parent_consent_asks`, `plan`, `conversations_total`, `conversations_7d`,
 `last_conversation_at_ist`, `atoms_total`, `avg_completeness`, `domains_covered`
-(`"5/8"`), `cards_delivered`, `cards_failed`, `cost_30d_inr`, `cost_per_conversation_30d_inr`.
+(`"5/8"`), `cards_delivered`, `cards_failed`, `cost_30d_inr`, `cost_per_conversation_30d_inr`,
+and (`METRICS_PAGE_LAYOUT.md` §4.2) `family_number_given`, `family_number_confirmed`,
+`confirm_code_live` (bools) and `days_since_last_conversation` (int or null).
 
 ### 6.12 API keys *(added 2026-11-21, `core/key_health.py`)*
 
@@ -301,13 +304,7 @@ Key names as in §6. Report `excluded_user_count`, never the excluded IDs themse
 
 ## 8. HTML page layout (`/admin/metrics/view`)
 
-Top to bottom: generated-at time (IST) and excluded count → **health strip**
-(API keys to look at, empty sessions 7d, failed cards 7d, crisis events 7d, active now, ₹ per conversation 7d,
-wasted outbound 7d) → API keys (§6.12) → funnel as a vertical
-list with counts and step-to-step % → conversations (headline numbers + the 30-day daily
-table, with a CSS width bar per row) → engagement and retention (rates **with** cohort
-sizes) → atoms → cards → dashboard → stories placeholder → cost, with `by_component` as a CSS-bar list
-→ per-family table (horizontally scrollable on mobile). Plain, legible, system font.
+See `docs/specs/METRICS_PAGE_LAYOUT.md`.
 
 ## 9. Tests
 
