@@ -21,6 +21,14 @@
       try {
         const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error(String(res.status));
+        // Add them to the Sender waitlist, which sends the thank-you email. Formspree already has
+        // the sign-up, so a failure here is not shown to them.
+        fetch('/api/interest', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: form.email.value, _gotcha: form._gotcha.value }),
+        }).catch(() => {});
         status.textContent = "Thank you. We'll write when there's news.";
         status.classList.add('ok');
         form.reset();

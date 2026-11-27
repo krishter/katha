@@ -1507,6 +1507,8 @@ fieldset { border: 0; min-width: 0; }
       <form class="updates-form" id="updates-form" action="https://formspree.io/f/maqrorwa" method="POST">
         <input type="hidden" name="_subject" value="Katha updates sign-up">
         <input type="hidden" name="list" value="updates (pilot cohort 1 full)">
+        <!-- Honeypot: hidden from people, filled by bots. Formspree and /api/interest both drop these. -->
+        <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
         <div class="f">
           <label for="f-email">Email</label>
           <div class="updates-row">
@@ -1515,7 +1517,7 @@ fieldset { border: 0; min-width: 0; }
           </div>
         </div>
         <!-- COPY: draft -->
-        <p class="form-note">We'll only write when there's something to tell you.</p>
+        <p class="form-note">We'll only write when there's something to tell you, and every email has an unsubscribe link.</p>
         <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
       </form>
     </div>
